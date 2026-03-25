@@ -171,6 +171,26 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .form-grid,.asset-grid{grid-template-columns:1fr}
   .modal-form-grid{grid-template-columns:1fr}
 }
+/* LOAN CARDS */
+.loan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.loan-card-header{padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background .1s}
+.loan-card-header:hover{background:var(--surface2)}
+.loan-card-customer{font-size:15px;font-weight:600}
+.loan-card-meta{font-size:12px;color:var(--text2);margin-top:2px}
+.loan-card-badge{display:flex;gap:6px;align-items:center}
+.loan-card-body{border-top:1px solid var(--border);padding:0}
+.loan-device{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px}
+.loan-device:last-child{border-bottom:none}
+.loan-device-info{flex:1}
+.loan-device-assetno{font-family:'DM Mono',monospace;font-size:12px;font-weight:500}
+.loan-device-desc{font-size:12px;color:var(--text2)}
+/* BATCH RETURN */
+.br-item{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.br-item:last-child{border-bottom:none}
+.br-item:hover{background:var(--surface2)}
+.br-item.checked{background:var(--green-light)}
+.br-checkbox{width:20px;height:20px;border-radius:4px;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .1s}
+.br-item.checked .br-checkbox{background:var(--green);border-color:var(--green);color:white}
 /* DRAG TO SCROLL */
 .table-scroll{cursor:grab;user-select:none}
 .table-scroll.dragging{cursor:grabbing}
@@ -228,6 +248,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="nav-tab" onclick="switchTab('database')" id="tab-database"><span>Database</span></button>
         <button class="nav-tab" onclick="switchTab('history')" id="tab-history"><span>History</span></button>
         <button class="nav-tab" onclick="switchTab('import')" id="tab-import"><span>Import</span></button>
+        <button class="nav-tab" onclick="switchTab('loans')" id="tab-loans"><span>Active Loans</span></button>
       </div>
       <button class="btn btn-sm" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
     </div>
@@ -248,6 +269,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <p class="subtitle">Scan or type a CHS Asset Number — or tap the camera icon for QR codes</p>
         <div class="scan-tabs">
           <button class="scan-tab active" id="stab-loan" onclick="setScanMode('loan')">Issue Loan</button>
+          <button class="scan-tab" id="stab-batch" onclick="setScanMode('batch')">Batch Loan</button>
           <button class="scan-tab" id="stab-return" onclick="setScanMode('return')">Return Equipment</button>
           <button class="scan-tab" id="stab-count" onclick="setScanMode('count')">Count / Audit</button>
         </div>
@@ -302,6 +324,31 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             <div class="form-actions">
               <button class="btn btn-primary" id="btn-count" onclick="submitCount()">
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Counted
+              </button>
+              <button class="btn" onclick="clearScan()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- BATCH LOAN FORM -->
+        <div id="batch-form" style="display:none">
+          <div class="scan-card" style="margin-top:0;padding:16px">
+            <div class="form-grid" style="margin-bottom:12px">
+              <div class="form-group"><label>On Loan To *</label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
+              <div class="form-group"><label>Location *</label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
+              <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
+              <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
+              <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
+            </div>
+            <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include</div>
+            <div id="batch-devices-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+            <button class="btn btn-sm" onclick="addBatchDevice()" style="margin-bottom:12px">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add another device
+            </button>
+            <div id="batch-feedback" style="display:none"></div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="btn-batch" onclick="submitBatchLoan()">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Batch Loan
               </button>
               <button class="btn" onclick="clearScan()">Cancel</button>
             </div>
@@ -383,6 +430,19 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>End Date</th><th>Notes</th></tr></thead>
         <tbody id="hist-tbody"></tbody>
       </table></div></div>
+    </div>
+
+    <!-- ACTIVE LOANS -->
+    <div class="panel" id="panel-loans">
+      <div class="table-toolbar">
+        <strong style="font-size:15px">Active Loans</strong>
+        <span id="loans-count" class="row-count" style="margin-left:8px"></span>
+        <div class="search-wrap" style="margin-left:auto">
+          <svg class="search-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input class="search-input" id="loans-search" type="text" placeholder="Search customer…" oninput="renderLoans()">
+        </div>
+      </div>
+      <div id="loans-list" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
 
     <!-- IMPORT -->
@@ -482,6 +542,31 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div id="qr-video-wrap"><video id="qr-video" autoplay playsinline muted></video><div class="qr-overlay"><div class="qr-frame"></div></div></div>
     <p style="font-size:13px;color:var(--text2);margin-top:12px;text-align:center">Point camera at QR code containing the CHS Asset Number</p>
     <div class="modal-footer"><button class="btn" onclick="closeQR()">Cancel</button></div>
+  </div>
+</div>
+
+<!-- BATCH RETURN MODAL -->
+<div class="modal-overlay" id="batch-return-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="br-title">Return Loan</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="br-subtitle"></div>
+      </div>
+      <button class="modal-close" onclick="closeBatchReturn()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="padding:4px 0 8px;font-size:13px;color:var(--text2)">Tick the items that have been returned. Unticked items remain on loan.</div>
+    <div id="br-items" style="display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+      <button class="btn btn-sm" onclick="selectAllBatchReturn(true)">Select all</button>
+      <button class="btn btn-sm" onclick="selectAllBatchReturn(false)">Deselect all</button>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <button class="btn" onclick="closeBatchReturn()">Cancel</button>
+        <button class="btn btn-green" onclick="confirmBatchReturn()">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Returns
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -610,6 +695,7 @@ function switchTab(n) {
   if (n === 'database') renderTable();
   if (n === 'history')  renderHistory();
   if (n === 'scan')     updateStats();
+  if (n === 'loans')    renderLoans();
 }
 
 // ── STATS ──────────────────────────────────────────────────────────────
@@ -627,7 +713,15 @@ function updateStats() {
 // ── SCAN ───────────────────────────────────────────────────────────────
 function setScanMode(m) {
   scanMode = m;
-  ['loan','return','count'].forEach(x => document.getElementById('stab-'+x).classList.toggle('active', x===m));
+  ['loan','batch','return','count'].forEach(x => {
+    const el = document.getElementById('stab-'+x);
+    if (el) el.classList.toggle('active', x===m);
+  });
+  document.getElementById('batch-form').style.display = m === 'batch' ? 'block' : 'none';
+  document.getElementById('scan-input').closest('.scan-input-wrap').style.display = m === 'batch' ? 'none' : 'block';
+  document.getElementById('scan-feedback').style.display = 'none';
+  document.getElementById('asset-preview').style.display = 'none';
+  if (m === 'batch') { initBatchForm(); return; }
   clearScan();
   document.getElementById('scan-input').focus();
 }
@@ -1016,6 +1110,209 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 ['item-modal','history-modal','qr-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
+
+// ── BATCH LOAN ────────────────────────────────────────────────────────
+let batchDevices = [];
+
+function initBatchForm() {
+  batchDevices = [{ id: 'bd_0', value: '' }];
+  renderBatchDevices();
+  document.getElementById('b-start-date').value = new Date().toISOString().slice(0,10);
+  // Populate autocomplete
+  document.getElementById('b-contacts-list').innerHTML = [...new Set(equipment.filter(e=>e.OnLoanTo).map(e=>e.OnLoanTo))].map(c=>`<option value="${esc(c)}">`).join('');
+  document.getElementById('b-locations-list').innerHTML = [...new Set(equipment.filter(e=>e.Location).map(e=>e.Location))].map(l=>`<option value="${esc(l)}">`).join('');
+}
+
+function renderBatchDevices() {
+  document.getElementById('batch-devices-list').innerHTML = batchDevices.map((d, i) => `
+    <div style="display:flex;gap:6px;align-items:center" id="bdwrap_${d.id}">
+      <input type="text" value="${d.value}" placeholder="CHS Asset Number" 
+        style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:14px;outline:none"
+        id="bdinput_${d.id}"
+        onchange="updateBatchDevice('${d.id}', this.value)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();validateBatchDevice('${d.id}',this.value);}">
+      <div id="bdstatus_${d.id}" style="font-size:12px;min-width:120px;color:var(--text3)"></div>
+      ${batchDevices.length > 1 ? `<button class="btn btn-sm btn-red" onclick="removeBatchDevice('${d.id}')" style="flex-shrink:0">✕</button>` : ''}
+    </div>`).join('');
+}
+
+function updateBatchDevice(id, val) {
+  const d = batchDevices.find(b => b.id === id);
+  if (d) { d.value = val.trim(); validateBatchDevice(id, val.trim()); }
+}
+
+function validateBatchDevice(id, val) {
+  const statusEl = document.getElementById('bdstatus_' + id);
+  if (!val || !statusEl) return;
+  const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+  if (item) {
+    const on = item.OnLoanTo && item.Returned !== 'Yes';
+    statusEl.innerHTML = on
+      ? `<span style="color:var(--amber)">⚠ Already on loan</span>`
+      : `<span style="color:var(--green)">✓ ${item.Model || 'Found'}</span>`;
+    const d = batchDevices.find(b => b.id === id);
+    if (d) d.value = item.CHSAssetNo;
+    document.getElementById('bdinput_' + id).value = item.CHSAssetNo;
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--red)">✗ Not found</span>`;
+  }
+}
+
+function addBatchDevice() {
+  const newId = 'bd_' + Date.now();
+  batchDevices.push({ id: newId, value: '' });
+  renderBatchDevices();
+  setTimeout(() => { const el = document.getElementById('bdinput_' + newId); if(el) el.focus(); }, 50);
+}
+
+function removeBatchDevice(id) {
+  batchDevices = batchDevices.filter(b => b.id !== id);
+  renderBatchDevices();
+}
+
+async function submitBatchLoan() {
+  const loanTo   = document.getElementById('b-loan-to').value.trim();
+  const location = document.getElementById('b-location').value.trim();
+  if (!loanTo || !location) {
+    document.getElementById('batch-feedback').style.display = 'block';
+    document.getElementById('batch-feedback').innerHTML = `<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please fill in "On Loan To" and "Location".</div>`;
+    return;
+  }
+  const validDevices = batchDevices.filter(d => {
+    const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+    return item && !(item.OnLoanTo && item.Returned !== 'Yes');
+  });
+  if (!validDevices.length) {
+    document.getElementById('batch-feedback').style.display = 'block';
+    document.getElementById('batch-feedback').innerHTML = `<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found. Check asset numbers above.</div>`;
+    return;
+  }
+  const btn = document.getElementById('btn-batch');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  const batchId = 'batch_' + Date.now();
+  const startDate = document.getElementById('b-start-date').value;
+  const endDate   = document.getElementById('b-end-date').value;
+  const notes     = document.getElementById('b-notes').value;
+  for (const d of validDevices) {
+    const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+    if (idx < 0) continue;
+    Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId });
+    historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
+  }
+  scheduleSave(); renderTable(); updateStats();
+  showToast('success', `Batch loan created: ${validDevices.length} device${validDevices.length>1?'s':''} loaned to ${loanTo}`);
+  clearScan();
+  btn.disabled = false; btn.textContent = 'Confirm Batch Loan';
+  renderLoans();
+}
+
+// ── ACTIVE LOANS ───────────────────────────────────────────────────────
+function renderLoans() {
+  const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
+  const today = new Date().toISOString().slice(0,10);
+  // Group equipment on loan by customer
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
+  const grouped = {};
+  onLoan.forEach(e => {
+    const key = e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||'');
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [] };
+    grouped[key].items.push(e);
+  });
+  const groups = Object.values(grouped).filter(g => !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q));
+  document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.length + ' devices';
+  if (!groups.length) {
+    document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
+    return;
+  }
+  document.getElementById('loans-list').innerHTML = groups.map((g, gi) => {
+    const overdue = g.endDate && g.endDate < today;
+    return `<div class="loan-card">
+      <div class="loan-card-header" onclick="toggleLoanCard(${gi})">
+        <div>
+          <div class="loan-card-customer">${esc(g.loanTo)}</div>
+          <div class="loan-card-meta">${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${g.endDate}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>
+        </div>
+        <div class="loan-card-badge">
+          ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
+          <button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturn(${gi})">Return items</button>
+        </div>
+      </div>
+      <div class="loan-card-body" id="loancard_${gi}" style="display:none">
+        ${g.items.map(e => `<div class="loan-device">
+          <div class="loan-device-info">
+            <div class="loan-device-assetno">${esc(e.CHSAssetNo)}</div>
+            <div class="loan-device-desc">${esc(e.Model)}${e.SerialNo?' · '+e.SerialNo:''}</div>
+          </div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  // Store groups for return modal
+  window._loanGroups = groups;
+}
+
+function toggleLoanCard(gi) {
+  const body = document.getElementById('loancard_' + gi);
+  if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+// ── BATCH RETURN ───────────────────────────────────────────────────────
+let currentBatchGroup = null;
+let batchReturnChecked = {};
+
+function openBatchReturn(gi) {
+  currentBatchGroup = window._loanGroups[gi];
+  if (!currentBatchGroup) return;
+  batchReturnChecked = {};
+  currentBatchGroup.items.forEach(e => { batchReturnChecked[e.id] = false; });
+  document.getElementById('br-title').textContent = `Return from ${currentBatchGroup.loanTo}`;
+  document.getElementById('br-subtitle').textContent = `${currentBatchGroup.location}${currentBatchGroup.endDate ? ' · Due: ' + currentBatchGroup.endDate : ''}`;
+  renderBatchReturnItems();
+  document.getElementById('batch-return-modal').classList.add('open');
+}
+
+function renderBatchReturnItems() {
+  document.getElementById('br-items').innerHTML = currentBatchGroup.items.map(e => `
+    <div class="br-item ${batchReturnChecked[e.id]?'checked':''}" onclick="toggleBatchReturn('${e.id}')">
+      <div class="br-checkbox">${batchReturnChecked[e.id]?'✓':''}</div>
+      <div style="flex:1">
+        <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500">${esc(e.CHSAssetNo)}</div>
+        <div style="font-size:12px;color:var(--text2)">${esc(e.Model)}${e.SerialNo?' · '+e.SerialNo:''}</div>
+      </div>
+      <div style="font-size:11px;color:var(--text3)">${batchReturnChecked[e.id]?'<span style="color:var(--green)">Returning</span>':'On loan'}</div>
+    </div>`).join('');
+}
+
+function toggleBatchReturn(id) {
+  batchReturnChecked[id] = !batchReturnChecked[id];
+  renderBatchReturnItems();
+}
+
+function selectAllBatchReturn(val) {
+  Object.keys(batchReturnChecked).forEach(k => batchReturnChecked[k] = val);
+  renderBatchReturnItems();
+}
+
+async function confirmBatchReturn() {
+  const toReturn = Object.entries(batchReturnChecked).filter(([k,v])=>v).map(([k])=>k);
+  if (!toReturn.length) { showToast('error','No items selected'); return; }
+  toReturn.forEach(id => {
+    const idx = equipment.findIndex(e => e.id === id);
+    if (idx < 0) return;
+    const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+    Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
+    historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
+  });
+  scheduleSave(); renderTable(); updateStats();
+  closeBatchReturn();
+  renderLoans();
+  showToast('success', `${toReturn.length} item${toReturn.length>1?'s':''} returned`);
+}
+
+function closeBatchReturn() {
+  document.getElementById('batch-return-modal').classList.remove('open');
+  currentBatchGroup = null;
+}
 
 // ── DETAIL PANEL ──────────────────────────────────────────────────────
 let currentDetailItem = null;
