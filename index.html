@@ -585,10 +585,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div class="detail-body" id="detail-body"></div>
     <div class="detail-footer">
-      <button class="btn btn-green btn-sm" onclick="closeDetail();setScanMode('return');document.getElementById('scan-input').value=currentDetailItem.CHSAssetNo;lookupAsset(currentDetailItem.CHSAssetNo);switchTab('scan')">Return</button>
-      <button class="btn btn-primary btn-sm" onclick="closeDetail();setScanMode('loan');document.getElementById('scan-input').value=currentDetailItem.CHSAssetNo;lookupAsset(currentDetailItem.CHSAssetNo);switchTab('scan')">Issue Loan</button>
-      <button class="btn btn-sm" onclick="openItemHistory(currentDetailItem.CHSAssetNo,currentDetailItem.Model);closeDetail()">History</button>
-      <button class="btn btn-sm btn-red" onclick="deleteItem(currentDetailItem.id,currentDetailItem.CHSAssetNo);closeDetail()" style="margin-left:auto">Delete</button>
+      <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
+      <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
+      <button class="btn btn-sm" onclick="detailAction('history')">History</button>
+      <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
     </div>
   </div>
 </div>
@@ -1116,6 +1116,7 @@ let batchDevices = [];
 
 function initBatchForm() {
   batchDevices = [{ id: 'bd_0', value: '' }];
+  window._batchStatus = {};
   renderBatchDevices();
   document.getElementById('b-start-date').value = new Date().toISOString().slice(0,10);
   // Populate autocomplete
@@ -1124,43 +1125,46 @@ function initBatchForm() {
 }
 
 function renderBatchDevices() {
-  document.getElementById('batch-devices-list').innerHTML = batchDevices.map((d, i) => `
-    <div style="display:flex;gap:6px;align-items:center" id="bdwrap_${d.id}">
-      <input type="text" value="${d.value}" placeholder="CHS Asset Number" 
+  document.getElementById('batch-devices-list').innerHTML = batchDevices.map((d, i) => {
+    const status = window._batchStatus && window._batchStatus[d.id];
+    const statusHtml = status ? status : '';
+    return `<div style="display:flex;gap:6px;align-items:center" id="bdwrap_${d.id}">
+      <input type="text" value="${d.value}" placeholder="CHS Asset Number"
         style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:14px;outline:none"
         id="bdinput_${d.id}"
-        onchange="updateBatchDevice('${d.id}', this.value)"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();validateBatchDevice('${d.id}',this.value);}">
-      <div id="bdstatus_${d.id}" style="font-size:12px;min-width:120px;color:var(--text3)"></div>
+        onblur="updateBatchDevice('${d.id}', this.value)"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();updateBatchDevice('${d.id}',this.value);}">
+      <div style="font-size:12px;min-width:130px">${statusHtml}</div>
       ${batchDevices.length > 1 ? `<button class="btn btn-sm btn-red" onclick="removeBatchDevice('${d.id}')" style="flex-shrink:0">✕</button>` : ''}
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function updateBatchDevice(id, val) {
+  val = val.trim();
   const d = batchDevices.find(b => b.id === id);
-  if (d) { d.value = val.trim(); validateBatchDevice(id, val.trim()); }
-}
-
-function validateBatchDevice(id, val) {
-  const statusEl = document.getElementById('bdstatus_' + id);
-  if (!val || !statusEl) return;
+  if (!d) return;
+  d.value = val;
+  if (!window._batchStatus) window._batchStatus = {};
+  if (!val) { window._batchStatus[id] = ''; renderBatchDevices(); return; }
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
-    statusEl.innerHTML = on
+    window._batchStatus[id] = on
       ? `<span style="color:var(--amber)">⚠ Already on loan</span>`
       : `<span style="color:var(--green)">✓ ${item.Model || 'Found'}</span>`;
-    const d = batchDevices.find(b => b.id === id);
-    if (d) d.value = item.CHSAssetNo;
-    document.getElementById('bdinput_' + id).value = item.CHSAssetNo;
+    d.value = item.CHSAssetNo;
   } else {
-    statusEl.innerHTML = `<span style="color:var(--red)">✗ Not found</span>`;
+    window._batchStatus[id] = `<span style="color:var(--red)">✗ Not found</span>`;
   }
+  renderBatchDevices();
 }
 
 function addBatchDevice() {
   const newId = 'bd_' + Date.now();
   batchDevices.push({ id: newId, value: '' });
+  if (!window._batchStatus) window._batchStatus = {};
+  window._batchStatus[newId] = '';
   renderBatchDevices();
   setTimeout(() => { const el = document.getElementById('bdinput_' + newId); if(el) el.focus(); }, 50);
 }
@@ -1385,8 +1389,26 @@ function closeDetail() {
 
 function editFromDetail() {
   if (!currentDetailItem) return;
+  const id = currentDetailItem.id;
   closeDetail();
-  openEditModal(currentDetailItem.id);
+  openEditModal(id);
+}
+
+function detailAction(action) {
+  if (!currentDetailItem) return;
+  const item = { ...currentDetailItem }; // copy before closing
+  closeDetail();
+  if (action === 'return') {
+    switchTab('scan'); setScanMode('return');
+    setTimeout(() => { document.getElementById('scan-input').value = item.CHSAssetNo; lookupAsset(item.CHSAssetNo); }, 50);
+  } else if (action === 'loan') {
+    switchTab('scan'); setScanMode('loan');
+    setTimeout(() => { document.getElementById('scan-input').value = item.CHSAssetNo; lookupAsset(item.CHSAssetNo); }, 50);
+  } else if (action === 'history') {
+    openItemHistory(item.CHSAssetNo, item.Model);
+  } else if (action === 'delete') {
+    deleteItem(item.id, item.CHSAssetNo);
+  }
 }
 
 function esc2(v) { if(!v&&v!==0) return '—'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
