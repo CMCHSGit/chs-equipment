@@ -487,19 +487,15 @@ function checkAuth() {
 
 // ── GOOGLE SHEETS API ─────────────────────────────────────────────────
 async function fetchBin() {
-  const r = await fetch(SCRIPT_URL, { redirect: 'follow' });
+  const r = await fetch(SCRIPT_URL + '?action=load&t=' + Date.now(), { redirect: 'follow' });
   if (!r.ok) throw new Error('Could not load data: ' + r.status);
   const text = await r.text();
   try { return JSON.parse(text); } catch { return { equipment: [], history: [] }; }
 }
 
 async function saveBin(data) {
-  const r = await fetch(SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify(data),
-    redirect: 'follow'
-  });
+  const encoded = encodeURIComponent(JSON.stringify(data));
+  const r = await fetch(SCRIPT_URL + '?action=save&data=' + encoded, { redirect: 'follow' });
   if (!r.ok) throw new Error('Could not save data: ' + r.status);
 }
 
