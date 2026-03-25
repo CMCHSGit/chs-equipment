@@ -334,9 +334,11 @@ thead .col-sticky{background:var(--surface2);z-index:3}
           <th onclick="sortTable('LoanEndDate')">End Date ↕</th>
           <th>Tile No.</th><th>Part No.</th>
           <th onclick="sortTable('NZPrice')">NZ$ ↕</th>
+          <th>Shelf Location</th><th>Device ID</th><th>LAN MAC</th><th>WLAN MAC</th>
+          <th>Old CHS #</th><th>Tile Type</th>
           <th>Counted</th><th>Actions</th>
         </tr></thead>
-        <tbody id="main-tbody"><tr><td colspan="13" class="table-empty">Loading…</td></tr></tbody>
+        <tbody id="main-tbody"><tr><td colspan="19" class="table-empty">Loading…</td></tr></tbody>
         </table>
       </div></div>
       <div style="margin-top:8px;display:flex;justify-content:flex-end"><span id="db-row-count" class="row-count"></span></div>
@@ -382,9 +384,10 @@ thead .col-sticky{background:var(--surface2);z-index:3}
         <div style="margin-top:24px">
           <div style="font-weight:500;margin-bottom:8px">Expected column names</div>
           <div style="font-size:12px;color:var(--text2);line-height:1.8;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:'DM Mono',monospace">
-            Model, Description, Serial Number, Manufacturing Date, CHS Asset Number,<br>
-            Tile Number, On Loan To, Location, Loan Start Date, Loan End Date,<br>
-            Returned, Counted, Part Number, Purchase Date, US$ Price, NZ$ Price, Notes
+            Model, Description, Serial Number, Manufacture Date, CHS Asset Number,<br>
+            TILE Number, On Loan To, Location, Loan Start Date, Loan End Date,<br>
+            Returned, Counted, Part Number, Purchase date, US$ Price, NZ$ Purchase Price,<br>
+            Shelf Location, Notes, Device ID, LAN MAC, WLAN MAC, Old CHS #, Tile Type
           </div>
           <button class="btn btn-sm" style="margin-top:10px" onclick="downloadTemplate()">Download blank template</button>
         </div>
@@ -420,6 +423,13 @@ thead .col-sticky{background:var(--surface2);z-index:3}
       <div class="form-group"><label>Returned</label><select id="m-Returned"><option value="">—</option><option>Yes</option><option>No</option></select></div>
       <div class="form-group"><label>Counted</label><select id="m-Counted"><option value="">—</option><option>Yes</option><option>No</option></select></div>
       <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="m-Notes" rows="2" style="resize:vertical"></textarea></div>
+      <hr class="section-divider"><div class="section-label">Additional Fields</div>
+      <div class="form-group"><label>Shelf Location</label><input type="text" id="m-ShelfLocation"></div>
+      <div class="form-group"><label>Device ID</label><input type="text" id="m-DeviceID"></div>
+      <div class="form-group"><label>LAN MAC</label><input type="text" id="m-LanMAC"></div>
+      <div class="form-group"><label>WLAN MAC</label><input type="text" id="m-WlanMAC"></div>
+      <div class="form-group"><label>Old CHS #</label><input type="text" id="m-OldCHS"></div>
+      <div class="form-group"><label>Tile Type</label><input type="text" id="m-TileType"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -724,20 +734,26 @@ function renderTable() {
       <td class="td-mono" style="font-size:11px">${esc(e.TileNo)}</td>
       <td class="td-mono" style="font-size:11px">${esc(e.PartNo)}</td>
       <td>${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+      <td class="td-mono" style="font-size:11px">${esc(e.ShelfLocation)}</td>
+      <td class="td-mono" style="font-size:11px">${esc(e.DeviceID)}</td>
+      <td class="td-mono" style="font-size:11px">${esc(e.LanMAC)}</td>
+      <td class="td-mono" style="font-size:11px">${esc(e.WlanMAC)}</td>
+      <td class="td-mono" style="font-size:11px">${esc(e.OldCHS)}</td>
+      <td>${esc(e.TileType)}</td>
       <td>${e.Counted==='Yes'?'<span class="chip chip-yes">✓ Yes</span>':'<span class="chip chip-no">No</span>'}</td>
       <td class="td-actions">
         <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
         <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
         <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
       </td></tr>`;
-  }).join('') : `<tr><td colspan="13" class="table-empty">No matching items</td></tr>`;
+  }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
 }
 
 function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
-const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes'];
+const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType'];
 
 function openAddModal() { editingId=null; document.getElementById('modal-title').textContent='Add Equipment'; MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';}); document.getElementById('item-modal').classList.add('open'); }
 function openEditModal(id) {
@@ -872,7 +888,29 @@ function closeQR() {
 }
 
 // ── IMPORT ─────────────────────────────────────────────────────────────
-const COL_MAP = {'chs asset number':'CHSAssetNo','chs asset no':'CHSAssetNo','chs asset':'CHSAssetNo','asset number':'CHSAssetNo','asset no':'CHSAssetNo','model':'Model','description':'Description','serial number':'SerialNo','serial no':'SerialNo','serial':'SerialNo','manufacturing date':'MfgDate','mfg date':'MfgDate','tile number':'TileNo','tile no':'TileNo','tile':'TileNo','on loan to':'OnLoanTo','loaned to':'OnLoanTo','location':'Location','loan start date':'LoanStartDate','loan start':'LoanStartDate','loan end date':'LoanEndDate','loan end':'LoanEndDate','returned':'Returned','counted':'Counted','part number':'PartNo','part no':'PartNo','purchase date':'PurchaseDate','us$ price':'USPrice','us price':'USPrice','usd price':'USPrice','us$':'USPrice','nz$ purchase price':'NZPrice','nz$ price':'NZPrice','nz price':'NZPrice','nzd price':'NZPrice','nz$':'NZPrice','notes':'Notes'};
+const COL_MAP = {
+  'model':'Model','description':'Description',
+  'serial number':'SerialNo','serial no':'SerialNo','serial':'SerialNo',
+  'manufacture date':'MfgDate','manufacturing date':'MfgDate','mfg date':'MfgDate',
+  'chs asset number':'CHSAssetNo','chs asset no':'CHSAssetNo','chs asset':'CHSAssetNo','asset number':'CHSAssetNo','asset no':'CHSAssetNo',
+  'tile number':'TileNo','tile no':'TileNo','tile':'TileNo',
+  'on loan to':'OnLoanTo','loaned to':'OnLoanTo',
+  'location':'Location',
+  'loan start date':'LoanStartDate','loan start':'LoanStartDate',
+  'loan end date':'LoanEndDate','loan end':'LoanEndDate',
+  'returned':'Returned','counted':'Counted',
+  'part number':'PartNo','part no':'PartNo',
+  'purchase date':'PurchaseDate','purchase date':'PurchaseDate',
+  'us$ price':'USPrice','us price':'USPrice','usd price':'USPrice','us$':'USPrice',
+  'nz$ purchase price':'NZPrice','nz$ price':'NZPrice','nz price':'NZPrice','nzd price':'NZPrice','nz$':'NZPrice',
+  'shelf location':'ShelfLocation',
+  'notes':'Notes',
+  'device id':'DeviceID','deviceid':'DeviceID',
+  'lan mac':'LanMAC','lan mac address':'LanMAC',
+  'wlan mac':'WlanMAC','wlan mac address':'WlanMAC','wifi mac':'WlanMAC',
+  'old chs #':'OldCHS','old chs':'OldCHS','old chs number':'OldCHS',
+  'tile type':'TileType'
+};
 let importRows = [];
 
 function handleFileSelect(e) { processFile(e.target.files[0]); }
@@ -912,12 +950,12 @@ function cancelImport() { importRows=[]; document.getElementById('import-preview
 
 // ── EXPORT ─────────────────────────────────────────────────────────────
 function exportCSV() {
-  const cols=['CHSAssetNo','Model','Description','SerialNo','MfgDate','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','PartNo','PurchaseDate','USPrice','NZPrice','Notes'];
-  const head=['CHS Asset Number','Model','Description','Serial Number','Manufacturing Date','Tile Number','On Loan To','Location','Loan Start Date','Loan End Date','Returned','Counted','Part Number','Purchase Date','US$ Price','NZ$ Price','Notes'];
+  const cols=['Model','Description','SerialNo','MfgDate','CHSAssetNo','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','PartNo','PurchaseDate','USPrice','NZPrice','ShelfLocation','Notes','DeviceID','LanMAC','WlanMAC','OldCHS','TileType'];
+  const head=['Model','Description','Serial Number','Manufacture Date','CHS Asset Number','TILE Number','On Loan To','Location','Loan Start Date','Loan End Date','Returned','Counted','Part Number','Purchase date','US$ Price','NZ$ Purchase Price','Shelf Location','Notes','Device ID','LAN MAC','WLAN MAC','Old CHS #','Tile Type'];
   const csv=[head.join(','),...equipment.map(e=>cols.map(c=>`"${(e[c]||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='chs-demo-equipment-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
 }
-function downloadTemplate() { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['CHS Asset Number,Model,Description,Serial Number,Manufacturing Date,Tile Number,On Loan To,Location,Loan Start Date,Loan End Date,Returned,Counted,Part Number,Purchase Date,US$ Price,NZ$ Price,Notes\n'],{type:'text/csv'})); a.download='chs-equipment-template.csv'; a.click(); }
+function downloadTemplate() { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['Model,Description,Serial Number,Manufacture Date,CHS Asset Number,TILE Number,On Loan To,Location,Loan Start Date,Loan End Date,Returned,Counted,Part Number,Purchase date,US$ Price,NZ$ Purchase Price,Shelf Location,Notes,Device ID,LAN MAC,WLAN MAC,Old CHS #,Tile Type\n'],{type:'text/csv'})); a.download='chs-equipment-template.csv'; a.click(); }
 
 // ── FEEDBACK / TOAST ───────────────────────────────────────────────────
 function showFeedback(type,msg){
