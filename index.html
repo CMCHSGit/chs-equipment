@@ -1458,15 +1458,10 @@ async function submitBatchLoan() {
     const alreadyDetails = alreadyOnLoan.map(d => {
       const item = equipment.find(e => e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
       return item.CHSAssetNo + ' (' + (item.Model||'') + ') currently on loan to ' + item.OnLoanTo;
-    }).join('
-');
+    }).join('\n');
     const confirmed = confirm(
-      'The following device' + (alreadyOnLoan.length>1?'s are':' is') + ' already on loan:
-
-' +
-      alreadyDetails + '
-
-Do you want to override and reassign ' +
+      'The following device' + (alreadyOnLoan.length>1?'s are':' is') + ' already on loan:\n\n' +
+      alreadyDetails + '\n\nDo you want to override and reassign ' +
       (alreadyOnLoan.length>1?'these devices':'this device') + ' to ' + loanTo + '?'
     );
     if (confirmed) devicesToLoan = [...cleanDevices, ...alreadyOnLoan];
