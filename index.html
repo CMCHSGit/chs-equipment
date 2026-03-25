@@ -1434,35 +1434,88 @@ async function submitBatchLoan() {
     document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please enter a valid Borrower Email address.</div>';
     return;
   }
-  const validDevices = batchDevices.filter(d => {
+
+  // Separate valid and already-on-loan devices
+  const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
+  const alreadyOnLoan = allFound.filter(d => {
+    const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+    return item && item.OnLoanTo && item.Returned !== 'Yes';
+  });
+  const cleanDevices = allFound.filter(d => {
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     return item && !(item.OnLoanTo && item.Returned !== 'Yes');
   });
-  if (!validDevices.length) {
+
+  if (!allFound.length) {
     document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = `<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found. Check asset numbers above.</div>`;
+    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found. Check asset numbers above.</div>';
     return;
   }
+
+  // Confirm overwrite of already-on-loan devices
+  let devicesToLoan = [...cleanDevices];
+  if (alreadyOnLoan.length > 0) {
+    const alreadyDetails = alreadyOnLoan.map(d => {
+      const item = equipment.find(e => e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+      return item.CHSAssetNo + ' (' + (item.Model||'') + ') currently on loan to ' + item.OnLoanTo;
+    }).join('
+');
+    const confirmed = confirm(
+      'The following device' + (alreadyOnLoan.length>1?'s are':' is') + ' already on loan:
+
+' +
+      alreadyDetails + '
+
+Do you want to override and reassign ' +
+      (alreadyOnLoan.length>1?'these devices':'this device') + ' to ' + loanTo + '?'
+    );
+    if (confirmed) devicesToLoan = [...cleanDevices, ...alreadyOnLoan];
+    else if (!cleanDevices.length) return; // nothing to do
+  }
+
+  if (!devicesToLoan.length) {
+    document.getElementById('batch-feedback').style.display = 'block';
+    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No devices selected to loan.</div>';
+    return;
+  }
+
   const btn = document.getElementById('btn-batch');
   btn.disabled = true; btn.textContent = 'Saving…';
-  const batchId = 'batch_' + Date.now();
-  const startDate    = document.getElementById('b-start-date').value;
-  const endDate      = document.getElementById('b-end-date').value;
-  const notes        = document.getElementById('b-notes').value;
-  const batchEmail   = document.getElementById('b-email').value.trim();
-  for (const d of validDevices) {
+  const batchId  = 'batch_' + Date.now();
+  const startDate = document.getElementById('b-start-date').value;
+  const endDate   = document.getElementById('b-end-date').value;
+  const notes     = document.getElementById('b-notes').value;
+  const batchEmail = document.getElementById('b-email').value.trim();
+
+  for (const d of devicesToLoan) {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     if (idx < 0) continue;
     Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
   }
+
   scheduleSave(); renderTable(); updateStats();
-  // Generate loan document for batch
-  const batchLoanItems = validDevices.map(d => equipment.find(e => e.CHSAssetNo.toLowerCase() === d.value.toLowerCase())).filter(Boolean);
-  generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate: endDate });
-  showToast('success', `Batch loan created: ${validDevices.length} device${validDevices.length>1?'s':''} loaned to ${loanTo}`);
-  clearScan();
+
+  // Store last loan doc info for re-opening from Active Loans
+  const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
+  window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate } };
+
+  // Generate loan document
+  generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate });
+
+  // Show success toast
+  showToast('success', 'Loan confirmed — ' + devicesToLoan.length + ' device' + (devicesToLoan.length>1?'s':'') + ' loaned to ' + loanTo);
+
+  // Reset batch form to fresh state
   btn.disabled = false; btn.textContent = 'Confirm Batch Loan';
+  batchDevices = [{ id: 'bd_0', value: '' }];
+  window._batchStatus = {};
+  ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  document.getElementById('b-start-date').value = nzDate();
+  document.getElementById('batch-feedback').style.display = 'none';
+  renderBatchDevices();
   renderLoans();
 }
 
@@ -1494,6 +1547,9 @@ function renderLoans() {
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
+          <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDoc(${gi})" title="View loan form">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoan(${gi})" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
           <button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturn(${gi})">Return items</button>
         </div>
@@ -2074,6 +2130,15 @@ function formatDisplayDate(d) {
 
 function closeLoanDoc() {
   document.getElementById('loan-doc-modal').classList.remove('open');
+}
+
+function viewLoanDoc(gi) {
+  const groups = window._loanGroups || [];
+  const g = groups[gi];
+  if (!g) return;
+  // Get full equipment items for this group
+  const items = g.items.map(i => equipment.find(e => e.id === i.id) || i);
+  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate: g.startDate || '', endDate: g.endDate });
 }
 
 function printLoanDoc() {
