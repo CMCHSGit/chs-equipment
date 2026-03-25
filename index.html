@@ -164,12 +164,44 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 /* SESSION */
 .session-wrap{margin-top:16px;display:none}
 
+.desktop-only{display:flex}.mobile-only{display:none}
+/* HAMBURGER */
+.hamburger-btn{background:none;border:none;cursor:pointer;padding:8px;display:flex;flex-direction:column;gap:5px;border-radius:var(--radius)}
+.hamburger-btn span{display:block;width:22px;height:2px;background:var(--text);border-radius:2px;transition:all .2s}
+.hamburger-btn.open span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.hamburger-btn.open span:nth-child(2){opacity:0}
+.hamburger-btn.open span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+/* MOBILE MENU */
+.mobile-menu{display:none;position:fixed;top:56px;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:99}
+.mobile-menu.open{display:block}
+.mobile-menu-inner{background:var(--surface);padding:8px 0;border-bottom:1px solid var(--border);box-shadow:var(--shadow-md)}
+.mobile-nav-item{width:100%;display:flex;align-items:center;gap:14px;padding:14px 20px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;text-align:left;transition:background .1s}
+.mobile-nav-item:hover,.mobile-nav-item.active{background:var(--accent-light);color:var(--accent)}
+.mobile-nav-item svg{flex-shrink:0;color:inherit}
+/* BOTTOM NAV for mobile quick access */
+.mobile-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:98;padding:6px 0 env(safe-area-inset-bottom,0)}
+.mobile-bottom-nav-inner{display:flex;justify-content:space-around}
+.mobile-bottom-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;color:var(--text2);cursor:pointer}
+.mobile-bottom-btn.active{color:var(--accent)}
+.mobile-bottom-btn svg{flex-shrink:0}
+
 @media(max-width:700px){
-  .app-header{padding:0 12px}.main{padding:12px}
-  .nav-tab span{display:none}
+  .desktop-only{display:none!important}
+  .mobile-only{display:flex!important}
+  .app-header{padding:0 12px;height:52px}
+  .main{padding:12px;padding-bottom:80px}
   table{min-width:700px}.stats-row{grid-template-columns:1fr 1fr}
   .form-grid,.asset-grid{grid-template-columns:1fr}
-  .modal-form-grid{grid-template-columns:1fr}
+  .modal-form-grid{grid-column:1fr}
+  .modal{margin:10px;max-height:calc(100vh - 20px)}
+  .detail-panel{max-width:100%!important;height:100vh}
+  .scan-card{padding:16px}
+  .scan-tabs{flex-wrap:wrap}
+  .scan-tab{flex:1;min-width:80px;font-size:12px;padding:8px 4px}
+  .stats-row .stat-card{padding:10px 12px}
+  .stats-row .stat-val{font-size:20px}
+  .mobile-bottom-nav{display:block}
+  .loan-card-header{flex-wrap:wrap;gap:8px}
 }
 /* LOAN CARDS */
 .loan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
@@ -242,17 +274,54 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   <header class="app-header">
     <div class="app-logo"><div class="app-logo-dot"></div>CHS Demo Equipment</div>
     <div class="header-right">
-      <div class="sync-pill"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Ready</span></div>
-      <div class="nav-tabs">
+      <div class="sync-pill desktop-only"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Ready</span></div>
+      <div class="nav-tabs desktop-only">
         <button class="nav-tab active" onclick="switchTab('scan')" id="tab-scan"><span>Scan / Loan</span></button>
         <button class="nav-tab" onclick="switchTab('database')" id="tab-database"><span>Database</span></button>
         <button class="nav-tab" onclick="switchTab('history')" id="tab-history"><span>History</span></button>
-        <button class="nav-tab" onclick="switchTab('import')" id="tab-import"><span>Import</span></button>
         <button class="nav-tab" onclick="switchTab('loans')" id="tab-loans"><span>Active Loans</span></button>
+        <button class="nav-tab" onclick="switchTab('import')" id="tab-import"><span>Import</span></button>
       </div>
-      <button class="btn btn-sm" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
+      <button class="btn btn-sm desktop-only" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
+      <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
+      <button class="hamburger-btn mobile-only" onclick="toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </header>
+  <div class="mobile-menu" id="mobile-menu">
+    <div class="mobile-menu-inner">
+      <button class="mobile-nav-item active" onclick="switchTab('scan');closeMobileMenu()" id="mtab-scan">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/></svg>
+        Scan / Loan
+      </button>
+      <button class="mobile-nav-item" onclick="switchTab('loans');closeMobileMenu()" id="mtab-loans">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Active Loans
+      </button>
+      <button class="mobile-nav-item" onclick="switchTab('database');closeMobileMenu()" id="mtab-database">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        Database
+      </button>
+      <button class="mobile-nav-item" onclick="switchTab('history');closeMobileMenu()" id="mtab-history">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        History
+      </button>
+      <button class="mobile-nav-item" onclick="switchTab('import');closeMobileMenu()" id="mtab-import">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import Data
+      </button>
+      <div style="height:1px;background:var(--border);margin:8px 0"></div>
+      <button class="mobile-nav-item" onclick="downloadExcel();closeMobileMenu()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download Excel
+      </button>
+      <button class="mobile-nav-item" onclick="doLogout()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Lock / Sign out
+      </button>
+    </div>
+  </div>
 
   <div class="main">
 
@@ -593,12 +662,46 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<!-- MOBILE BOTTOM NAV -->
+<div class="mobile-bottom-nav">
+  <div class="mobile-bottom-nav-inner">
+    <button class="mobile-bottom-btn active" id="mbnav-scan" onclick="switchTab('scan')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h7v7"/></svg>
+      Scan
+    </button>
+    <button class="mobile-bottom-btn" id="mbnav-loans" onclick="switchTab('loans')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Loans
+    </button>
+    <button class="mobile-bottom-btn" id="mbnav-database" onclick="switchTab('database')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+      Database
+    </button>
+    <button class="mobile-bottom-btn" id="mbnav-history" onclick="switchTab('history')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      History
+    </button>
+    <button class="mobile-bottom-btn" id="mbnav-more" onclick="toggleMobileMenu()">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+      More
+    </button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────
 const APP_PASSWORD = 'CHS2024';          // ← change this to your password
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// NZ timezone date helper
+function nzDate() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }); // returns YYYY-MM-DD
+}
+function nzNow() {
+  return new Date().toLocaleString('sv-SE', { timeZone: 'Pacific/Auckland' }).replace(' ', 'T') + '+12:00';
+}
 
 // ── AUTH ───────────────────────────────────────────────────────────────
 function doLogin() {
@@ -684,14 +787,30 @@ function scheduleSave() {
 // ── LOADING / SYNC ─────────────────────────────────────────────────────
 function showLoading(msg) { document.getElementById('loading-overlay').classList.add('show'); document.getElementById('loading-msg').textContent = msg; }
 function hideLoading()    { document.getElementById('loading-overlay').classList.remove('show'); }
-function setSync(s, l)    { document.getElementById('sync-dot').className = 'sync-dot ' + s; document.getElementById('sync-label').textContent = l; }
+function setSync(s, l) {
+  document.getElementById('sync-dot').className = 'sync-dot ' + s;
+  document.getElementById('sync-label').textContent = l;
+  const dm = document.getElementById('sync-dot-m'); if(dm) dm.className = 'sync-dot ' + s;
+  const lm = document.getElementById('sync-label-m'); if(lm) lm.textContent = l;
+}
 
 // ── TABS ───────────────────────────────────────────────────────────────
 function switchTab(n) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('panel-' + n).classList.add('active');
-  document.getElementById('tab-' + n).classList.add('active');
+  const dt = document.getElementById('tab-' + n); if(dt) dt.classList.add('active');
+  // Mobile menu items
+  document.querySelectorAll('.mobile-nav-item').forEach(t => t.classList.remove('active'));
+  const mt = document.getElementById('mtab-' + n); if(mt) mt.classList.add('active');
+  // Bottom nav
+  document.querySelectorAll('.mobile-bottom-btn').forEach(t => t.classList.remove('active'));
+  const mb = document.getElementById('mbnav-' + n); if(mb) mb.classList.add('active');
+  // Sync pill
+  const sd = document.getElementById('sync-dot-m'); const sl = document.getElementById('sync-label-m');
+  const sd2 = document.getElementById('sync-dot'); const sl2 = document.getElementById('sync-label');
+  if(sd&&sd2) sd.className = sd2.className;
+  if(sl&&sl2) sl.textContent = sl2.textContent;
   if (n === 'database') renderTable();
   if (n === 'history')  renderHistory();
   if (n === 'scan')     updateStats();
@@ -700,7 +819,7 @@ function switchTab(n) {
 
 // ── STATS ──────────────────────────────────────────────────────────────
 function updateStats() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = nzDate();
   const total = equipment.length;
   const on    = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes').length;
   const od    = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && e.LoanEndDate < today).length;
@@ -743,7 +862,7 @@ function showAssetPreview(item) {
   document.getElementById('prev-asset-no').textContent = item.CHSAssetNo || '—';
   document.getElementById('prev-model').textContent    = item.Model || '—';
   document.getElementById('prev-serial').textContent   = item.SerialNo || '—';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = nzDate();
   const on = item.OnLoanTo && item.Returned !== 'Yes';
   const od = on && item.LoanEndDate && item.LoanEndDate < today;
   document.getElementById('prev-status').innerHTML = on
@@ -775,7 +894,7 @@ function submitLoan() {
     Returned: 'No',
     Notes: document.getElementById('f-notes').value || equipment[idx].Notes || ''
   });
-  historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value });
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   showToast('success', `${currentItem.CHSAssetNo} loaned to ${loanTo}`);
@@ -786,7 +905,7 @@ function submitReturn() {
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
   Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes' });
-  historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Returned', loanTo: prev.loanTo, location: prev.loc });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   showToast('success', `${currentItem.CHSAssetNo} returned`);
@@ -796,7 +915,7 @@ function submitCount() {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   equipment[idx].Counted = 'Yes';
-  historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', notes: '' });
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', notes: '' });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); clearScan();
   showToast('success', `${currentItem.CHSAssetNo} marked as counted`);
@@ -809,7 +928,7 @@ function clearScan() {
   ['loan-form','return-form','count-form'].forEach(id => document.getElementById(id).style.display = 'none');
   hideFeedback();
   ['f-loan-to','f-location','f-end-date','f-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('f-start-date').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('f-start-date').value = nzDate();
   document.getElementById('scan-input').focus();
 }
 
@@ -849,7 +968,7 @@ function sortTable(col) { if (sortCol===col) sortDir*=-1; else { sortCol=col; so
 function renderTable() {
   const q   = (document.getElementById('db-search').value || '').toLowerCase();
   const sf  = document.getElementById('db-status').value;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = nzDate();
   let rows = equipment.filter(e => {
     const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
     const match = !q || Object.values(e).join(' ').toLowerCase().includes(q);
@@ -1092,7 +1211,7 @@ function exportCSV() {
   const cols=['Model','Description','SerialNo','MfgDate','CHSAssetNo','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','PartNo','PurchaseDate','USPrice','NZPrice','ShelfLocation','Notes','DeviceID','LanMAC','WlanMAC','OldCHS','TileType'];
   const head=['Model','Description','Serial Number','Manufacture Date','CHS Asset Number','TILE Number','On Loan To','Location','Loan Start Date','Loan End Date','Returned','Counted','Part Number','Purchase date','US$ Price','NZ$ Purchase Price','Shelf Location','Notes','Device ID','LAN MAC','WLAN MAC','Old CHS #','Tile Type'];
   const csv=[head.join(','),...equipment.map(e=>cols.map(c=>`"${(e[c]||'').toString().replace(/"/g,'""')}"`).join(','))].join('\n');
-  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='chs-demo-equipment-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='chs-demo-equipment-'+nzDate()+'.csv'; a.click();
 }
 function downloadTemplate() { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['Model,Description,Serial Number,Manufacture Date,CHS Asset Number,TILE Number,On Loan To,Location,Loan Start Date,Loan End Date,Returned,Counted,Part Number,Purchase date,US$ Price,NZ$ Purchase Price,Shelf Location,Notes,Device ID,LAN MAC,WLAN MAC,Old CHS #,Tile Type\n'],{type:'text/csv'})); a.download='chs-equipment-template.csv'; a.click(); }
 
@@ -1118,7 +1237,7 @@ function initBatchForm() {
   batchDevices = [{ id: 'bd_0', value: '' }];
   window._batchStatus = {};
   renderBatchDevices();
-  document.getElementById('b-start-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('b-start-date').value = nzDate();
   // Populate autocomplete
   document.getElementById('b-contacts-list').innerHTML = [...new Set(equipment.filter(e=>e.OnLoanTo).map(e=>e.OnLoanTo))].map(c=>`<option value="${esc(c)}">`).join('');
   document.getElementById('b-locations-list').innerHTML = [...new Set(equipment.filter(e=>e.Location).map(e=>e.Location))].map(l=>`<option value="${esc(l)}">`).join('');
@@ -1201,7 +1320,7 @@ async function submitBatchLoan() {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     if (idx < 0) continue;
     Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId });
-    historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
   }
   scheduleSave(); renderTable(); updateStats();
   showToast('success', `Batch loan created: ${validDevices.length} device${validDevices.length>1?'s':''} loaned to ${loanTo}`);
@@ -1213,7 +1332,7 @@ async function submitBatchLoan() {
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
 function renderLoans() {
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
-  const today = new Date().toISOString().slice(0,10);
+  const today = nzDate();
   // Group equipment on loan by customer
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
   const grouped = {};
@@ -1305,7 +1424,7 @@ async function confirmBatchReturn() {
     if (idx < 0) return;
     const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
     Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
-    historyLog.unshift({ id: uid(), ts: new Date().toISOString(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
   });
   scheduleSave(); renderTable(); updateStats();
   closeBatchReturn();
@@ -1325,7 +1444,7 @@ function openDetail(id) {
   const item = equipment.find(e => e.id === id);
   if (!item) return;
   currentDetailItem = item;
-  const today = new Date().toISOString().slice(0,10);
+  const today = nzDate();
   const on = item.OnLoanTo && item.Returned !== 'Yes';
   const od = on && item.LoanEndDate && item.LoanEndDate < today;
 
@@ -1413,6 +1532,25 @@ function detailAction(action) {
 
 function esc2(v) { if(!v&&v!==0) return '—'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// ── MOBILE MENU ───────────────────────────────────────────────────────
+function toggleMobileMenu() {
+  const menu = document.getElementById('mobile-menu');
+  const btn  = document.getElementById('hamburger-btn');
+  const open = menu.classList.toggle('open');
+  btn.classList.toggle('open', open);
+}
+function closeMobileMenu() {
+  document.getElementById('mobile-menu').classList.remove('open');
+  document.getElementById('hamburger-btn').classList.remove('open');
+}
+document.addEventListener('click', function(e) {
+  const menu = document.getElementById('mobile-menu');
+  const btn  = document.getElementById('hamburger-btn');
+  if (menu && menu.classList.contains('open') && !menu.contains(e.target) && !btn.contains(e.target)) {
+    closeMobileMenu();
+  }
+});
+
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
 function initDragScroll() {
   const el = document.querySelector('.table-scroll');
@@ -1441,7 +1579,7 @@ function initDragScroll() {
 }
 
 // ── START ──────────────────────────────────────────────────────────────
-document.getElementById('f-start-date').value = new Date().toISOString().slice(0,10);
+document.getElementById('f-start-date').value = nzDate();
 document.getElementById('login-pw').focus();
 checkAuth();
 setTimeout(initDragScroll, 1000);
