@@ -506,6 +506,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <option value="Return">Returns</option><option value="Count">Audits</option>
         </select>
         <span id="hist-count" class="row-count" style="margin-left:auto"></span>
+        <button class="btn btn-sm" onclick="openHistoryMgmt()" style="margin-left:8px">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>Manage
+        </button>
       </div>
       <div class="table-wrap"><div class="table-scroll"><table>
         <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>End Date</th><th>Notes</th></tr></thead>
@@ -626,6 +629,55 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<!-- EXTEND LOAN MODAL -->
+<div class="modal-overlay" id="extend-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="extend-title">Extend Loan</div>
+      <button class="modal-close" onclick="closeExtendModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px" id="extend-subtitle"></div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>New End Date</label>
+      <input type="date" id="extend-date" style="width:100%;padding:10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none">
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Reason (optional)</label>
+      <input type="text" id="extend-reason" placeholder="e.g. Customer requested extension" style="width:100%;padding:10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeExtendModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmExtendLoan()">Extend Loan</button>
+    </div>
+  </div>
+</div>
+
+<!-- HISTORY MANAGEMENT MODAL -->
+<div class="modal-overlay" id="history-mgmt-modal">
+  <div class="modal" style="max-width:700px">
+    <div class="modal-header">
+      <div class="modal-title">Manage History</div>
+      <button class="modal-close" onclick="closeHistoryMgmt()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div id="history-mgmt-auth" style="text-align:center;padding:20px 0">
+      <div style="font-size:14px;color:var(--text2);margin-bottom:12px">Enter admin password to manage history</div>
+      <input type="password" id="hmgmt-pw" placeholder="Admin password" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:280px;display:block;margin:0 auto 12px" onkeydown="if(event.key==='Enter')historyMgmtAuth()">
+      <button class="btn btn-primary" onclick="historyMgmtAuth()">Unlock</button>
+      <div id="hmgmt-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
+    </div>
+    <div id="history-mgmt-content" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="hmgmt-search" placeholder="Search…" oninput="renderHistoryMgmt()" style="padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;flex:1;min-width:160px">
+        <button class="btn btn-sm" onclick="selectAllHistoryMgmt(true)">Select all</button>
+        <button class="btn btn-sm" onclick="selectAllHistoryMgmt(false)">Deselect all</button>
+        <button class="btn btn-sm btn-red" onclick="deleteSelectedHistory()">Delete selected</button>
+        <span id="hmgmt-count" style="font-size:12px;color:var(--text3);margin-left:auto"></span>
+      </div>
+      <div id="hmgmt-list" style="max-height:400px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)"></div>
+    </div>
+  </div>
+</div>
+
 <!-- BATCH RETURN MODAL -->
 <div class="modal-overlay" id="batch-return-modal">
   <div class="modal" style="max-width:620px">
@@ -668,6 +720,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="detail-footer">
       <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
       <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
+      <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
       <button class="btn btn-sm" onclick="detailAction('history')">History</button>
       <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
     </div>
@@ -780,7 +833,8 @@ async function loadData() {
     setSync('ok', 'Live — auto-saving');
     updateStats(); renderTable(); renderHistory();
     hideLoading();
-    setTimeout(() => checkOverdueNotifications(), 1000);
+    await loadSentNotifications();
+    setTimeout(() => checkOverdueNotifications(), 500);
     return true;
   } catch(e) {
     setSync('err', 'Load failed');
@@ -1262,7 +1316,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 
@@ -1394,6 +1448,7 @@ function renderLoans() {
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
+          <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoan(${gi})" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
           <button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturn(${gi})">Return items</button>
         </div>
       </div>
@@ -1560,6 +1615,9 @@ function detailAction(action) {
   } else if (action === 'loan') {
     switchTab('scan'); setScanMode('loan');
     setTimeout(() => { document.getElementById('scan-input').value = item.CHSAssetNo; lookupAsset(item.CHSAssetNo); }, 50);
+  } else if (action === 'extend') {
+    switchTab('loans');
+    setTimeout(() => openExtendFromDetail(item), 400);
   } else if (action === 'history') {
     openItemHistory(item.CHSAssetNo, item.Model);
   } else if (action === 'delete') {
@@ -1612,7 +1670,8 @@ async function sendOverdueEmail(group) {
       to_name:     group.loanTo,
       items:       itemsList,
       due_date:    group.endDate,
-      return_link: returnLink
+      return_link: returnLink,
+      extend_link: APP_URL + '?extend=' + encodeURIComponent(group.loanTo)
     });
     console.log('Overdue email sent to', group.email);
     showToast('success', 'Overdue reminder sent to ' + group.email);
@@ -1622,14 +1681,31 @@ async function sendOverdueEmail(group) {
   }
 }
 
-// Track which loans we've already notified this session
-const _notifiedLoans = new Set();
+// Track notified loans persistently in Firebase
+let _sentNotifications = {};  // { "loanKey": true }
+
+async function loadSentNotifications() {
+  try {
+    const r = await fetch(FB_URL + '/notifications.json');
+    const d = await r.json();
+    _sentNotifications = d || {};
+  } catch(e) { _sentNotifications = {}; }
+}
+
+async function markNotificationSent(key) {
+  _sentNotifications[key] = nzDate();
+  try {
+    await fetch(FB_URL + '/notifications.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_sentNotifications)
+    });
+  } catch(e) { console.warn('Could not save notification record', e); }
+}
 
 function checkOverdueNotifications() {
   const today = nzDate();
-  console.log('Checking overdue notifications, today:', today);
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
-  console.log('Items on loan with end date:', onLoan.length);
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
@@ -1637,14 +1713,12 @@ function checkOverdueNotifications() {
     grouped[key].items.push(e);
   });
   Object.values(grouped).forEach(g => {
-    console.log('Loan group:', g.loanTo, 'endDate:', g.endDate, 'email:', g.email, 'overdue:', g.endDate < today);
+    const notifKey = g.loanTo + '|||' + g.endDate;
     if (g.endDate < today) {
       if (!g.email) {
-        console.warn('Overdue loan for', g.loanTo, 'but no borrower email set');
-        showToast('info', 'Overdue: ' + g.loanTo + ' — no borrower email set for this loan');
-      } else if (!_notifiedLoans.has(g.loanTo + g.endDate)) {
-        _notifiedLoans.add(g.loanTo + g.endDate);
-        console.log('Sending overdue email to', g.email);
+        showToast('info', 'Overdue: ' + g.loanTo + ' — no borrower email on this loan');
+      } else if (!_sentNotifications[notifKey]) {
+        markNotificationSent(notifKey);
         sendOverdueEmail(g);
       }
     }
@@ -1693,6 +1767,141 @@ document.addEventListener('click', function(e) {
     closeMobileMenu();
   }
 });
+
+// ── EXTEND LOAN ───────────────────────────────────────────────────────
+let currentExtendGroup = null;
+
+function openExtendLoan(gi) {
+  currentExtendGroup = window._loanGroups ? window._loanGroups[gi] : null;
+  if (!currentExtendGroup) return;
+  document.getElementById('extend-title').textContent = 'Extend Loan — ' + currentExtendGroup.loanTo;
+  document.getElementById('extend-subtitle').textContent =
+    currentExtendGroup.items.length + ' device' + (currentExtendGroup.items.length>1?'s':'') +
+    ' · Current due date: ' + (currentExtendGroup.endDate || 'none');
+  document.getElementById('extend-date').value = currentExtendGroup.endDate || nzDate();
+  document.getElementById('extend-reason').value = '';
+  document.getElementById('extend-modal').classList.add('open');
+}
+
+function closeExtendModal() {
+  document.getElementById('extend-modal').classList.remove('open');
+  currentExtendGroup = null;
+}
+
+async function confirmExtendLoan() {
+  if (!currentExtendGroup) return;
+  const newDate = document.getElementById('extend-date').value;
+  if (!newDate) { showToast('error', 'Please select a new end date'); return; }
+  if (newDate <= currentExtendGroup.endDate) {
+    showToast('error', 'New date must be after the current end date'); return;
+  }
+  const oldKey = currentExtendGroup.loanTo + '|||' + currentExtendGroup.endDate;
+  // Update all items in this loan group
+  currentExtendGroup.items.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id);
+    if (idx >= 0) equipment[idx].LoanEndDate = newDate;
+  });
+  // Clear old notification so new date can trigger fresh notification
+  if (_sentNotifications[oldKey]) {
+    delete _sentNotifications[oldKey];
+    await fetch(FB_URL + '/notifications.json', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(_sentNotifications)
+    });
+  }
+  scheduleSave();
+  closeExtendModal();
+  renderLoans();
+  renderTable();
+  showToast('success', 'Loan extended to ' + newDate + ' for ' + currentExtendGroup.loanTo);
+}
+
+// Handle extend action from detail panel
+function openExtendFromDetail(item) {
+  // Find the loan group for this item
+  renderLoans();
+  const groups = window._loanGroups || [];
+  const gi = groups.findIndex(g => g.loanTo === item.OnLoanTo && g.endDate === item.LoanEndDate);
+  if (gi >= 0) openExtendLoan(gi);
+  else { showToast('error', 'Could not find loan group'); }
+}
+
+// ── HISTORY MANAGEMENT ─────────────────────────────────────────────────
+const ADMIN_PASSWORD = 'notouchy';
+let _histMgmtUnlocked = false;
+let _histMgmtChecked = {};
+
+function openHistoryMgmt() {
+  _histMgmtUnlocked = false;
+  _histMgmtChecked = {};
+  document.getElementById('history-mgmt-auth').style.display = 'block';
+  document.getElementById('history-mgmt-content').style.display = 'none';
+  document.getElementById('hmgmt-pw').value = '';
+  document.getElementById('hmgmt-err').style.display = 'none';
+  document.getElementById('history-mgmt-modal').classList.add('open');
+  setTimeout(() => document.getElementById('hmgmt-pw').focus(), 100);
+}
+
+function historyMgmtAuth() {
+  const pw = document.getElementById('hmgmt-pw').value;
+  if (pw === ADMIN_PASSWORD) {
+    _histMgmtUnlocked = true;
+    document.getElementById('history-mgmt-auth').style.display = 'none';
+    document.getElementById('history-mgmt-content').style.display = 'block';
+    historyLog.forEach(h => { _histMgmtChecked[h.id] = false; });
+    renderHistoryMgmt();
+  } else {
+    document.getElementById('hmgmt-err').style.display = 'block';
+    document.getElementById('hmgmt-pw').value = '';
+  }
+}
+
+function renderHistoryMgmt() {
+  const q = (document.getElementById('hmgmt-search').value || '').toLowerCase();
+  const rows = historyLog.filter(h =>
+    !q || [h.chsAssetNo,h.model,h.loanTo,h.location,h.action].join(' ').toLowerCase().includes(q)
+  );
+  document.getElementById('hmgmt-count').textContent = rows.length + ' entries';
+  const aL = {Loan:'Loaned',Return:'Returned',Count:'Counted'};
+  document.getElementById('hmgmt-list').innerHTML = rows.length ? rows.map(h => `
+    <div class="br-item ${_histMgmtChecked[h.id]?'checked':''}" onclick="toggleHistoryMgmt('${h.id}')">
+      <div class="br-checkbox">${_histMgmtChecked[h.id]?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:500;font-family:'DM Mono',monospace">${h.chsAssetNo||'—'} <span style="font-family:'DM Sans',sans-serif;font-weight:400;color:var(--text2)">${h.model||''}</span></div>
+        <div style="font-size:11px;color:var(--text2)">${aL[h.action]||h.action} ${h.loanTo?'→ '+h.loanTo:''} · ${h.ts?new Date(h.ts).toLocaleString():''}</div>
+      </div>
+      <div style="font-size:11px;color:${_histMgmtChecked[h.id]?'var(--red)':'var(--text3)'}">${_histMgmtChecked[h.id]?'Delete':''}</div>
+    </div>`).join('')
+    : '<div style="padding:20px;text-align:center;color:var(--text3)">No entries found</div>';
+}
+
+function toggleHistoryMgmt(id) {
+  _histMgmtChecked[id] = !_histMgmtChecked[id];
+  renderHistoryMgmt();
+}
+
+function selectAllHistoryMgmt(val) {
+  const q = (document.getElementById('hmgmt-search').value || '').toLowerCase();
+  historyLog.filter(h => !q || [h.chsAssetNo,h.model,h.loanTo,h.location].join(' ').toLowerCase().includes(q))
+    .forEach(h => { _histMgmtChecked[h.id] = val; });
+  renderHistoryMgmt();
+}
+
+async function deleteSelectedHistory() {
+  const toDelete = Object.entries(_histMgmtChecked).filter(([k,v])=>v).map(([k])=>k);
+  if (!toDelete.length) { showToast('error','No entries selected'); return; }
+  if (!confirm('Delete ' + toDelete.length + ' history entr' + (toDelete.length>1?'ies':'y') + '? This cannot be undone.')) return;
+  historyLog = historyLog.filter(h => !toDelete.includes(h.id));
+  toDelete.forEach(id => delete _histMgmtChecked[id]);
+  scheduleSave();
+  renderHistoryMgmt();
+  renderHistory();
+  showToast('success', toDelete.length + ' entr' + (toDelete.length>1?'ies':'y') + ' deleted');
+}
+
+function closeHistoryMgmt() {
+  document.getElementById('history-mgmt-modal').classList.remove('open');
+}
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
 function initDragScroll() {
