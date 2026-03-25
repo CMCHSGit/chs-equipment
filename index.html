@@ -728,7 +728,7 @@ function doLogin() {
     sessionStorage.setItem('chs_auth', '1');
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    loadData();
+    loadData().then(() => setTimeout(handleReturnLink, 1200));
   } else {
     document.getElementById('login-err').style.display = 'block';
     document.getElementById('login-pw').value = '';
@@ -743,7 +743,7 @@ function checkAuth() {
   if (sessionStorage.getItem('chs_auth') === '1') {
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    loadData();
+    loadData().then(() => setTimeout(handleReturnLink, 1200));
   }
 }
 
@@ -780,11 +780,13 @@ async function loadData() {
     setSync('ok', 'Live — auto-saving');
     updateStats(); renderTable(); renderHistory();
     hideLoading();
-    setTimeout(() => { checkOverdueNotifications(); handleReturnLink(); }, 1000);
+    setTimeout(() => checkOverdueNotifications(), 1000);
+    return true;
   } catch(e) {
     setSync('err', 'Load failed');
     hideLoading();
     showToast('error', 'Could not load data: ' + e.message);
+    return false;
   }
 }
 
@@ -1629,28 +1631,27 @@ function checkOverdueNotifications() {
   });
 }
 
-// Handle return link from email — check URL params on load
+// Handle return link from email — runs after login + data load
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('return');
   if (!token) return;
   try {
-    const decoded = decodeURIComponent(atob(token.replace(/-/g,'+').replace(/_/g,'/')));
+    const decoded = decodeURIComponent(atob(token));
     const [loanTo, endDate] = decoded.split('|||');
-    if (loanTo) {
-      // Switch to loans tab and open the batch return modal for this customer
-      switchTab('loans');
-      setTimeout(() => {
-        renderLoans();
-        const groups = window._loanGroups || [];
-        const gi = groups.findIndex(g => g.loanTo === loanTo);
-        if (gi >= 0) {
-          openBatchReturn(gi);
-        } else {
-          showToast('info', 'Loan for ' + loanTo + ' — please select from Active Loans');
-        }
-      }, 800);
-    }
+    if (!loanTo) return;
+    switchTab('loans');
+    setTimeout(() => {
+      renderLoans();
+      const groups = window._loanGroups || [];
+      const gi = groups.findIndex(g => g.loanTo === loanTo);
+      if (gi >= 0) {
+        openBatchReturn(gi);
+        showToast('info', 'Return checklist opened for ' + loanTo);
+      } else {
+        showToast('info', 'No active loan found for ' + loanTo + ' — may already be returned');
+      }
+    }, 600);
   } catch(e) { console.log('Return link parse error', e); }
 }
 
