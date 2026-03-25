@@ -1591,10 +1591,9 @@ function buildReturnLink(loanTo, endDate) {
 
 async function sendOverdueEmail(group) {
   if (!_ejsReady || !group.email) return;
-  const itemsList = group.items.map(e =>
-    `• ${e.CHSAssetNo} — ${e.Model || ''}${e.SerialNo ? ' (S/N: ' + e.SerialNo + ')' : ''}`
-  ).join('
-');
+  const itemsList = group.items.map(function(e) {
+    return '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '');
+  }).join('\n');
   const returnLink = buildReturnLink(group.loanTo, group.endDate);
   try {
     await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
