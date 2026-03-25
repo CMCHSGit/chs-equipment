@@ -171,6 +171,28 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .form-grid,.asset-grid{grid-template-columns:1fr}
   .modal-form-grid{grid-template-columns:1fr}
 }
+/* DRAG TO SCROLL */
+.table-scroll{cursor:grab;user-select:none}
+.table-scroll.dragging{cursor:grabbing}
+/* DETAIL PANEL */
+.detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:flex-start;justify-content:flex-end}
+.detail-overlay.open{display:flex}
+.detail-panel{background:var(--surface);width:100%;max-width:520px;height:100vh;overflow-y:auto;box-shadow:var(--shadow-md);display:flex;flex-direction:column}
+.detail-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);z-index:10}
+.detail-title{font-size:16px;font-weight:600;letter-spacing:-.01em}
+.detail-subtitle{font-size:12px;color:var(--text2);margin-top:2px}
+.detail-body{padding:20px;flex:1}
+.detail-section{margin-bottom:20px}
+.detail-section-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.detail-field{background:var(--surface2);border-radius:var(--radius);padding:10px 12px}
+.detail-field label{font-size:11px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
+.detail-field span{font-size:13px;color:var(--text);font-weight:500;word-break:break-all}
+.detail-field.full{grid-column:1/-1}
+.detail-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;gap:8px;position:sticky;bottom:0;background:var(--surface)}
+.detail-status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500;margin-bottom:16px}
+tr.clickable-row{cursor:pointer}
+tr.clickable-row:hover td{background:var(--accent-light)!important}
 </style>
 </head>
 <body>
@@ -463,6 +485,29 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   </div>
 </div>
 
+<!-- DETAIL PANEL -->
+<div class="detail-overlay" id="detail-overlay" onclick="if(event.target===this)closeDetail()">
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-header">
+      <div>
+        <div class="detail-title" id="dp-title">—</div>
+        <div class="detail-subtitle" id="dp-subtitle">—</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-sm btn-primary" onclick="editFromDetail()">Edit</button>
+        <button class="modal-close" onclick="closeDetail()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div class="detail-body" id="detail-body"></div>
+    <div class="detail-footer">
+      <button class="btn btn-green btn-sm" onclick="closeDetail();setScanMode('return');document.getElementById('scan-input').value=currentDetailItem.CHSAssetNo;lookupAsset(currentDetailItem.CHSAssetNo);switchTab('scan')">Return</button>
+      <button class="btn btn-primary btn-sm" onclick="closeDetail();setScanMode('loan');document.getElementById('scan-input').value=currentDetailItem.CHSAssetNo;lookupAsset(currentDetailItem.CHSAssetNo);switchTab('scan')">Issue Loan</button>
+      <button class="btn btn-sm" onclick="openItemHistory(currentDetailItem.CHSAssetNo,currentDetailItem.Model);closeDetail()">History</button>
+      <button class="btn btn-sm btn-red" onclick="deleteItem(currentDetailItem.id,currentDetailItem.CHSAssetNo);closeDetail()" style="margin-left:auto">Delete</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -723,7 +768,7 @@ function renderTable() {
   document.getElementById('db-row-count').textContent = rows.length + ' of ' + equipment.length + ' items';
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
     const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
-    return `<tr>
+    return `<tr class="clickable-row" onclick="openDetail('${e.id}')">
       <td class="col-sticky td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
       <td>${esc(e.Model)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
@@ -972,10 +1017,115 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 
+// ── DETAIL PANEL ──────────────────────────────────────────────────────
+let currentDetailItem = null;
+
+function openDetail(id) {
+  const item = equipment.find(e => e.id === id);
+  if (!item) return;
+  currentDetailItem = item;
+  const today = new Date().toISOString().slice(0,10);
+  const on = item.OnLoanTo && item.Returned !== 'Yes';
+  const od = on && item.LoanEndDate && item.LoanEndDate < today;
+
+  document.getElementById('dp-title').textContent = item.CHSAssetNo || '—';
+  document.getElementById('dp-subtitle').textContent = [item.Model, item.Description].filter(Boolean).join(' · ') || '—';
+
+  const statusBadge = on
+    ? `<span class="detail-status badge-loan">${od ? '⚠ Overdue' : 'On loan'}</span>`
+    : `<span class="detail-status badge-avail">Available</span>`;
+
+  document.getElementById('detail-body').innerHTML = `
+    ${statusBadge}
+    <div class="detail-section">
+      <div class="detail-section-title">Equipment</div>
+      <div class="detail-grid">
+        <div class="detail-field"><label>CHS Asset No.</label><span>${esc2(item.CHSAssetNo)}</span></div>
+        <div class="detail-field"><label>Model</label><span>${esc2(item.Model)}</span></div>
+        <div class="detail-field full"><label>Description</label><span>${esc2(item.Description)}</span></div>
+        <div class="detail-field"><label>Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.SerialNo)}</span></div>
+        <div class="detail-field"><label>Part Number</label><span>${esc2(item.PartNo)}</span></div>
+        <div class="detail-field"><label>Manufacture Date</label><span>${esc2(item.MfgDate)}</span></div>
+        <div class="detail-field"><label>Purchase Date</label><span>${esc2(item.PurchaseDate)}</span></div>
+        <div class="detail-field"><label>US$ Price</label><span>${item.USPrice ? '$'+Number(item.USPrice).toLocaleString() : '—'}</span></div>
+        <div class="detail-field"><label>NZ$ Price</label><span>${item.NZPrice ? '$'+Number(item.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</span></div>
+        <div class="detail-field"><label>Tile No.</label><span>${esc2(item.TileNo)}</span></div>
+        <div class="detail-field"><label>Tile Type</label><span>${esc2(item.TileType)}</span></div>
+        <div class="detail-field"><label>Shelf Location</label><span>${esc2(item.ShelfLocation)}</span></div>
+        <div class="detail-field"><label>Counted</label><span>${item.Counted === 'Yes' ? '✓ Yes' : 'No'}</span></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <div class="detail-section-title">Network / Device</div>
+      <div class="detail-grid">
+        <div class="detail-field"><label>Device ID</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.DeviceID)}</span></div>
+        <div class="detail-field"><label>Old CHS #</label><span>${esc2(item.OldCHS)}</span></div>
+        <div class="detail-field"><label>LAN MAC</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.LanMAC)}</span></div>
+        <div class="detail-field"><label>WLAN MAC</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.WlanMAC)}</span></div>
+      </div>
+    </div>
+    ${on ? `<div class="detail-section">
+      <div class="detail-section-title">Current Loan</div>
+      <div class="detail-grid">
+        <div class="detail-field"><label>On Loan To</label><span>${esc2(item.OnLoanTo)}</span></div>
+        <div class="detail-field"><label>Location</label><span>${esc2(item.Location)}</span></div>
+        <div class="detail-field"><label>Start Date</label><span>${esc2(item.LoanStartDate)}</span></div>
+        <div class="detail-field" style="${od?'background:var(--red-light)':''}"><label>End Date</label><span style="${od?'color:var(--red)':''}">${esc2(item.LoanEndDate)}</span></div>
+      </div>
+    </div>` : ''}
+    ${item.Notes ? `<div class="detail-section">
+      <div class="detail-section-title">Notes</div>
+      <div class="detail-field full"><label>Notes</label><span>${esc2(item.Notes)}</span></div>
+    </div>` : ''}
+  `;
+  document.getElementById('detail-overlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').classList.remove('open');
+  currentDetailItem = null;
+}
+
+function editFromDetail() {
+  if (!currentDetailItem) return;
+  closeDetail();
+  openEditModal(currentDetailItem.id);
+}
+
+function esc2(v) { if(!v&&v!==0) return '—'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── DRAG TO SCROLL ─────────────────────────────────────────────────────
+function initDragScroll() {
+  const el = document.querySelector('.table-scroll');
+  if (!el) return;
+  let isDown = false, startX, scrollLeft;
+  el.addEventListener('mousedown', e => {
+    if (e.target.closest('button') || e.target.closest('a')) return;
+    isDown = true; el.classList.add('dragging');
+    startX = e.pageX - el.offsetLeft; scrollLeft = el.scrollLeft;
+  });
+  el.addEventListener('mouseleave', () => { isDown = false; el.classList.remove('dragging'); });
+  el.addEventListener('mouseup', () => { isDown = false; el.classList.remove('dragging'); });
+  el.addEventListener('mousemove', e => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - el.offsetLeft;
+    el.scrollLeft = scrollLeft - (x - startX) * 1.5;
+  });
+  // Touch support
+  let touchStartX, touchScrollLeft;
+  el.addEventListener('touchstart', e => { touchStartX = e.touches[0].pageX; touchScrollLeft = el.scrollLeft; }, {passive:true});
+  el.addEventListener('touchmove', e => {
+    const x = e.touches[0].pageX;
+    el.scrollLeft = touchScrollLeft - (x - touchStartX);
+  }, {passive:true});
+}
+
 // ── START ──────────────────────────────────────────────────────────────
 document.getElementById('f-start-date').value = new Date().toISOString().slice(0,10);
 document.getElementById('login-pw').focus();
 checkAuth();
+setTimeout(initDragScroll, 1000);
 </script>
 </body>
 </html>
