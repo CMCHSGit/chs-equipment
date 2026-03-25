@@ -376,7 +376,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location *</label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="f-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="f-end-date"></div>
-              <div class="form-group"><label>Borrower Email</label><input type="email" id="f-email" placeholder="borrower@email.com"></div>
+              <div class="form-group"><label>Borrower Email *</label><input type="email" id="f-email" placeholder="borrower@email.com" required></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="f-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div class="form-actions">
@@ -418,7 +418,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location *</label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
-              <div class="form-group"><label>Borrower Email</label><input type="email" id="b-email" placeholder="borrower@email.com"></div>
+              <div class="form-group"><label>Borrower Email *</label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include</div>
@@ -534,7 +534,14 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="scan-card">
         <h2>Import Equipment Data</h2>
         <p class="subtitle">Import from Excel or CSV. Existing items matched by CHS Asset Number will be updated; new ones added. Saves automatically.</p>
-        <div class="import-zone" id="import-zone" onclick="document.getElementById('file-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+        <div id="import-auth-wrap" style="text-align:center;padding:20px 0;margin-bottom:16px">
+        <div style="font-size:14px;color:var(--text2);margin-bottom:10px">Enter admin password to access import</div>
+        <input type="password" id="import-pw" placeholder="Admin password" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:280px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockImport()">
+        <button class="btn btn-primary" onclick="unlockImport()">Unlock Import</button>
+        <div id="import-pw-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
+      </div>
+      <div id="import-main" style="display:none">
+      <div class="import-zone" id="import-zone" onclick="document.getElementById('file-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 10px;display:block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <div style="font-weight:500">Click to upload or drag &amp; drop</div>
           <div style="font-size:12px;margin-top:4px">Excel (.xlsx, .xls) or CSV</div>
@@ -556,6 +563,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             Shelf Location, Notes, Device ID, LAN MAC, WLAN MAC, Old CHS #, Tile Type
           </div>
           <button class="btn btn-sm" style="margin-top:10px" onclick="downloadTemplate()">Download blank template</button>
+        </div><!-- end import-main -->
         </div>
       </div>
     </div>
@@ -626,6 +634,22 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div id="qr-video-wrap"><video id="qr-video" autoplay playsinline muted></video><div class="qr-overlay"><div class="qr-frame"></div></div></div>
     <p style="font-size:13px;color:var(--text2);margin-top:12px;text-align:center">Point camera at QR code containing the CHS Asset Number</p>
     <div class="modal-footer"><button class="btn" onclick="closeQR()">Cancel</button></div>
+  </div>
+</div>
+
+<!-- LOAN DOCUMENT MODAL -->
+<div class="modal-overlay" id="loan-doc-modal">
+  <div class="modal" style="max-width:900px;padding:0">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <div style="font-size:16px;font-weight:600">Loan Form</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
+        </button>
+        <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:80vh"></div>
   </div>
 </div>
 
@@ -973,7 +997,9 @@ function submitLoan() {
   if (!currentItem) return;
   const loanTo   = document.getElementById('f-loan-to').value.trim();
   const location = document.getElementById('f-location').value.trim();
+  const emailVal = document.getElementById('f-email').value.trim();
   if (!loanTo || !location) { showFeedback('error', 'Please fill in "On Loan To" and "Location".'); return; }
+  if (!emailVal || !emailVal.includes('@')) { showFeedback('error', 'Please enter a valid Borrower Email address.'); return; }
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const borrowerEmail = document.getElementById('f-email').value.trim();
   Object.assign(equipment[idx], {
@@ -986,7 +1012,10 @@ function submitLoan() {
   });
   historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
-  scheduleSave(); updateStats(); renderTable(); clearScan();
+  scheduleSave(); updateStats(); renderTable();
+  // Generate loan document
+  generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate });
+  clearScan();
   showToast('success', `${currentItem.CHSAssetNo} loaned to ${loanTo}`);
 }
 
@@ -1316,7 +1345,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 
@@ -1386,9 +1415,15 @@ function removeBatchDevice(id) {
 async function submitBatchLoan() {
   const loanTo   = document.getElementById('b-loan-to').value.trim();
   const location = document.getElementById('b-location').value.trim();
+  const batchEmailCheck = document.getElementById('b-email').value.trim();
   if (!loanTo || !location) {
     document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = `<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please fill in "On Loan To" and "Location".</div>`;
+    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please fill in "On Loan To" and "Location".</div>';
+    return;
+  }
+  if (!batchEmailCheck || !batchEmailCheck.includes('@')) {
+    document.getElementById('batch-feedback').style.display = 'block';
+    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please enter a valid Borrower Email address.</div>';
     return;
   }
   const validDevices = batchDevices.filter(d => {
@@ -1414,6 +1449,9 @@ async function submitBatchLoan() {
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
   }
   scheduleSave(); renderTable(); updateStats();
+  // Generate loan document for batch
+  const batchLoanItems = validDevices.map(d => equipment.find(e => e.CHSAssetNo.toLowerCase() === d.value.toLowerCase())).filter(Boolean);
+  generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate: endDate });
   showToast('success', `Batch loan created: ${validDevices.length} device${validDevices.length>1?'s':''} loaned to ${loanTo}`);
   clearScan();
   btn.disabled = false; btn.textContent = 'Confirm Batch Loan';
@@ -1671,13 +1709,13 @@ async function sendOverdueEmail(group) {
       items:       itemsList,
       due_date:    group.endDate,
       return_link: returnLink,
-      extend_link: APP_URL + '?extend=' + encodeURIComponent(group.loanTo)
+      extend_link: APP_URL + '?extend=' + loanReturnToken(group.loanTo, group.endDate)
     });
     console.log('Overdue email sent to', group.email);
-    showToast('success', 'Overdue reminder sent to ' + group.email);
+    console.log('Overdue reminder sent to', group.email);
   } catch(err) {
     console.error('Email send failed:', err);
-    showToast('error', 'Email failed: ' + (err.text || err.message || JSON.stringify(err)));
+    console.error('Email failed:', err);
   }
 }
 
@@ -1716,7 +1754,7 @@ function checkOverdueNotifications() {
     const notifKey = g.loanTo + '|||' + g.endDate;
     if (g.endDate < today) {
       if (!g.email) {
-        showToast('info', 'Overdue: ' + g.loanTo + ' — no borrower email on this loan');
+        console.log('Overdue loan for', g.loanTo, '- no borrower email set');
       } else if (!_sentNotifications[notifKey]) {
         markNotificationSent(notifKey);
         sendOverdueEmail(g);
@@ -1725,10 +1763,12 @@ function checkOverdueNotifications() {
   });
 }
 
-// Handle return link from email — runs after login + data load
+// Handle return/extend links from email
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
-  const token = params.get('return');
+  const returnToken = params.get('return');
+  const extendToken = params.get('extend');
+  const token = returnToken || extendToken;
   if (!token) return;
   try {
     const decoded = decodeURIComponent(atob(token));
@@ -1740,13 +1780,13 @@ function handleReturnLink() {
       const groups = window._loanGroups || [];
       const gi = groups.findIndex(g => g.loanTo === loanTo);
       if (gi >= 0) {
-        openBatchReturn(gi);
-        showToast('info', 'Return checklist opened for ' + loanTo);
+        if (extendToken) openExtendLoan(gi);
+        else openBatchReturn(gi);
       } else {
-        showToast('info', 'No active loan found for ' + loanTo + ' — may already be returned');
+        showToast('info', 'No active loan found for ' + loanTo);
       }
     }, 600);
-  } catch(e) { console.log('Return link parse error', e); }
+  } catch(e) { console.log('Link parse error', e); }
 }
 
 // ── MOBILE MENU ───────────────────────────────────────────────────────
@@ -1901,6 +1941,149 @@ async function deleteSelectedHistory() {
 
 function closeHistoryMgmt() {
   document.getElementById('history-mgmt-modal').classList.remove('open');
+}
+
+// ── IMPORT PASSWORD ────────────────────────────────────────────────────
+let _importUnlocked = false;
+function unlockImport() {
+  const pw = document.getElementById('import-pw').value;
+  if (pw === ADMIN_PASSWORD) {
+    _importUnlocked = true;
+    document.getElementById('import-auth-wrap').style.display = 'none';
+    document.getElementById('import-main').style.display = 'block';
+  } else {
+    document.getElementById('import-pw-err').style.display = 'block';
+    document.getElementById('import-pw').value = '';
+  }
+}
+
+// Reset import lock when leaving tab
+const _origSwitchTab = switchTab;
+function switchTab(n) {
+  if (n !== 'import' && _importUnlocked) {
+    _importUnlocked = false;
+    document.getElementById('import-auth-wrap').style.display = 'block';
+    document.getElementById('import-main').style.display = 'none';
+    document.getElementById('import-pw').value = '';
+    document.getElementById('import-pw-err').style.display = 'none';
+  }
+  _origSwitchTab(n);
+}
+
+// ── LOAN DOCUMENT ──────────────────────────────────────────────────────
+let _currentLoanDocItems = [];
+
+function generateLoanDoc(loanItems, loanInfo) {
+  _currentLoanDocItems = loanItems;
+  const today = nzDate();
+  const rows = loanItems.map(e => `
+    <tr>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${e.CHSAssetNo||''}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${e.Description||e.Model||''}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${e.SerialNo||e.PartNo||''}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+    </tr>`).join('');
+  // Add empty rows to fill table
+  const emptyRows = Math.max(0, 15 - loanItems.length);
+  const blank = Array(emptyRows).fill('<tr>' + '<td style="border:1px solid #ccc;padding:6px 8px;height:24px"></td>'.repeat(7) + '</tr>').join('');
+
+  document.getElementById('loan-doc-content').innerHTML = `
+    <div id="printable-loan-doc" style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto">
+      <!-- HEADER -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
+        <tr>
+          <td style="padding:0">
+            <div style="font-size:22px;font-weight:700;color:#1a1917">Connected Healthcare Equipment Loan Form</div>
+          </td>
+          <td style="text-align:right;padding:0;width:120px">
+            <div style="font-size:11px;font-weight:600;color:#1d4ed8;text-align:right">connected<br><span style="font-weight:400;color:#666">healthcare systems</span></div>
+          </td>
+        </tr>
+      </table>
+      <div style="border-top:2px solid #333;border-bottom:1px solid #ccc;margin-bottom:0"></div>
+      <!-- CUSTOMER INFO -->
+      <table style="width:100%;border-collapse:collapse;border:1px solid #ccc;border-top:none">
+        <tr style="background:#f5f5f5">
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:18%">Customer</td>
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:20%">Customer Address</td>
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:12%">Loan Date</td>
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date</td>
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:18%">Contact Name</td>
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700">Contact Number</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${loanInfo.loanTo||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${loanInfo.location||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${formatDisplayDate(loanInfo.startDate||today)}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${formatDisplayDate(loanInfo.endDate||'')}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+        </tr>
+      </table>
+      <!-- EQUIPMENT TABLE -->
+      <table style="width:100%;border-collapse:collapse;margin-top:12px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:12%">CHS Asset #</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:22%">Description</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:15%">Serial/Part #</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%">Dispatched CHS</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%">Customer Received</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%">Dispatched Customer</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left">CHS Received</th>
+          </tr>
+        </thead>
+        <tbody>${rows}${blank}</tbody>
+      </table>
+      <!-- NOTES + AUTH -->
+      <table style="width:100%;border-collapse:collapse;margin-top:0">
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;height:40px" colspan="6"></td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;height:30px" colspan="6"></td>
+        </tr>
+      </table>
+      <!-- FOOTER -->
+      <table style="width:100%;border-collapse:collapse;margin-top:0">
+        <tr>
+          <td style="border:1px solid #ccc;padding:12px 16px;width:50%;vertical-align:middle">
+            <div style="color:#1d4ed8;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
+            <div style="color:#dc2626;font-weight:700;font-size:11px;text-align:center;margin-top:6px">Check all units have current ESC</div>
+          </td>
+          <td style="border:1px solid #ccc;padding:8px 16px;vertical-align:top">
+            <table style="width:100%;border-collapse:collapse">
+              <tr><td style="font-size:11px;padding:4px 0;border-bottom:1px solid #ccc">Name (print):</td></tr>
+              <tr><td style="font-size:11px;padding:8px 0;border-bottom:1px solid #ccc">Signature:</td></tr>
+              <tr><td style="font-size:11px;padding:4px 0">Date:</td></tr>
+            </table>
+          </td>
+        </tr>
+      </table>
+    </div>`;
+  document.getElementById('loan-doc-modal').classList.add('open');
+}
+
+function formatDisplayDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  return (day||'') + '/' + (m||'') + '/' + (y||'');
+}
+
+function closeLoanDoc() {
+  document.getElementById('loan-doc-modal').classList.remove('open');
+}
+
+function printLoanDoc() {
+  const content = document.getElementById('printable-loan-doc').innerHTML;
+  const w = window.open('', '_blank');
+  w.document.write('<html><head><title>CHS Loan Form</title><style>@media print{body{margin:0;padding:16px}button{display:none}}body{font-family:Arial,sans-serif}</style></head><body>' + content + '<script>window.onload=function(){window.print();}<\/script></body></html>');
+  w.document.close();
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
