@@ -910,6 +910,14 @@ function switchTab(n) {
   const sd2 = document.getElementById('sync-dot'); const sl2 = document.getElementById('sync-label');
   if(sd&&sd2) sd.className = sd2.className;
   if(sl&&sl2) sl.textContent = sl2.textContent;
+  // Reset import lock when leaving import tab
+  if (n !== 'import' && typeof _importUnlocked !== 'undefined' && _importUnlocked) {
+    _importUnlocked = false;
+    const iaw = document.getElementById('import-auth-wrap'); if(iaw) iaw.style.display = 'block';
+    const im = document.getElementById('import-main'); if(im) im.style.display = 'none';
+    const ipw = document.getElementById('import-pw'); if(ipw) ipw.value = '';
+    const ipe = document.getElementById('import-pw-err'); if(ipe) ipe.style.display = 'none';
+  }
   if (n === 'database') renderTable();
   if (n === 'history')  renderHistory();
   if (n === 'scan')     updateStats();
@@ -1957,18 +1965,7 @@ function unlockImport() {
   }
 }
 
-// Reset import lock when leaving tab
-const _origSwitchTab = switchTab;
-function switchTab(n) {
-  if (n !== 'import' && _importUnlocked) {
-    _importUnlocked = false;
-    document.getElementById('import-auth-wrap').style.display = 'block';
-    document.getElementById('import-main').style.display = 'none';
-    document.getElementById('import-pw').value = '';
-    document.getElementById('import-pw-err').style.display = 'none';
-  }
-  _origSwitchTab(n);
-}
+// Import lock reset handled in switchTab
 
 // ── LOAN DOCUMENT ──────────────────────────────────────────────────────
 let _currentLoanDocItems = [];
