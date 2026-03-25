@@ -7,6 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f4f3f0;--surface:#fff;--surface2:#f9f8f6;--border:#e5e3de;--border2:#d4d1ca;--text:#1a1917;--text2:#6b6860;--text3:#9c9a94;--accent:#1d4ed8;--accent-light:#eff4ff;--green:#15803d;--green-light:#f0fdf4;--green-border:#bbf7d0;--red:#dc2626;--red-light:#fef2f2;--red-border:#fecaca;--amber:#d97706;--amber-light:#fffbeb;--amber-border:#fde68a;--radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.06)}
@@ -327,6 +328,15 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
     <!-- SCAN -->
     <div class="panel active" id="panel-scan">
+      <div id="overdue-banner" style="display:none;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:12px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-weight:600;color:var(--red);font-size:14px">⚠ Overdue equipment detected</div>
+            <div id="overdue-banner-text" style="font-size:13px;color:var(--text2);margin-top:2px"></div>
+          </div>
+          <button class="btn btn-sm btn-red" onclick="switchTab('loans')">View overdue loans</button>
+        </div>
+      </div>
       <div class="stats-row">
         <div class="stat-card"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total items</div></div>
         <div class="stat-card"><div class="stat-val" style="color:var(--amber)" id="stat-onloan">0</div><div class="stat-label">On loan</div></div>
@@ -366,6 +376,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location *</label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="f-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="f-end-date"></div>
+              <div class="form-group"><label>Borrower Email</label><input type="email" id="f-email" placeholder="borrower@email.com"></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="f-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div class="form-actions">
@@ -407,6 +418,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location *</label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
+              <div class="form-group"><label>Borrower Email</label><input type="email" id="b-email" placeholder="borrower@email.com"></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include</div>
@@ -695,6 +707,12 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 const APP_PASSWORD = 'CHS2024';          // ← change this to your password
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
+// EmailJS config
+const EJS_SERVICE  = 'service_bqd6bgi';
+const EJS_TEMPLATE = 'template_xux1ico';
+const EJS_KEY      = 'vMgCBjvQgk-oWs34f';
+const APP_URL      = 'https://cmchsgit.github.io/chs-equipment';
+
 // NZ timezone date helper
 function nzDate() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' }); // returns YYYY-MM-DD
@@ -762,6 +780,7 @@ async function loadData() {
     setSync('ok', 'Live — auto-saving');
     updateStats(); renderTable(); renderHistory();
     hideLoading();
+    setTimeout(() => { checkOverdueNotifications(); handleReturnLink(); }, 1000);
   } catch(e) {
     setSync('err', 'Load failed');
     hideLoading();
@@ -822,11 +841,24 @@ function updateStats() {
   const today = nzDate();
   const total = equipment.length;
   const on    = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes').length;
-  const od    = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && e.LoanEndDate < today).length;
+  const odItems = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && e.LoanEndDate < today);
+  const od = odItems.length;
   document.getElementById('stat-total').textContent     = total;
   document.getElementById('stat-onloan').textContent    = on;
   document.getElementById('stat-available').textContent = total - on;
   document.getElementById('stat-overdue').textContent   = od;
+  // Show/hide overdue banner
+  const banner = document.getElementById('overdue-banner');
+  if (banner) {
+    if (od > 0) {
+      banner.style.display = 'block';
+      const customers = [...new Set(odItems.map(e => e.OnLoanTo))];
+      document.getElementById('overdue-banner-text').textContent =
+        od + ' item' + (od>1?'s':'') + ' overdue from ' + customers.join(', ') + '. Overdue emails sent to borrowers.';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
 }
 
 // ── SCAN ───────────────────────────────────────────────────────────────
@@ -887,12 +919,14 @@ function submitLoan() {
   const location = document.getElementById('f-location').value.trim();
   if (!loanTo || !location) { showFeedback('error', 'Please fill in "On Loan To" and "Location".'); return; }
   const idx = equipment.findIndex(e => e.id === currentItem.id);
+  const borrowerEmail = document.getElementById('f-email').value.trim();
   Object.assign(equipment[idx], {
     OnLoanTo: loanTo, Location: location,
     LoanStartDate: document.getElementById('f-start-date').value || '',
     LoanEndDate:   document.getElementById('f-end-date').value   || '',
     Returned: 'No',
-    Notes: document.getElementById('f-notes').value || equipment[idx].Notes || ''
+    Notes: document.getElementById('f-notes').value || equipment[idx].Notes || '',
+    BorrowerEmail: borrowerEmail
   });
   historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
@@ -927,7 +961,7 @@ function clearScan() {
   document.getElementById('asset-preview').style.display = 'none';
   ['loan-form','return-form','count-form'].forEach(id => document.getElementById(id).style.display = 'none');
   hideFeedback();
-  ['f-loan-to','f-location','f-end-date','f-notes'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  ['f-loan-to','f-location','f-end-date','f-notes','f-email'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('f-start-date').value = nzDate();
   document.getElementById('scan-input').focus();
 }
@@ -1011,7 +1045,7 @@ function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;
 function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
-const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType'];
+const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail'];
 
 function openAddModal() { editingId=null; document.getElementById('modal-title').textContent='Add Equipment'; MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';}); document.getElementById('item-modal').classList.add('open'); }
 function openEditModal(id) {
@@ -1313,13 +1347,14 @@ async function submitBatchLoan() {
   const btn = document.getElementById('btn-batch');
   btn.disabled = true; btn.textContent = 'Saving…';
   const batchId = 'batch_' + Date.now();
-  const startDate = document.getElementById('b-start-date').value;
-  const endDate   = document.getElementById('b-end-date').value;
-  const notes     = document.getElementById('b-notes').value;
+  const startDate    = document.getElementById('b-start-date').value;
+  const endDate      = document.getElementById('b-end-date').value;
+  const notes        = document.getElementById('b-notes').value;
+  const batchEmail   = document.getElementById('b-email').value.trim();
   for (const d of validDevices) {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     if (idx < 0) continue;
-    Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId });
+    Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
   }
   scheduleSave(); renderTable(); updateStats();
@@ -1532,6 +1567,93 @@ function detailAction(action) {
 
 function esc2(v) { if(!v&&v!==0) return '—'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+// ── NOTIFICATIONS & OVERDUE CHECKS ────────────────────────────────────
+let _ejsReady = false;
+function initEmailJS() {
+  if (typeof emailjs !== 'undefined') {
+    emailjs.init(EJS_KEY);
+    _ejsReady = true;
+  }
+}
+
+// Generate a unique return token for a loan group
+function loanReturnToken(loanTo, endDate) {
+  return btoa(encodeURIComponent(loanTo + '|||' + endDate)).replace(/=/g,'');
+}
+
+// Build return link that opens the app with the return modal pre-loaded
+function buildReturnLink(loanTo, endDate) {
+  const token = loanReturnToken(loanTo, endDate);
+  return APP_URL + '?return=' + token;
+}
+
+async function sendOverdueEmail(group) {
+  if (!_ejsReady || !group.email) return;
+  const itemsList = group.items.map(e =>
+    `• ${e.CHSAssetNo} — ${e.Model || ''}${e.SerialNo ? ' (S/N: ' + e.SerialNo + ')' : ''}`
+  ).join('
+');
+  const returnLink = buildReturnLink(group.loanTo, group.endDate);
+  try {
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email:    group.email,
+      to_name:     group.loanTo,
+      items:       itemsList,
+      due_date:    group.endDate,
+      return_link: returnLink
+    });
+    console.log('Overdue email sent to', group.email);
+  } catch(e) {
+    console.error('Email send failed:', e);
+  }
+}
+
+// Track which loans we've already notified this session
+const _notifiedLoans = new Set();
+
+function checkOverdueNotifications() {
+  const today = nzDate();
+  // Group on-loan items
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
+  const grouped = {};
+  onLoan.forEach(e => {
+    const key = e.OnLoanTo + '|||' + e.LoanEndDate;
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: e.BorrowerEmail || '', items: [] };
+    grouped[key].items.push(e);
+  });
+  Object.values(grouped).forEach(g => {
+    if (g.endDate < today && g.email && !_notifiedLoans.has(g.loanTo + g.endDate)) {
+      _notifiedLoans.add(g.loanTo + g.endDate);
+      sendOverdueEmail(g);
+    }
+  });
+}
+
+// Handle return link from email — check URL params on load
+function handleReturnLink() {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('return');
+  if (!token) return;
+  try {
+    const decoded = decodeURIComponent(atob(token.replace(/-/g,'+').replace(/_/g,'/')));
+    const [loanTo, endDate] = decoded.split('|||');
+    if (loanTo) {
+      // Switch to loans tab and open the batch return modal for this customer
+      switchTab('loans');
+      setTimeout(() => {
+        renderLoans();
+        const groups = window._loanGroups || [];
+        const gi = groups.findIndex(g => g.loanTo === loanTo);
+        if (gi >= 0) {
+          openBatchReturn(gi);
+        } else {
+          showToast('info', 'Loan for ' + loanTo + ' — please select from Active Loans');
+        }
+      }, 800);
+    }
+  } catch(e) { console.log('Return link parse error', e); }
+}
+
 // ── MOBILE MENU ───────────────────────────────────────────────────────
 function toggleMobileMenu() {
   const menu = document.getElementById('mobile-menu');
@@ -1581,6 +1703,7 @@ function initDragScroll() {
 // ── START ──────────────────────────────────────────────────────────────
 document.getElementById('f-start-date').value = nzDate();
 document.getElementById('login-pw').focus();
+initEmailJS();
 checkAuth();
 setTimeout(initDragScroll, 1000);
 </script>
