@@ -1572,10 +1572,21 @@ function esc2(v) { if(!v&&v!==0) return '—'; return String(v).replace(/&/g,'&a
 // ── NOTIFICATIONS & OVERDUE CHECKS ────────────────────────────────────
 let _ejsReady = false;
 function initEmailJS() {
-  if (typeof emailjs !== 'undefined') {
-    emailjs.init(EJS_KEY);
-    _ejsReady = true;
-  }
+  // Retry up to 5 times since script may not be loaded yet
+  let attempts = 0;
+  const tryInit = () => {
+    if (typeof emailjs !== 'undefined') {
+      emailjs.init({ publicKey: EJS_KEY });
+      _ejsReady = true;
+      console.log('EmailJS ready');
+    } else if (attempts < 5) {
+      attempts++;
+      setTimeout(tryInit, 1000);
+    } else {
+      console.warn('EmailJS failed to load');
+    }
+  };
+  tryInit();
 }
 
 // Generate a unique return token for a loan group
@@ -1604,8 +1615,10 @@ async function sendOverdueEmail(group) {
       return_link: returnLink
     });
     console.log('Overdue email sent to', group.email);
-  } catch(e) {
-    console.error('Email send failed:', e);
+    showToast('success', 'Overdue reminder sent to ' + group.email);
+  } catch(err) {
+    console.error('Email send failed:', err);
+    showToast('error', 'Email failed: ' + (err.text || err.message || JSON.stringify(err)));
   }
 }
 
@@ -1614,8 +1627,9 @@ const _notifiedLoans = new Set();
 
 function checkOverdueNotifications() {
   const today = nzDate();
-  // Group on-loan items
+  console.log('Checking overdue notifications, today:', today);
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
+  console.log('Items on loan with end date:', onLoan.length);
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
@@ -1623,9 +1637,16 @@ function checkOverdueNotifications() {
     grouped[key].items.push(e);
   });
   Object.values(grouped).forEach(g => {
-    if (g.endDate < today && g.email && !_notifiedLoans.has(g.loanTo + g.endDate)) {
-      _notifiedLoans.add(g.loanTo + g.endDate);
-      sendOverdueEmail(g);
+    console.log('Loan group:', g.loanTo, 'endDate:', g.endDate, 'email:', g.email, 'overdue:', g.endDate < today);
+    if (g.endDate < today) {
+      if (!g.email) {
+        console.warn('Overdue loan for', g.loanTo, 'but no borrower email set');
+        showToast('info', 'Overdue: ' + g.loanTo + ' — no borrower email set for this loan');
+      } else if (!_notifiedLoans.has(g.loanTo + g.endDate)) {
+        _notifiedLoans.add(g.loanTo + g.endDate);
+        console.log('Sending overdue email to', g.email);
+        sendOverdueEmail(g);
+      }
     }
   });
 }
