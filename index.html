@@ -2062,9 +2062,8 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
     return;
   }
   const itemsList = loanItems.map(e =>
-    '  • ' + (e.CHSAssetNo||'') + ' — ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? '  SN: ' + e.SerialNo : '')
-  ).join('
-');
+    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')
+  ).join('\n');
 
   const manageLink = APP_URL + '?tab=loans';
 
