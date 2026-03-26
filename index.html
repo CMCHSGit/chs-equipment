@@ -1551,24 +1551,33 @@ function renderLoans() {
     document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
     return;
   }
+  // Store groups by key for reliable lookup
+  window._loanGroupMap = {};
+  groups.forEach((g, gi) => {
+    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate);
+    window._loanGroupMap[key] = g;
+  });
+  window._loanGroups = groups;
+
   document.getElementById('loans-list').innerHTML = groups.map((g, gi) => {
     const overdue = g.endDate && g.endDate < today;
+    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate);
     return `<div class="loan-card">
-      <div class="loan-card-header" onclick="toggleLoanCard(${gi})">
+      <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
           <div class="loan-card-meta">${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${g.endDate}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
-          <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDoc(${gi})" title="View loan form">
+          <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey('${key}')" title="View loan form">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoan(${gi})" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
-          <button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturn(${gi})">Return items</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+          <button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey('${key}')">Return items</button>
         </div>
       </div>
-      <div class="loan-card-body" id="loancard_${gi}" style="display:none">
+      <div class="loan-card-body" id="lc_${gi}" style="display:none">
         ${g.items.map(e => `<div class="loan-device">
           <div class="loan-device-info">
             <div class="loan-device-assetno">${esc(e.CHSAssetNo)}</div>
@@ -1578,12 +1587,10 @@ function renderLoans() {
       </div>
     </div>`;
   }).join('');
-  // Store groups for return modal
-  window._loanGroups = groups;
 }
 
-function toggleLoanCard(gi) {
-  const body = document.getElementById('loancard_' + gi);
+function toggleLoanCard(id) {
+  const body = document.getElementById(id);
   if (body) body.style.display = body.style.display === 'none' ? 'block' : 'none';
 }
 
@@ -2146,18 +2153,38 @@ function closeLoanDoc() {
   document.getElementById('loan-doc-modal').classList.remove('open');
 }
 
+function getLoanGroupByKey(key) {
+  return (window._loanGroupMap || {})[key] || null;
+}
+
 function viewLoanDoc(gi) {
-  const groups = window._loanGroups || [];
-  const g = groups[gi];
+  const g = (window._loanGroups || [])[gi];
+  if (g) { const key = encodeURIComponent(g.loanTo + '|||' + g.endDate); viewLoanDocByKey(key); }
+}
+
+function viewLoanDocByKey(key) {
+  const g = getLoanGroupByKey(key);
   if (!g) { showToast('error','Could not find loan data'); return; }
-  // Get full equipment items for this group - match by id first, fallback to CHSAssetNo
-  const items = g.items.map(i => {
-    return equipment.find(e => e.id === i.id) ||
-           equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) ||
-           i;
-  }).filter(Boolean);
+  const items = g.items.map(i =>
+    equipment.find(e => e.id === i.id) ||
+    equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) || i
+  ).filter(Boolean);
   if (!items.length) { showToast('error','No items found for this loan'); return; }
   generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate: g.startDate || '', endDate: g.endDate });
+}
+
+function openExtendLoanByKey(key) {
+  const g = getLoanGroupByKey(key);
+  if (!g) return;
+  const gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
+  if (gi >= 0) openExtendLoan(gi);
+}
+
+function openBatchReturnByKey(key) {
+  const g = getLoanGroupByKey(key);
+  if (!g) return;
+  const gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
+  if (gi >= 0) openBatchReturn(gi);
 }
 
 function printLoanDoc() {
