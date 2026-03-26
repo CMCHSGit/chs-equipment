@@ -2085,7 +2085,8 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
 }
 
 // Track notified loans persistently in Firebase
-let _sentNotifications = {};  // { "loanKey": true }
+// _sentNotifications stores { "loanKey": "YYYY-MM-DD" } — date last sent
+let _sentNotifications = {};
 
 async function loadSentNotifications() {
   try {
@@ -2106,6 +2107,26 @@ async function markNotificationSent(key) {
   } catch(e) { console.warn('Could not save notification record', e); }
 }
 
+// Returns true if today is Monday in NZ time and after 9am
+function isMondayMorningNZ() {
+  const now = new Date();
+  const nzStr = now.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', weekday: 'long', hour: 'numeric', hour12: false });
+  // weekday: 'long' gives us "Monday" etc, hour gives us 0-23
+  const day  = now.toLocaleDateString('en-NZ', { timeZone: 'Pacific/Auckland', weekday: 'long' });
+  const hour = parseInt(now.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', hour: 'numeric', hour12: false }));
+  return day === 'Monday' && hour >= 9;
+}
+
+// Returns the most recent Monday date string (YYYY-MM-DD) in NZ time
+function lastMondayNZ() {
+  const now = new Date();
+  const nzDate2 = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
+  const day = nzDate2.getDay(); // 0=Sun, 1=Mon
+  const diff = (day === 0) ? 6 : day - 1; // days since last Monday
+  nzDate2.setDate(nzDate2.getDate() - diff);
+  return nzDate2.toISOString().slice(0, 10);
+}
+
 function checkOverdueNotifications() {
   const today = nzDate();
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
@@ -2117,13 +2138,19 @@ function checkOverdueNotifications() {
   });
   Object.values(grouped).forEach(g => {
     const notifKey = g.loanTo + '|||' + g.endDate;
-    if (g.endDate < today) {
-      if (!g.email) {
-        console.log('Overdue loan for', g.loanTo, '- no borrower email set');
-      } else if (!_sentNotifications[notifKey]) {
-        markNotificationSent(notifKey);
-        sendOverdueEmail(g);
-      }
+    if (g.endDate >= today) return; // not overdue yet
+    if (!g.email) {
+      console.log('Overdue loan for', g.loanTo, '- no email set');
+      return;
+    }
+    const lastSent = _sentNotifications[notifKey]; // date string or undefined
+    const thisMonday = lastMondayNZ();
+    // Send if: never sent, OR last sent before this Monday AND today is Monday after 9am
+    const shouldSend = !lastSent || (isMondayMorningNZ() && lastSent < thisMonday);
+    if (shouldSend) {
+      markNotificationSent(notifKey);
+      sendOverdueEmail(g);
+      console.log('Weekly overdue reminder sent to', g.email, 'for', g.loanTo);
     }
   });
 }
