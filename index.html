@@ -97,7 +97,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .badge-avail{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
 
 /* TABLE */
-.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;position:sticky;top:56px;z-index:50;background:var(--bg);padding:10px 0 8px;margin-top:-10px}
 .search-wrap{position:relative}
 .search-input{padding:7px 12px 7px 34px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;width:220px}
 .search-input:focus{border-color:var(--accent)}
@@ -738,9 +738,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px">This will remove the item from the main database and move it to the Sold / Retired tab.</div>
     <div class="form-group" style="margin-bottom:12px">
-      <label>Reason <span style="color:var(--red)">*</span></label>
+      <label>Reason</label>
       <select id="retire-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
-        <option value="">Select reason…</option>
+        <option value="">Optional…</option>
         <option>Sold</option>
         <option>Retired / End of life</option>
         <option>Lost</option>
@@ -1282,11 +1282,11 @@ function renderTable() {
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
     const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
     const checked = _selectedIds.has(e.id);
-    return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}">
+    return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}" onclick="openDetail('${e.id}')">
       <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
         <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
       </td>
-      <td class="td-mono" style="font-weight:500;cursor:pointer" onclick="openDetail('${e.id}')">${esc(e.CHSAssetNo)}</td>
+      <td class="td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
       <td>${esc(e.Model)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
       <td class="td-mono" style="font-size:11px">${esc(e.SerialNo)}</td>
@@ -1303,7 +1303,7 @@ function renderTable() {
       <td class="td-mono" style="font-size:11px">${esc(e.OldCHS)}</td>
       <td>${esc(e.TileType)}</td>
       <td>${e.Counted==='Yes'?'<span class="chip chip-yes">✓ Yes</span>':'<span class="chip chip-no">No</span>'}</td>
-      <td class="td-actions">
+      <td class="td-actions" onclick="event.stopPropagation()">
         <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
         <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
         ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
@@ -2021,11 +2021,61 @@ function openDetail(id) {
     </div>` : ''}
   `;
   document.getElementById('detail-overlay').classList.add('open');
+  // Reset footer to normal state
+  document.querySelector('.detail-footer').innerHTML = `
+    <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
+    <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
+    <button class="btn btn-sm" onclick="detailAction('retire')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
+    <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+    <button class="btn btn-sm" onclick="detailAction('history')">History</button>
+    <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
+  `;
 }
 
 function closeDetail() {
   document.getElementById('detail-overlay').classList.remove('open');
   currentDetailItem = null;
+}
+
+function openRetiredDetail(id) {
+  const item = retiredAssets.find(e => e.id === id);
+  if (!item) return;
+  // Use the existing detail panel but show retired-specific info
+  currentDetailItem = item;
+  document.getElementById('dp-title').textContent = item.CHSAssetNo || '—';
+  document.getElementById('dp-subtitle').textContent = [item.Model, item.Description].filter(Boolean).join(' · ') || '—';
+
+  document.getElementById('detail-body').innerHTML = `
+    <span class="detail-status" style="background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border);display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500;margin-bottom:16px">
+      ${item.RetiredReason || 'Sold / Retired'}
+    </span>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">Retired: ${formatDisplayDate(item.RetiredDate)||'—'}${item.RetiredNotes ? '<br>' + item.RetiredNotes : ''}</div>
+    <div class="detail-section">
+      <div class="detail-section-title">Equipment</div>
+      <div class="detail-grid">
+        <div class="detail-field"><label>CHS Asset No.</label><span>${esc2(item.CHSAssetNo)}</span></div>
+        <div class="detail-field"><label>Model</label><span>${esc2(item.Model)}</span></div>
+        <div class="detail-field full"><label>Description</label><span>${esc2(item.Description)}</span></div>
+        <div class="detail-field"><label>Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.SerialNo)}</span></div>
+        <div class="detail-field"><label>Part Number</label><span>${esc2(item.PartNo)}</span></div>
+        <div class="detail-field"><label>Manufacture Date</label><span>${esc2(item.MfgDate)}</span></div>
+        <div class="detail-field"><label>Purchase Date</label><span>${esc2(item.PurchaseDate)}</span></div>
+        <div class="detail-field"><label>US$ Price</label><span>${item.USPrice ? '$'+Number(item.USPrice).toLocaleString() : '—'}</span></div>
+        <div class="detail-field"><label>NZ$ Price</label><span>${item.NZPrice ? '$'+Number(item.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</span></div>
+        <div class="detail-field"><label>Tile No.</label><span>${esc2(item.TileNo)}</span></div>
+        <div class="detail-field"><label>Shelf Location</label><span>${esc2(item.ShelfLocation)}</span></div>
+      </div>
+    </div>
+    ${item.Notes ? `<div class="detail-section"><div class="detail-section-title">Notes</div><div class="detail-field full"><label>Notes</label><span>${esc2(item.Notes)}</span></div></div>` : ''}
+  `;
+
+  // Override footer buttons for retired items
+  document.getElementById('detail-overlay').classList.add('open');
+  // Swap footer to show Restore instead of loan actions
+  document.querySelector('.detail-footer').innerHTML = `
+    <button class="btn btn-sm btn-primary" onclick="restoreRetiredItem('${item.id}');closeDetail()">Restore to Database</button>
+    <button class="btn btn-sm btn-red" onclick="deleteRetiredItem('${item.id}','${esc(item.CHSAssetNo)}');closeDetail()" style="margin-left:auto">Delete Permanently</button>
+  `;
 }
 
 function tileBtn(uuid) {
@@ -3136,7 +3186,6 @@ function closeRetireModal() {
 
 async function confirmRetire() {
   const reason = document.getElementById('retire-reason').value;
-  if (!reason) { showToast('error', 'Please select a reason'); return; }
   const notes  = document.getElementById('retire-notes').value.trim();
   const item   = equipment.find(e => e.id === _retireItemId);
   if (!item) { closeRetireModal(); return; }
@@ -3166,17 +3215,17 @@ function renderRetired() {
     return av < bv ? -retiredSortDir : av > bv ? retiredSortDir : 0;
   });
   document.getElementById('retired-count').textContent = rows.length + ' items';
-  document.getElementById('retired-tbody').innerHTML = rows.length ? rows.map(e => `<tr>
+  document.getElementById('retired-tbody').innerHTML = rows.length ? rows.map(e => `<tr class="clickable-row" onclick="openRetiredDetail('${e.id}')">
     <td class="td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
     <td>${esc(e.Model)}</td>
     <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.Description)}</td>
     <td class="td-mono" style="font-size:11px">${esc(e.SerialNo)}</td>
     <td style="max-width:200px;font-size:12px;color:var(--text2)">${esc(e.RetiredNotes || e.Notes)}</td>
-    <td style="font-size:12px">${esc(e.RetiredDate)}</td>
+    <td style="font-size:12px">${formatDisplayDate(e.RetiredDate)}</td>
     <td><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)">${esc(e.RetiredReason)}</span></td>
     <td class="td-mono" style="font-size:11px">${esc(e.PartNo)}</td>
     <td>${e.NZPrice ? '$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</td>
-    <td class="td-actions">
+    <td class="td-actions" onclick="event.stopPropagation()">
       <button class="btn btn-sm" onclick="restoreRetiredItem('${e.id}')">Restore</button>
       <button class="btn btn-sm btn-red" onclick="deleteRetiredItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
     </td>
