@@ -693,6 +693,31 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<!-- ADD ITEMS TO LOAN MODAL -->
+<div class="modal-overlay" id="add-items-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="add-items-title">Add Items to Loan</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="add-items-subtitle"></div>
+      </div>
+      <button class="modal-close" onclick="closeAddItemsModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Scan or type additional asset numbers to add to this loan. Dates and customer details will match the existing loan.</div>
+    <div id="add-items-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+    <button class="btn btn-sm" onclick="addItemToLoanRow()" style="margin-bottom:12px">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add another
+    </button>
+    <div id="add-items-feedback" style="display:none"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAddItemsModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAddItemsToLoan()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Add to Loan
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- EXTEND LOAN MODAL -->
 <div class="modal-overlay" id="extend-modal">
   <div class="modal" style="max-width:420px">
@@ -1084,8 +1109,8 @@ function submitLoan() {
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
   scheduleSave(); updateStats(); renderTable();
   // Generate loan document
-  window._lastLoanDoc = { items: [equipment[idx]], info: { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate } };
-  generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate });
+  window._lastLoanDoc = { items: [equipment[idx]], info: { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' } };
+  generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' });
   clearScan();
   showToast('success', `${currentItem.CHSAssetNo} loaned to ${loanTo}`);
 }
@@ -1486,7 +1511,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 
@@ -1671,10 +1696,10 @@ async function submitBatchLoan() {
   // Store last loan doc info for re-opening from Active Loans
   const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
   window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate } };
-
+  window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
   // Generate loan document
   generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate });
-
+  generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM });
   // Show success toast
   // Show green confirmed badge
   const badge = document.getElementById('loan-confirmed-badge');
@@ -1752,7 +1777,13 @@ function renderLoans() {
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey('${key}')" title="Add more devices to this loan">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items
+          </button>
           <button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey('${key}')">Return items</button>
+          <button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteLoanByKey('${key}')" title="Delete this loan">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+          </button>
         </div>
       </div>
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
@@ -2291,7 +2322,7 @@ function generateLoanDoc(loanItems, loanInfo) {
           <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:20%">Customer Address</td>
           <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:12%">Loan Date</td>
           <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date</td>
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:18%">Contact Name</td>
+          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:18%">Account Manager</td>
           <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700">Contact Number</td>
         </tr>
         <tr>
@@ -2299,7 +2330,7 @@ function generateLoanDoc(loanItems, loanInfo) {
           <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${loanInfo.location||''}</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${formatDisplayDate(loanInfo.startDate||today)}</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${formatDisplayDate(loanInfo.endDate||'')}</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${loanInfo.accountManager||''}</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
         </tr>
       </table>
@@ -2401,6 +2432,7 @@ function saveLoanDocChanges() {
     const newLoanTo   = cells[0]?.innerText?.trim() || '';
     const newLocation = cells[1]?.innerText?.trim() || '';
     const newEndDate  = cells[3]?.innerText?.trim() || '';  // dd/mm/yyyy format
+    const newAM       = cells[4]?.innerText?.trim() || '';
 
     // Convert dd/mm/yyyy back to yyyy-mm-dd for storage
     function toISO(d) {
@@ -2420,9 +2452,10 @@ function saveLoanDocChanges() {
     items.forEach(item => {
       const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
       if (idx >= 0) {
-        if (newLoanTo)   equipment[idx].OnLoanTo  = newLoanTo;
-        if (newLocation) equipment[idx].Location  = newLocation;
-        if (newEndDate)  equipment[idx].LoanEndDate = toISO(newEndDate);
+        if (newLoanTo)   equipment[idx].OnLoanTo       = newLoanTo;
+        if (newLocation) equipment[idx].Location       = newLocation;
+        if (newEndDate)  equipment[idx].LoanEndDate    = toISO(newEndDate);
+        if (newAM)       equipment[idx].AccountManager = newAM;
         updated++;
       }
     });
@@ -2458,7 +2491,8 @@ function viewLoanDocByKey(key) {
   if (!items.length) { showToast('error','No items found for this loan'); return; }
   // Get startDate from group or fall back to first item's LoanStartDate
   const startDate = g.startDate || (items[0] && items[0].LoanStartDate) || '';
-  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate });
+  const am = items[0]?.AccountManager || '';
+  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am });
 }
 
 function openExtendLoanByKey(key) {
@@ -2669,6 +2703,139 @@ function issueLoanFromSelection() {
     // Clear selection after transfer
     clearSelection();
   }, 200);
+}
+
+// ── ADD ITEMS TO LOAN ─────────────────────────────────────────────────
+let _addItemsGroup = null;
+let _addItemsRows = [];
+let _addItemsStatus = {};
+
+function openAddItemsToLoanByKey(key) {
+  const g = getLoanGroupByKey(key);
+  if (!g) return;
+  _addItemsGroup = g;
+  _addItemsRows = [{ id: 'ai_0', value: '' }];
+  _addItemsStatus = {};
+  document.getElementById('add-items-title').textContent = 'Add Items — ' + g.loanTo;
+  document.getElementById('add-items-subtitle').textContent =
+    g.location + (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
+    ' · ' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') + ' currently';
+  document.getElementById('add-items-feedback').style.display = 'none';
+  renderAddItemsRows();
+  document.getElementById('add-items-modal').classList.add('open');
+  setTimeout(() => { const el = document.getElementById('aiinput_ai_0'); if (el) el.focus(); }, 100);
+}
+
+function renderAddItemsRows() {
+  document.getElementById('add-items-list').innerHTML = _addItemsRows.map((r, i) => {
+    const status = _addItemsStatus[r.id] || '';
+    return `<div style="display:flex;gap:6px;align-items:center">
+      <input type="text" id="aiinput_${r.id}" value="${r.value}" placeholder="CHS Asset Number"
+        style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:14px;outline:none"
+        onblur="updateAddItemRow('${r.id}',this.value)"
+        onkeydown="handleAddItemKey(event,'${r.id}')">
+      <div style="font-size:12px;min-width:160px">${status}</div>
+      ${_addItemsRows.length > 1 ? `<button class="btn btn-sm btn-red" onclick="removeAddItemRow('${r.id}')">✕</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function updateAddItemRow(id, val) {
+  val = val.trim();
+  const r = _addItemsRows.find(x => x.id === id);
+  if (!r) return;
+  r.value = val;
+  if (!val) { _addItemsStatus[id] = ''; renderAddItemsRows(); return; }
+  const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+  if (item) {
+    const on = item.OnLoanTo && item.Returned !== 'Yes';
+    _addItemsStatus[id] = on
+      ? `<span style="color:var(--amber)">⚠ ${item.Model||val} — on loan to ${item.OnLoanTo}</span>`
+      : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
+    r.value = item.CHSAssetNo;
+  } else {
+    _addItemsStatus[id] = `<span style="color:var(--red)">✗ Not found</span>`;
+  }
+  renderAddItemsRows();
+}
+
+function handleAddItemKey(e, id) {
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    updateAddItemRow(id, e.target.value);
+    addItemToLoanRow();
+  }
+}
+
+function addItemToLoanRow() {
+  const newId = 'ai_' + Date.now();
+  _addItemsRows.push({ id: newId, value: '' });
+  _addItemsStatus[newId] = '';
+  renderAddItemsRows();
+  setTimeout(() => { const el = document.getElementById('aiinput_' + newId); if (el) el.focus(); }, 30);
+}
+
+function removeAddItemRow(id) {
+  _addItemsRows = _addItemsRows.filter(r => r.id !== id);
+  delete _addItemsStatus[id];
+  renderAddItemsRows();
+}
+
+function closeAddItemsModal() {
+  document.getElementById('add-items-modal').classList.remove('open');
+  _addItemsGroup = null;
+}
+
+async function confirmAddItemsToLoan() {
+  if (!_addItemsGroup) return;
+  const validRows = _addItemsRows.filter(r => {
+    const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
+    return item && !(item.OnLoanTo && item.Returned !== 'Yes');
+  });
+  if (!validRows.length) {
+    const fb = document.getElementById('add-items-feedback');
+    fb.style.display = 'block';
+    fb.innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid available devices found. Check asset numbers.</div>';
+    return;
+  }
+  const g = _addItemsGroup;
+  const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
+  validRows.forEach(r => {
+    const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
+    if (idx < 0) return;
+    Object.assign(equipment[idx], {
+      OnLoanTo: g.loanTo, Location: g.location,
+      LoanStartDate: g.startDate || nzDate(),
+      LoanEndDate: g.endDate || '',
+      Returned: 'No', BatchID: batchId,
+      AccountManager: g.items[0]?.AccountManager || '',
+      BorrowerEmail: g.items[0]?.BorrowerEmail || ''
+    });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+  });
+  scheduleSave(); renderTable(); updateStats();
+  closeAddItemsModal();
+  renderLoans();
+  showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
+}
+
+// ── DELETE LOAN ────────────────────────────────────────────────────────
+function deleteLoanByKey(key) {
+  const g = getLoanGroupByKey(key);
+  if (!g) return;
+  const pw = prompt('Enter admin password to delete this loan for ' + g.loanTo + ':');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  const deviceList = g.items.map(i => i.CHSAssetNo).join(', ');
+  if (!confirm('Delete entire loan for ' + g.loanTo + '?\n\nThis will mark these devices as returned:\n' + deviceList + '\n\nThis cannot be undone.')) return;
+  g.items.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
+    if (idx < 0) return;
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Loan deleted by admin' });
+    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '' });
+  });
+  scheduleSave(); renderTable(); updateStats(); renderLoans();
+  showToast('info', 'Loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' marked as returned');
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
