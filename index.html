@@ -224,6 +224,13 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .br-item.checked{background:var(--green-light)}
 .br-checkbox{width:20px;height:20px;border-radius:4px;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .1s}
 .br-item.checked .br-checkbox{background:var(--green);border-color:var(--green);color:white}
+/* CHECKBOX */
+.db-checkbox{width:18px;height:18px;border-radius:4px;border:2px solid var(--border2);cursor:pointer;appearance:none;-webkit-appearance:none;background:var(--surface);position:relative;flex-shrink:0;transition:all .1s}
+.db-checkbox:checked{background:var(--accent);border-color:var(--accent)}
+.db-checkbox:checked::after{content:'';position:absolute;left:4px;top:1px;width:5px;height:9px;border:2px solid #fff;border-top:none;border-left:none;transform:rotate(45deg)}
+.db-checkbox:hover{border-color:var(--accent)}
+tr.row-selected td{background:var(--accent-light)!important}
+tr.row-selected .col-sticky{background:var(--accent-light)!important}
 /* EDITABLE CELLS */
 [contenteditable]:hover{background:rgba(29,78,216,.04);outline:1px dashed rgba(29,78,216,.3)}
 [contenteditable]:focus{background:rgba(29,78,216,.06);outline:2px solid var(--accent);outline-offset:-1px}
@@ -478,9 +485,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <button class="btn btn-sm" onclick="exportCSV()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
           </button>
-          <button class="btn btn-sm" onclick="switchTab('scan');setScanMode('batch')" style="background:var(--accent);border-color:var(--accent);color:#fff">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Issue Loan
+          <button class="btn btn-sm" id="btn-issue-selected" onclick="issueLoanFromSelection()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Issue Loan (<span id="selected-count">0</span>)
           </button>
+          <button class="btn btn-sm" id="btn-clear-selection" onclick="clearSelection()" style="display:none">Clear selection</button>
           <button class="btn btn-sm btn-primary" onclick="openAddModal()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Item
           </button>
@@ -488,7 +496,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       </div>
       <div class="table-wrap"><div class="table-scroll">
         <table><thead><tr>
-          <th class="col-sticky" onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
+          <th class="col-sticky" style="width:36px;padding:10px 8px">
+            <input type="checkbox" class="db-checkbox" id="select-all-cb" onclick="toggleSelectAll(this.checked)" title="Select all">
+          </th>
+          <th onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
           <th onclick="sortTable('Model')">Model ↕</th>
           <th>Description</th><th>Serial No.</th>
           <th onclick="sortTable('_status')">Status ↕</th>
@@ -501,7 +512,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <th>Old CHS #</th><th>Tile Type</th>
           <th>Counted</th><th>Actions</th>
         </tr></thead>
-        <tbody id="main-tbody"><tr><td colspan="19" class="table-empty">Loading…</td></tr></tbody>
+        <tbody id="main-tbody"><tr><td colspan="20" class="table-empty">Loading…</td></tr></tbody>
         </table>
       </div></div>
       <div style="margin-top:8px;display:flex;justify-content:flex-end"><span id="db-row-count" class="row-count"></span></div>
@@ -1171,11 +1182,15 @@ function renderTable() {
   });
   rows.sort((a,b) => { const av=(a[sortCol]||'').toString().toLowerCase(), bv=(b[sortCol]||'').toString().toLowerCase(); return av<bv?-sortDir:av>bv?sortDir:0; });
   document.getElementById('db-row-count').textContent = rows.length + ' of ' + equipment.length + ' items';
-  setTimeout(initDragScroll, 50);
+  setTimeout(() => { initDragScroll(); updateSelectionBar(); }, 50);
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
     const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
-    return `<tr class="clickable-row" onclick="openDetail('${e.id}')">
-      <td class="col-sticky td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
+    const checked = _selectedIds.has(e.id);
+    return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}">
+      <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
+        <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
+      </td>
+      <td class="td-mono" style="font-weight:500;cursor:pointer" onclick="openDetail('${e.id}')">${esc(e.CHSAssetNo)}</td>
       <td>${esc(e.Model)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
       <td class="td-mono" style="font-size:11px">${esc(e.SerialNo)}</td>
@@ -2485,6 +2500,82 @@ function removeAccountManager(i) {
 function getAMEmail(amName) {
   const am = accountManagers.find(a => a.name === amName);
   return am ? am.email : '';
+}
+
+// ── DATABASE ROW SELECTION ────────────────────────────────────────────
+const _selectedIds = new Set();
+
+function toggleRowSelect(id, checked) {
+  if (checked) _selectedIds.add(id);
+  else _selectedIds.delete(id);
+  const row = document.getElementById('row-' + id);
+  if (row) row.classList.toggle('row-selected', checked);
+  updateSelectionBar();
+}
+
+function toggleSelectAll(checked) {
+  // Only affect currently visible rows
+  document.querySelectorAll('#main-tbody .db-checkbox').forEach(cb => {
+    const row = cb.closest('tr');
+    const id = row ? row.id.replace('row-','') : null;
+    if (!id) return;
+    cb.checked = checked;
+    if (checked) _selectedIds.add(id);
+    else _selectedIds.delete(id);
+    row.classList.toggle('row-selected', checked);
+  });
+  updateSelectionBar();
+}
+
+function updateSelectionBar() {
+  const n = _selectedIds.size;
+  const issueBtn  = document.getElementById('btn-issue-selected');
+  const clearBtn  = document.getElementById('btn-clear-selection');
+  const countSpan = document.getElementById('selected-count');
+  if (issueBtn)  issueBtn.style.display  = n > 0 ? 'inline-flex' : 'none';
+  if (clearBtn)  clearBtn.style.display  = n > 0 ? 'inline-flex' : 'none';
+  if (countSpan) countSpan.textContent   = n;
+  // Update select-all checkbox state
+  const allCbs = document.querySelectorAll('#main-tbody .db-checkbox');
+  const selectAllCb = document.getElementById('select-all-cb');
+  if (selectAllCb && allCbs.length > 0) {
+    const visibleSelected = [...allCbs].filter(cb => cb.checked).length;
+    selectAllCb.indeterminate = visibleSelected > 0 && visibleSelected < allCbs.length;
+    selectAllCb.checked = visibleSelected === allCbs.length;
+  }
+}
+
+function clearSelection() {
+  _selectedIds.clear();
+  document.querySelectorAll('#main-tbody .db-checkbox').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#main-tbody tr').forEach(r => r.classList.remove('row-selected'));
+  const selectAllCb = document.getElementById('select-all-cb');
+  if (selectAllCb) { selectAllCb.checked = false; selectAllCb.indeterminate = false; }
+  updateSelectionBar();
+}
+
+function issueLoanFromSelection() {
+  if (_selectedIds.size === 0) return;
+  const selectedItems = equipment.filter(e => _selectedIds.has(e.id));
+  switchTab('scan');
+  setScanMode('batch');
+  setTimeout(() => {
+    // Pre-fill batch form with selected asset numbers
+    batchDevices = selectedItems.map((e, i) => ({ id: 'bd_sel_' + i, value: e.CHSAssetNo }));
+    if (!window._batchStatus) window._batchStatus = {};
+    batchDevices.forEach(d => {
+      const item = equipment.find(e => e.CHSAssetNo === d.value);
+      if (item) {
+        const on = item.OnLoanTo && item.Returned !== 'Yes';
+        window._batchStatus[d.id] = on
+          ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
+          : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
+      }
+    });
+    renderBatchDevices();
+    // Clear selection after transfer
+    clearSelection();
+  }, 200);
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
