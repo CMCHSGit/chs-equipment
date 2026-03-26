@@ -224,6 +224,9 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .br-item.checked{background:var(--green-light)}
 .br-checkbox{width:20px;height:20px;border-radius:4px;border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .1s}
 .br-item.checked .br-checkbox{background:var(--green);border-color:var(--green);color:white}
+/* EDITABLE CELLS */
+[contenteditable]:hover{background:rgba(29,78,216,.04);outline:1px dashed rgba(29,78,216,.3)}
+[contenteditable]:focus{background:rgba(29,78,216,.06);outline:2px solid var(--accent);outline-offset:-1px}
 /* DRAG TO SCROLL */
 .table-scroll{cursor:grab;user-select:none}
 .table-scroll.dragging{cursor:grabbing}
@@ -642,8 +645,12 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 <div class="modal-overlay" id="loan-doc-modal">
   <div class="modal" style="max-width:900px;padding:0">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
-      <div style="font-size:16px;font-weight:600">Loan Form</div>
-      <div style="display:flex;gap:8px">
+      <div>
+        <div style="font-size:16px;font-weight:600">Loan Form</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Click any cell to edit before printing</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div id="doc-edited-note" style="display:none;font-size:12px;color:var(--amber);font-weight:500">● Edited</div>
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
         </button>
@@ -2103,13 +2110,13 @@ function generateLoanDoc(loanItems, loanInfo) {
   const today = nzDate();
   const rows = loanItems.map(e => `
     <tr>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${e.CHSAssetNo||''}</td>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${e.Description||e.Model||''}</td>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${e.SerialNo||e.PartNo||''}</td>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
-      <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${e.CHSAssetNo||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${e.Description||e.Model||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
     </tr>`).join('');
   // Add empty rows to fill table
   const emptyRows = Math.max(0, 15 - loanItems.length);
@@ -2140,12 +2147,12 @@ function generateLoanDoc(loanItems, loanInfo) {
           <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700">Contact Number</td>
         </tr>
         <tr>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${loanInfo.loanTo||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${loanInfo.location||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${formatDisplayDate(loanInfo.startDate||today)}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px">${formatDisplayDate(loanInfo.endDate||'')}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:12px"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px;min-width:60px" title="Click to edit">${loanInfo.loanTo||''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${loanInfo.location||''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${formatDisplayDate(loanInfo.startDate||today)}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${formatDisplayDate(loanInfo.endDate||'')}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
         </tr>
       </table>
       <!-- EQUIPMENT TABLE -->
@@ -2167,11 +2174,11 @@ function generateLoanDoc(loanItems, loanInfo) {
       <table style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;height:40px" colspan="6"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to add notes"></td>
         </tr>
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;height:30px" colspan="6"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to add authorisation"></td>
         </tr>
       </table>
       <!-- FOOTER -->
@@ -2192,18 +2199,37 @@ function generateLoanDoc(loanItems, loanInfo) {
       </table>
     </div>`;
   document.getElementById('loan-doc-modal').classList.add('open');
+  document.getElementById('doc-edited-note').style.display = 'none';
+  // Track edits
+  setTimeout(() => {
+    document.querySelectorAll('#loan-doc-content [contenteditable]').forEach(el => {
+      el.addEventListener('input', () => {
+        document.getElementById('doc-edited-note').style.display = 'block';
+      }, { once: true });
+    });
+  }, 200);
 }
 
 function formatDisplayDate(d) {
-  if (!d || typeof d !== 'string') return '';
-  // Handle YYYY-MM-DD
-  if (d.includes('-')) {
-    const parts = d.split('-');
-    if (parts.length === 3) return (parts[2]||'') + '/' + (parts[1]||'') + '/' + (parts[0]||'');
+  if (!d && d !== 0) return '';
+  const s = String(d).trim();
+  if (!s) return '';
+  // Already DD/MM/YYYY or DD/MM/YY
+  if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(s)) return s;
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const [y,m,day] = s.split('-');
+    return day + '/' + m + '/' + y;
   }
-  // Handle DD/MM/YYYY already
-  if (d.includes('/')) return d;
-  return d;
+  // Excel serial
+  if (/^\d{4,6}$/.test(s) && Number(s) > 1000) {
+    const date = new Date(Date.UTC(1900,0,Number(s)-1));
+    if (Number(s) >= 60) date.setUTCDate(date.getUTCDate()-1);
+    const dd = String(date.getUTCDate()).padStart(2,'0');
+    const mm = String(date.getUTCMonth()+1).padStart(2,'0');
+    return dd + '/' + mm + '/' + date.getUTCFullYear();
+  }
+  return s;
 }
 
 function closeLoanDoc() {
@@ -2227,7 +2253,9 @@ function viewLoanDocByKey(key) {
     equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) || i
   ).filter(Boolean);
   if (!items.length) { showToast('error','No items found for this loan'); return; }
-  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate: g.startDate || '', endDate: g.endDate });
+  // Get startDate from group or fall back to first item's LoanStartDate
+  const startDate = g.startDate || (items[0] && items[0].LoanStartDate) || '';
+  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate });
 }
 
 function openExtendLoanByKey(key) {
