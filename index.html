@@ -285,6 +285,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="nav-tab" onclick="switchTab('import')" id="tab-import"><span>Import</span></button>
         <button class="nav-tab" onclick="switchTab('retired')" id="tab-retired"><span>Sold / Retired</span></button>
       </div>
+      <button class="btn btn-sm desktop-only" onclick="promptAddAsset()" style="font-size:11px;padding:4px 8px">+ Add Asset</button>
       <button class="btn btn-sm desktop-only" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
       <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
       <button class="hamburger-btn mobile-only" onclick="event.stopPropagation();toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
@@ -326,6 +327,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <button class="mobile-nav-item" onclick="openAMModal();closeMobileMenu()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Account Managers
+      </button>
+      <button class="mobile-nav-item" onclick="promptAddAsset();closeMobileMenu()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Asset
       </button>
       <button class="mobile-nav-item" onclick="doLogout()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -473,13 +478,11 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <button class="btn btn-sm" onclick="exportCSV()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
           </button>
-          <button class="btn btn-sm" id="btn-issue-selected" onclick="issueLoanFromSelection()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Issue Loan (<span id="selected-count">0</span>)
+          <button class="btn btn-sm btn-primary" id="btn-issue-selected" onclick="issueLoanFromSelection()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Add Item (<span id="selected-count">0</span>)
           </button>
           <button class="btn btn-sm" id="btn-clear-selection" onclick="clearSelection()" style="display:none">Clear selection</button>
-          <button class="btn btn-sm btn-primary" onclick="openAddModal()">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Item
-          </button>
+
         </div>
       </div>
       <div class="table-wrap"><div class="table-scroll">
@@ -1307,11 +1310,23 @@ function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).s
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
 const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','AccountManager'];
 
-function openAddModal() { editingId=null; document.getElementById('modal-title').textContent='Add Equipment'; MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';}); document.getElementById('item-modal').classList.add('open'); }
+function openAddModal() {
+  editingId=null;
+  document.getElementById('modal-title').textContent='Add Asset';
+  MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';});
+  document.getElementById('item-modal').classList.add('open');
+}
+
+function promptAddAsset() {
+  const pw = prompt('Enter admin password to add a new asset:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  openAddModal();
+}
 function openEditModal(id) {
   const item = equipment.find(e=>e.id===id); if(!item) return;
   editingId = id;
-  document.getElementById('modal-title').textContent = 'Edit Equipment';
+  document.getElementById('modal-title').textContent = 'Edit Asset';
   MF.forEach(f => { const el = document.getElementById('m-'+f); if(el) el.value = item[f]||''; });
   document.getElementById('item-modal').classList.add('open');
 }
