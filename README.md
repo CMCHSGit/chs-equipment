@@ -1,1 +1,1 @@
-# chs-equipment
+# CMCHS-Demo-Equipment-Register
