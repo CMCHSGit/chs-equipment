@@ -372,11 +372,11 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <!-- LOAN FORM -->
           <div id="loan-form" style="display:none">
             <div class="form-grid">
-              <div class="form-group"><label>On Loan To *</label><input type="text" id="f-loan-to" list="contacts-list"><datalist id="contacts-list"></datalist></div>
-              <div class="form-group"><label>Location *</label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
+              <div class="form-group"><label>On Loan To <span style="color:var(--red)">*</span></label><input type="text" id="f-loan-to" list="contacts-list"><datalist id="contacts-list"></datalist></div>
+              <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="f-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="f-end-date"></div>
-              <div class="form-group"><label>Borrower Email *</label><input type="email" id="f-email" placeholder="borrower@email.com" required></div>
+              <div class="form-group"><label>Borrower Email <span style="color:var(--red)">*</span></label><input type="email" id="f-email" placeholder="borrower@email.com" required></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="f-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div class="form-actions">
@@ -414,11 +414,11 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <div id="batch-form" style="display:none">
           <div class="scan-card" style="margin-top:0;padding:16px">
             <div class="form-grid" style="margin-bottom:12px">
-              <div class="form-group"><label>On Loan To *</label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
-              <div class="form-group"><label>Location *</label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
+              <div class="form-group"><label>On Loan To <span style="color:var(--red)">*</span></label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
+              <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
-              <div class="form-group"><label>Borrower Email *</label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
+              <div class="form-group"><label>Borrower Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include</div>
@@ -579,7 +579,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <button class="modal-close" onclick="closeModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="modal-form-grid">
-      <div class="form-group"><label>CHS Asset Number *</label><input type="text" id="m-CHSAssetNo"></div>
+      <div class="form-group"><label>CHS Asset Number <span style="color:var(--red)">*</span></label><input type="text" id="m-CHSAssetNo"></div>
       <div class="form-group"><label>Model</label><input type="text" id="m-Model"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Description</label><input type="text" id="m-Description"></div>
       <div class="form-group"><label>Serial Number</label><input type="text" id="m-SerialNo"></div>
@@ -2144,9 +2144,15 @@ function generateLoanDoc(loanItems, loanInfo) {
 }
 
 function formatDisplayDate(d) {
-  if (!d) return '';
-  const [y,m,day] = d.split('-');
-  return (day||'') + '/' + (m||'') + '/' + (y||'');
+  if (!d || typeof d !== 'string') return '';
+  // Handle YYYY-MM-DD
+  if (d.includes('-')) {
+    const parts = d.split('-');
+    if (parts.length === 3) return (parts[2]||'') + '/' + (parts[1]||'') + '/' + (parts[0]||'');
+  }
+  // Handle DD/MM/YYYY already
+  if (d.includes('/')) return d;
+  return d;
 }
 
 function closeLoanDoc() {
