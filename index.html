@@ -783,7 +783,12 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <!-- MAIN CONTENT -->
     <div id="am-main-section" style="display:none">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add name and email for each account manager. Email is auto-filled when selected in a loan form.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;color:var(--text2)">Email is auto-filled when selected in a loan form.</div>
+        <button class="btn btn-sm" onclick="sortAMList()" title="Sort A-Z">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>A–Z
+        </button>
+      </div>
       <div id="am-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto"></div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Add New</div>
@@ -2524,10 +2529,13 @@ let _amUnlocked = false;
 function loadAccountManagers() {
   const saved = localStorage.getItem('chs_account_managers_v2');
   accountManagers = saved ? JSON.parse(saved) : [];
+  accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
   updateAMDropdowns();
 }
 
 function saveAccountManagers() {
+  // Always keep sorted A-Z by name
+  accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
   localStorage.setItem('chs_account_managers_v2', JSON.stringify(accountManagers));
   updateAMDropdowns();
 }
@@ -2576,6 +2584,12 @@ function unlockAMModal() {
 function closeAMModal() {
   document.getElementById('am-modal').classList.remove('open');
   _amUnlocked = false;
+}
+
+function sortAMList() {
+  saveAccountManagers(); // sort is applied inside saveAccountManagers
+  renderAMList();
+  showToast('success', 'Sorted A–Z');
 }
 
 function renderAMList() {
