@@ -348,7 +348,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             <div style="font-weight:600;color:var(--red);font-size:14px">⚠ Overdue equipment detected</div>
             <div id="overdue-banner-text" style="font-size:13px;color:var(--text2);margin-top:2px"></div>
           </div>
-          <button class="btn btn-sm btn-red" onclick="switchTab('loans')">View overdue loans</button>
+          <button class="btn btn-sm btn-red" onclick="viewOverdueLoans()">View overdue loans</button>
         </div>
       </div>
       <div class="stats-row">
@@ -545,7 +545,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="table-toolbar">
         <strong style="font-size:15px">Active Loans</strong>
         <span id="loans-count" class="row-count" style="margin-left:8px"></span>
-        <select class="filter-select" id="loans-sort" onchange="renderLoans()" style="margin-left:auto">
+        <label id="overdue-filter-label" style="display:none;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-left:auto;padding:5px 10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);color:var(--red);font-weight:500">
+          <input type="checkbox" id="loans-overdue-only" onchange="renderLoans()" style="cursor:pointer">Overdue only
+        </label>
+        <select class="filter-select" id="loans-sort" onchange="renderLoans()">
           <option value="manager" selected>Account Manager</option>
           <option value="recent">Most recent loan</option>
           <option value="alpha">Customer A–Z</option>
@@ -1032,6 +1035,8 @@ function updateStats() {
       const customers = [...new Set(odItems.map(e => e.OnLoanTo))];
       document.getElementById('overdue-banner-text').textContent =
         od + ' item' + (od>1?'s':'') + ' overdue from ' + customers.join(', ') + '. Overdue emails sent to borrowers.';
+      const fl = document.getElementById('overdue-filter-label');
+      if (fl) fl.style.display = 'flex';
     } else {
       banner.style.display = 'none';
     }
@@ -1736,7 +1741,12 @@ function renderLoans() {
     if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [] };
     grouped[key].items.push(e);
   });
-  let groups = Object.values(grouped).filter(g => !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q));
+  const overdueOnly = document.getElementById('loans-overdue-only')?.checked;
+  let groups = Object.values(grouped).filter(g => {
+    const matchQ = !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q);
+    const matchOverdue = !overdueOnly || (g.endDate && g.endDate < today);
+    return matchQ && matchOverdue;
+  });
   if (sortBy === 'manager') groups.sort((a,b) => {
     const ma = (a.items[0]?.AccountManager||'zzz').toLowerCase();
     const mb = (b.items[0]?.AccountManager||'zzz').toLowerCase();
@@ -2896,6 +2906,15 @@ function deleteLoanByKey(key) {
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   showToast('info', 'Loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' marked as returned');
+}
+
+function viewOverdueLoans() {
+  switchTab('loans');
+  // Enable overdue filter
+  const cb = document.getElementById('loans-overdue-only');
+  const label = document.getElementById('overdue-filter-label');
+  if (cb) { cb.checked = true; if (label) label.style.display = 'flex'; }
+  renderLoans();
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
