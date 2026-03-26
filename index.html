@@ -492,6 +492,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <th class="col-sticky" style="width:36px;padding:10px 8px">
             <input type="checkbox" class="db-checkbox" id="select-all-cb" onclick="toggleSelectAll(this.checked)" title="Select all">
           </th>
+          <th style="white-space:nowrap">Actions</th>
           <th onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
           <th onclick="sortTable('Model')">Model ↕</th>
           <th>Description</th><th>Serial No.</th>
@@ -503,7 +504,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <th onclick="sortTable('NZPrice')">NZ$ ↕</th>
           <th>Shelf Location</th><th>Device ID</th><th>LAN MAC</th><th>WLAN MAC</th>
           <th>Old CHS #</th><th>Tile Type</th>
-          <th>Counted</th><th>Actions</th>
+          <th>Counted</th>
         </tr></thead>
         <tbody id="main-tbody"><tr><td colspan="20" class="table-empty">Loading…</td></tr></tbody>
         </table>
@@ -528,7 +529,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </button>
       </div>
       <div class="table-wrap"><div class="table-scroll"><table>
-        <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>End Date</th><th>Notes</th></tr></thead>
+        <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>End Date</th><th>Notes</th><th>Loan Form</th></tr></thead>
         <tbody id="hist-tbody"></tbody>
       </table></div></div>
     </div>
@@ -1257,7 +1258,9 @@ function renderHistory() {
         <td class="td-mono">${esc(h.chsAssetNo)}</td><td>${esc(h.model)}</td>
         <td><span class="status-badge ${aC[h.action]||''}">${aL[h.action]||h.action}</span></td>
         <td>${esc(h.loanTo)}</td><td>${esc(h.location)}</td><td>${esc(h.loanEnd)}</td>
-        <td style="font-size:12px;color:var(--text2)">${esc(h.notes)}</td></tr>`).join('')
+        <td style="font-size:12px;color:var(--text2)">${esc(h.notes)}</td>
+        <td>${h.action==='Loan' && h._pdfKey && window._loanPDFs && window._loanPDFs[h._pdfKey] ? `<button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')" style="font-size:11px;padding:3px 8px">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>` : ''}</td></tr>`).join('')
     : `<tr><td colspan="8" class="table-empty">No history yet</td></tr>`;
 }
 
@@ -1286,6 +1289,13 @@ function renderTable() {
       <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
         <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
       </td>
+      <td class="td-actions" onclick="event.stopPropagation()">
+        <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
+        <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
+        ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
+        <button class="btn btn-sm" onclick="openRetireModal('${e.id}')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
+        <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
+      </td>
       <td class="td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
       <td>${esc(e.Model)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
@@ -1303,13 +1313,7 @@ function renderTable() {
       <td class="td-mono" style="font-size:11px">${esc(e.OldCHS)}</td>
       <td>${esc(e.TileType)}</td>
       <td>${e.Counted==='Yes'?'<span class="chip chip-yes">✓ Yes</span>':'<span class="chip chip-no">No</span>'}</td>
-      <td class="td-actions" onclick="event.stopPropagation()">
-        <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
-        <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
-        ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
-        <button class="btn btn-sm" onclick="openRetireModal('${e.id}')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
-        <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
-      </td></tr>`;
+      </tr>`;
   }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
 }
 
@@ -1360,7 +1364,7 @@ function openItemHistory(assetNo, model) {
   document.getElementById('hmodal-title').textContent = `History — ${assetNo} (${model})`;
   const aL={Loan:'Loaned out',Return:'Returned',Count:'Counted'}, dC={Loan:'hdot-loan',Return:'hdot-return',Count:'hdot-count'};
   document.getElementById('hmodal-body').innerHTML = rows.length
-    ? `<div class="history-list">${rows.map(h=>`<div class="history-item"><div class="history-dot ${dC[h.action]||''}"></div><div class="history-body"><div class="history-action">${aL[h.action]||h.action}</div><div class="history-meta">${h.loanTo?`To: ${h.loanTo}`:''}${h.location?` · ${h.location}`:''}${h.loanEnd?` · Due: ${h.loanEnd}`:''}<br>${h.ts?new Date(h.ts).toLocaleString():''}${h.notes?`<br><em>${h.notes}</em>`:''}</div></div></div>`).join('')}</div>`
+    ? `<div class="history-list">${rows.map(h=>`<div class="history-item"><div class="history-dot ${dC[h.action]||''}"></div><div class="history-body"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="history-action">${aL[h.action]||h.action}</div>${h.action==='Loan'&&h._pdfKey&&window._loanPDFs&&window._loanPDFs[h._pdfKey]?`<button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')" style="font-size:11px;padding:2px 7px;margin-left:8px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>`:''}</div><div class="history-meta">${h.loanTo?`To: ${h.loanTo}`:''}${h.location?` · ${h.location}`:''}${h.loanEnd?` · Due: ${h.loanEnd}`:''}<br>${h.ts?new Date(h.ts).toLocaleString():''}${h.notes?`<br><em>${h.notes}</em>`:''}</div></div></div>`).join('')}</div>`
     : '<p style="color:var(--text3);padding:12px 0">No history for this item.</p>';
   document.getElementById('history-modal').classList.add('open');
 }
@@ -1764,7 +1768,7 @@ async function submitBatchLoan() {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     if (idx < 0) continue;
     Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
   }
 
   scheduleSave(); renderTable(); updateStats();
@@ -1776,6 +1780,12 @@ async function submitBatchLoan() {
   // Generate loan document
   generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate });
   generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM });
+  // Store PDF HTML in memory keyed by batchId for history viewing
+  setTimeout(() => {
+    const docEl = document.getElementById('printable-loan-doc');
+    if (docEl) window._loanPDFs = window._loanPDFs || {};
+    if (docEl) window._loanPDFs[batchId] = docEl.innerHTML;
+  }, 300);
 
   // Send confirmation email to account manager
   const amEmailForConfirm = batchEmail || getAMEmail(batchAM);
@@ -2502,9 +2512,9 @@ function generateLoanDoc(loanItems, loanInfo) {
       <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
     </tr>`).join('');
-  // Add empty rows to fill table
-  const emptyRows = Math.max(0, 15 - loanItems.length);
-  const blank = Array(emptyRows).fill('<tr>' + '<td style="border:1px solid #ccc;padding:6px 8px;height:24px"></td>'.repeat(7) + '</tr>').join('');
+  // Add 3 spare editable rows below items
+  const spare = 3;
+  const blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:28px;font-size:12px" title="Click to edit"></td>'.repeat(7) + '</tr>').join('');
 
   document.getElementById('loan-doc-content').innerHTML = `
     <div id="printable-loan-doc" style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto">
@@ -2540,20 +2550,22 @@ function generateLoanDoc(loanItems, loanInfo) {
         </tr>
       </table>
       <!-- EQUIPMENT TABLE -->
-      <table style="width:100%;border-collapse:collapse;margin-top:12px">
-        <thead>
+      <div style="overflow-x:auto">
+      <table id="loan-doc-equip-table" style="width:100%;border-collapse:collapse;margin-top:12px">
+        <thead style="position:sticky;top:0;z-index:2">
           <tr style="background:#f5f5f5">
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:12%">CHS Asset #</th>
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:22%">Description</th>
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:15%">Serial/Part #</th>
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%">Dispatched CHS</th>
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%">Customer Received</th>
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%">Dispatched Customer</th>
-            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left">CHS Received</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:12%;background:#f5f5f5">CHS Asset #</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:22%;background:#f5f5f5">Description</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:15%;background:#f5f5f5">Serial/Part #</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched CHS</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Customer Received</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched Customer</th>
+            <th style="border:1px solid #ccc;padding:5px 8px;font-size:11px;text-align:left;background:#f5f5f5">CHS Received</th>
           </tr>
         </thead>
         <tbody>${rows}${blank}</tbody>
       </table>
+      </div>
       <!-- NOTES + AUTH -->
       <table style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
@@ -2625,6 +2637,16 @@ function formatDisplayDate(d) {
 function closeLoanDoc() {
   document.getElementById('loan-doc-modal').classList.remove('open');
   window._currentLoanDocInfo = null;
+}
+
+function viewHistoryPDF(pdfKey) {
+  const html = (window._loanPDFs || {})[pdfKey];
+  if (!html) { showToast('error', 'Loan form not available — only forms from this session can be viewed'); return; }
+  document.getElementById('loan-doc-content').innerHTML = '<div id="printable-loan-doc">' + html + '</div>';
+  document.getElementById('doc-edited-note').style.display = 'none';
+  const sb = document.getElementById('doc-save-btn');
+  if (sb) sb.style.display = 'none';
+  document.getElementById('loan-doc-modal').classList.add('open');
 }
 
 function addDocRow() {
