@@ -285,7 +285,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       </div>
       <button class="btn btn-sm desktop-only" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
       <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
-      <button class="hamburger-btn mobile-only" onclick="toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
+      <button class="hamburger-btn mobile-only" onclick="event.stopPropagation();toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
         <span></span><span></span><span></span>
       </button>
     </div>
@@ -770,7 +770,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       History
     </button>
-    <button class="mobile-bottom-btn" id="mbnav-more" onclick="toggleMobileMenu()">
+    <button class="mobile-bottom-btn" id="mbnav-more" onclick="event.stopPropagation();toggleMobileMenu()">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
       More
     </button>
@@ -1022,6 +1022,7 @@ function submitLoan() {
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
   scheduleSave(); updateStats(); renderTable();
   // Generate loan document
+  window._lastLoanDoc = { items: [equipment[idx]], info: { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate } };
   generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate });
   clearScan();
   showToast('success', `${currentItem.CHSAssetNo} loaned to ${loanTo}`);
@@ -1341,6 +1342,24 @@ function exportCSV() {
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='chs-demo-equipment-'+nzDate()+'.csv'; a.click();
 }
 function downloadTemplate() { const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob(['Model,Description,Serial Number,Manufacture Date,CHS Asset Number,TILE Number,On Loan To,Location,Loan Start Date,Loan End Date,Returned,Counted,Part Number,Purchase date,US$ Price,NZ$ Purchase Price,Shelf Location,Notes,Device ID,LAN MAC,WLAN MAC,Old CHS #,Tile Type\n'],{type:'text/csv'})); a.download='chs-equipment-template.csv'; a.click(); }
+
+function downloadExcel() {
+  const cols=['Model','Description','SerialNo','MfgDate','CHSAssetNo','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','PartNo','PurchaseDate','USPrice','NZPrice','ShelfLocation','Notes','DeviceID','LanMAC','WlanMAC','OldCHS','TileType'];
+  const head=['Model','Description','Serial Number','Manufacture Date','CHS Asset Number','TILE Number','On Loan To','Location','Loan Start Date','Loan End Date','Returned','Counted','Part Number','Purchase date','US$ Price','NZ$ Purchase Price','Shelf Location','Notes','Device ID','LAN MAC','WLAN MAC','Old CHS #','Tile Type'];
+  const rows = equipment.map(e => cols.map(c => e[c] || ''));
+  const ws = XLSX.utils.aoa_to_sheet([head, ...rows]);
+  ws['!cols'] = cols.map(() => ({ wch: 18 }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Equipment');
+  // History sheet
+  const hCols=['ts','chsAssetNo','model','action','loanTo','location','loanStart','loanEnd','notes'];
+  const hHead=['Date/Time','CHS Asset No.','Model','Action','On Loan To','Location','Loan Start','Loan End','Notes'];
+  const hRows = historyLog.map(h => hCols.map(c => c==='ts'?(h.ts?new Date(h.ts).toLocaleString():''):(h[c]||'')));
+  const ws2 = XLSX.utils.aoa_to_sheet([hHead, ...hRows]);
+  ws2['!cols'] = hCols.map(() => ({ wch: 18 }));
+  XLSX.utils.book_append_sheet(wb, ws2, 'History');
+  XLSX.writeFile(wb, 'CHS-Demo-Equipment-' + nzDate() + '.xlsx');
+}
 
 // ── FEEDBACK / TOAST ───────────────────────────────────────────────────
 function showFeedback(type,msg){
@@ -2130,9 +2149,14 @@ function closeLoanDoc() {
 function viewLoanDoc(gi) {
   const groups = window._loanGroups || [];
   const g = groups[gi];
-  if (!g) return;
-  // Get full equipment items for this group
-  const items = g.items.map(i => equipment.find(e => e.id === i.id) || i);
+  if (!g) { showToast('error','Could not find loan data'); return; }
+  // Get full equipment items for this group - match by id first, fallback to CHSAssetNo
+  const items = g.items.map(i => {
+    return equipment.find(e => e.id === i.id) ||
+           equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) ||
+           i;
+  }).filter(Boolean);
+  if (!items.length) { showToast('error','No items found for this loan'); return; }
   generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate: g.startDate || '', endDate: g.endDate });
 }
 
