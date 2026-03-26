@@ -604,6 +604,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="form-group"><label>WLAN MAC</label><input type="text" id="m-WlanMAC"></div>
       <div class="form-group"><label>Old CHS #</label><input type="text" id="m-OldCHS"></div>
       <div class="form-group"><label>Tile Type</label><input type="text" id="m-TileType"></div>
+      <div class="form-group"><label>Tile UUID</label><input type="text" id="m-TileUUID" placeholder="e.g. abc12345-..."></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1130,6 +1131,7 @@ function renderTable() {
       <td class="td-actions">
         <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
         <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
+        ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
         <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
       </td></tr>`;
   }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
@@ -1139,7 +1141,7 @@ function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;
 function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
-const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail'];
+const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID'];
 
 function openAddModal() { editingId=null; document.getElementById('modal-title').textContent='Add Equipment'; MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';}); document.getElementById('item-modal').classList.add('open'); }
 function openEditModal(id) {
@@ -1583,6 +1585,7 @@ function renderLoans() {
             <div class="loan-device-assetno">${esc(e.CHSAssetNo)}</div>
             <div class="loan-device-desc">${esc(e.Model)}${e.SerialNo?' · '+e.SerialNo:''}</div>
           </div>
+          ${e.TileUUID ? tileBtn(e.TileUUID) : ''}
         </div>`).join('')}
       </div>
     </div>`;
@@ -1697,6 +1700,7 @@ function openDetail(id) {
         <div class="detail-field"><label>Old CHS #</label><span>${esc2(item.OldCHS)}</span></div>
         <div class="detail-field"><label>LAN MAC</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.LanMAC)}</span></div>
         <div class="detail-field"><label>WLAN MAC</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.WlanMAC)}</span></div>
+        ${item.TileUUID ? `<div class="detail-field full"><label>Tile Tracker</label><span>${tileBtn(item.TileUUID)}</span></div>` : ''}
       </div>
     </div>
     ${on ? `<div class="detail-section">
@@ -1719,6 +1723,18 @@ function openDetail(id) {
 function closeDetail() {
   document.getElementById('detail-overlay').classList.remove('open');
   currentDetailItem = null;
+}
+
+function tileBtn(uuid) {
+  if (!uuid) return '';
+  const deepLink = 'tile://find?uuid=' + uuid;
+  const webLink  = 'https://www.thetileapp.com/en-us/map';
+  // Try app deep link, fall back to web
+  return `<a href="${deepLink}" onclick="setTimeout(()=>window.open('${webLink}','_blank'),1500)" 
+    style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;background:#00A86B;color:#fff;font-size:12px;font-weight:500;text-decoration:none;border:none;cursor:pointer" 
+    title="Open in Tile app">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>Find on Tile
+  </a>`;
 }
 
 function editFromDetail() {
