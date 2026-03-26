@@ -384,7 +384,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="f-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="f-end-date"></div>
-              <div class="form-group"><label>Borrower Email <span style="color:var(--red)">*</span></label><input type="email" id="f-email" placeholder="borrower@email.com" required></div>
+              <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="f-email" placeholder="borrower@email.com" required></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="f-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div class="form-actions">
@@ -426,11 +426,11 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
-              <div class="form-group"><label>Borrower Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
+              <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group"><label>Account Manager</label><select id="b-account-manager"><option value=""></option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
-            <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include</div>
+            <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include (Asset Numbers)</div>
             <div id="batch-devices-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
             <button class="btn btn-sm" onclick="addBatchDevice()" style="margin-bottom:12px">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add another device
@@ -441,6 +441,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
                 <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Loan
               </button>
               <button class="btn" onclick="clearScan()">Cancel</button>
+              <span id="loan-confirmed-badge" style="display:none;padding:5px 12px;background:var(--green-light);color:var(--green);border:1px solid var(--green-border);border-radius:20px;font-size:13px;font-weight:500">✓ Loan confirmed!</span>
             </div>
           </div>
         </div>
@@ -476,6 +477,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           </button>
           <button class="btn btn-sm" onclick="exportCSV()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
+          </button>
+          <button class="btn btn-sm" onclick="switchTab('scan');setScanMode('batch')" style="background:var(--accent);border-color:var(--accent);color:#fff">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Issue Loan
           </button>
           <button class="btn btn-sm btn-primary" onclick="openAddModal()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Item
@@ -725,16 +729,32 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <!-- ACCOUNT MANAGER SETTINGS MODAL -->
 <div class="modal-overlay" id="am-modal">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:460px">
     <div class="modal-header">
       <div class="modal-title">Account Managers</div>
       <button class="modal-close" onclick="closeAMModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
-    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add or remove account managers from the dropdown list.</div>
-    <div id="am-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;max-height:280px;overflow-y:auto"></div>
-    <div style="display:flex;gap:8px">
-      <input type="text" id="am-new-input" placeholder="New account manager name" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addAccountManager()">
-      <button class="btn btn-primary" onclick="addAccountManager()">Add</button>
+    <!-- AUTH -->
+    <div id="am-auth-section" style="text-align:center;padding:12px 0 8px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Enter admin password to manage account managers</div>
+      <input type="password" id="am-pw-input" placeholder="Admin password" style="padding:9px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:260px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockAMModal()">
+      <button class="btn btn-primary" onclick="unlockAMModal()">Unlock</button>
+      <div id="am-pw-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
+    </div>
+    <!-- MAIN CONTENT -->
+    <div id="am-main-section" style="display:none">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add name and email for each account manager. Email is auto-filled when selected in a loan form.</div>
+      <div id="am-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto"></div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Add New</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <input type="text" id="am-new-name" placeholder="Full name" style="padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('am-new-email').focus()">
+          <div style="display:flex;gap:8px">
+            <input type="email" id="am-new-email" placeholder="Email address" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addAccountManager()">
+            <button class="btn btn-primary" onclick="addAccountManager()">Add</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeAMModal()">Done</button>
@@ -1050,7 +1070,7 @@ function submitLoan() {
   const location = document.getElementById('f-location').value.trim();
   const emailVal = document.getElementById('f-email').value.trim();
   if (!loanTo || !location) { showFeedback('error', 'Please fill in "On Loan To" and "Location".'); return; }
-  if (!emailVal || !emailVal.includes('@')) { showFeedback('error', 'Please enter a valid Borrower Email address.'); return; }
+  if (!emailVal || !emailVal.includes('@')) { showFeedback('error', 'Please enter a valid Account Manager Email address.'); return; }
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const borrowerEmail = document.getElementById('f-email').value.trim();
   Object.assign(equipment[idx], {
@@ -1476,8 +1496,8 @@ function renderBatchDevices() {
       <input type="text" value="${d.value}" placeholder="CHS Asset Number"
         style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:14px;outline:none"
         id="bdinput_${d.id}"
-        oninput="debounceBatchDevice('${d.id}', this.value)"
-        onkeydown="handleBatchDeviceKey(event,'${d.id}',${i})">
+        onkeydown="handleBatchDeviceKey(event,'${d.id}',${i})"
+        onblur="updateBatchDevice('${d.id}',this.value)">
       <div style="font-size:12px;min-width:130px">${statusHtml}</div>
       ${batchDevices.length > 1 ? `<button class="btn btn-sm btn-red" onclick="removeBatchDevice('${d.id}')" style="flex-shrink:0">✕</button>` : ''}
     </div>`;
@@ -1517,7 +1537,7 @@ function updateBatchDevice(id, val) {
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
     window._batchStatus[id] = on
-      ? `<span style="color:var(--amber)">⚠ Already on loan</span>`
+      ? `<span style="color:var(--amber)">⚠ ${item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
       : `<span style="color:var(--green)">✓ ${item.Model || 'Found'}</span>`;
     d.value = item.CHSAssetNo;
   } else {
@@ -1620,10 +1640,12 @@ async function submitBatchLoan() {
   generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate });
 
   // Show success toast
-  showToast('success', 'Loan confirmed — ' + devicesToLoan.length + ' device' + (devicesToLoan.length>1?'s':'') + ' loaned to ' + loanTo);
+  // Show green confirmed badge
+  const badge = document.getElementById('loan-confirmed-badge');
+  if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display='none', 5000); }
 
   // Reset batch form to fresh state
-  btn.disabled = false; btn.textContent = 'Confirm Batch Loan';
+  btn.disabled = false; btn.textContent = 'Confirm Loan';
   batchDevices = [{ id: 'bd_0', value: '' }];
   window._batchStatus = {};
   ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => {
@@ -2341,66 +2363,116 @@ function printLoanDoc() {
 }
 
 // ── ACCOUNT MANAGERS ──────────────────────────────────────────────────
+// accountManagers is array of { name, email }
 let accountManagers = [];
+let _amUnlocked = false;
 
 function loadAccountManagers() {
-  const saved = localStorage.getItem('chs_account_managers');
+  const saved = localStorage.getItem('chs_account_managers_v2');
   accountManagers = saved ? JSON.parse(saved) : [];
   updateAMDropdowns();
 }
 
 function saveAccountManagers() {
-  localStorage.setItem('chs_account_managers', JSON.stringify(accountManagers));
+  localStorage.setItem('chs_account_managers_v2', JSON.stringify(accountManagers));
   updateAMDropdowns();
 }
 
 function updateAMDropdowns() {
-  const opts = '<option value=""></option>' + accountManagers.map(am => `<option value="${esc(am)}">${esc(am)}</option>`).join('');
+  const opts = '<option value=""></option>' + accountManagers.map(am =>
+    `<option value="${esc(am.name)}">${esc(am.name)}</option>`).join('');
   ['m-AccountManager','b-account-manager'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) {
-      const current = el.value;
-      el.innerHTML = opts;
-      el.value = current;
-    }
+    if (el) { const cur = el.value; el.innerHTML = opts; el.value = cur; }
   });
+  // When AM selected in batch form, auto-fill email
+  const amSel = document.getElementById('b-account-manager');
+  if (amSel) {
+    amSel.onchange = () => {
+      const am = accountManagers.find(a => a.name === amSel.value);
+      const emailEl = document.getElementById('b-email');
+      if (emailEl && am) emailEl.value = am.email || '';
+    };
+  }
 }
 
 function openAMModal() {
-  renderAMList();
+  _amUnlocked = false;
+  document.getElementById('am-auth-section').style.display = 'block';
+  document.getElementById('am-main-section').style.display = 'none';
+  document.getElementById('am-pw-input').value = '';
+  document.getElementById('am-pw-err').style.display = 'none';
   document.getElementById('am-modal').classList.add('open');
-  setTimeout(() => document.getElementById('am-new-input').focus(), 100);
+  setTimeout(() => document.getElementById('am-pw-input').focus(), 100);
+}
+
+function unlockAMModal() {
+  if (document.getElementById('am-pw-input').value === ADMIN_PASSWORD) {
+    _amUnlocked = true;
+    document.getElementById('am-auth-section').style.display = 'none';
+    document.getElementById('am-main-section').style.display = 'block';
+    renderAMList();
+    setTimeout(() => document.getElementById('am-new-name').focus(), 100);
+  } else {
+    document.getElementById('am-pw-err').style.display = 'block';
+    document.getElementById('am-pw-input').value = '';
+  }
 }
 
 function closeAMModal() {
   document.getElementById('am-modal').classList.remove('open');
+  _amUnlocked = false;
 }
 
 function renderAMList() {
   document.getElementById('am-list').innerHTML = accountManagers.length
     ? accountManagers.map((am, i) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)">
-        <span style="flex:1;font-size:13px">${esc(am)}</span>
-        <button class="btn btn-sm btn-red" onclick="removeAccountManager(${i})">Remove</button>
+      <div style="background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);padding:10px 12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="flex:1">
+            <input type="text" value="${esc(am.name)}" placeholder="Name"
+              onchange="updateAMField(${i},'name',this.value)"
+              style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          </div>
+          <button class="btn btn-sm btn-red" onclick="removeAccountManager(${i})">Remove</button>
+        </div>
+        <input type="email" value="${esc(am.email||'')}" placeholder="Email address"
+          onchange="updateAMField(${i},'email',this.value)"
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
       </div>`).join('')
-    : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers added yet</div>';
+    : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers yet</div>';
+}
+
+function updateAMField(i, field, val) {
+  if (accountManagers[i]) {
+    accountManagers[i][field] = val.trim();
+    saveAccountManagers();
+  }
 }
 
 function addAccountManager() {
-  const name = document.getElementById('am-new-input').value.trim();
+  const name = document.getElementById('am-new-name').value.trim();
+  const email = document.getElementById('am-new-email').value.trim();
   if (!name) return;
-  if (accountManagers.includes(name)) { showToast('error', 'Already exists'); return; }
-  accountManagers.push(name);
+  if (accountManagers.find(a => a.name === name)) { showToast('error', 'Already exists'); return; }
+  accountManagers.push({ name, email });
   saveAccountManagers();
   renderAMList();
-  document.getElementById('am-new-input').value = '';
-  document.getElementById('am-new-input').focus();
+  document.getElementById('am-new-name').value = '';
+  document.getElementById('am-new-email').value = '';
+  document.getElementById('am-new-name').focus();
 }
 
 function removeAccountManager(i) {
   accountManagers.splice(i, 1);
   saveAccountManagers();
   renderAMList();
+}
+
+// Get AM email for notifications
+function getAMEmail(amName) {
+  const am = accountManagers.find(a => a.name === amName);
+  return am ? am.email : '';
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
