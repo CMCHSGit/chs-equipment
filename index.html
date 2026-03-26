@@ -893,9 +893,10 @@ const APP_PASSWORD = 'CHS2024';          // ← change this to your password
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 // EmailJS config
-const EJS_SERVICE  = 'service_bqd6bgi';
-const EJS_TEMPLATE = 'template_xux1ico';
-const EJS_KEY      = 'vMgCBjvQgk-oWs34f';
+const EJS_SERVICE           = 'service_bqd6bgi';
+const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder template
+const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
+const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'https://cmchsgit.github.io/chs-equipment';
 
 // NZ timezone date helper
@@ -1710,6 +1711,17 @@ async function submitBatchLoan() {
   // Generate loan document
   generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate });
   generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM });
+
+  // Send confirmation email to account manager
+  const amEmailForConfirm = batchEmail || getAMEmail(batchAM);
+  if (amEmailForConfirm) {
+    sendLoanConfirmationEmail(
+      batchLoanItems,
+      { loanTo, location, startDate, endDate },
+      amEmailForConfirm,
+      batchAM
+    );
+  }
   // Show success toast
   // Show green confirmed badge
   const badge = document.getElementById('loan-confirmed-badge');
@@ -2054,6 +2066,36 @@ async function sendOverdueEmail(group) {
   } catch(err) {
     console.error('Email send failed:', err);
     console.error('Email failed:', err);
+  }
+}
+
+// ── LOAN CONFIRMATION EMAIL ───────────────────────────────────────────
+async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
+  if (!_ejsReady || !amEmail) {
+    console.log('Loan confirmation not sent - EmailJS not ready or no AM email');
+    return;
+  }
+  const itemsList = loanItems.map(e =>
+    '  • ' + (e.CHSAssetNo||'') + ' — ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? '  SN: ' + e.SerialNo : '')
+  ).join('
+');
+
+  const manageLink = APP_URL + '?tab=loans';
+
+  try {
+    await emailjs.send(EJS_SERVICE, EJS_LOAN_TEMPLATE, {
+      to_email:          amEmail,
+      to_name:           amName || amEmail,
+      customer_name:     loanInfo.loanTo    || '',
+      customer_location: loanInfo.location  || '',
+      loan_start:        formatDisplayDate(loanInfo.startDate || nzDate()),
+      loan_end:          formatDisplayDate(loanInfo.endDate   || ''),
+      items:             itemsList,
+      manage_link:       manageLink
+    });
+    console.log('Loan confirmation sent to', amEmail);
+  } catch(err) {
+    console.error('Loan confirmation email failed:', err);
   }
 }
 
