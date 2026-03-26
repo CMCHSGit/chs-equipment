@@ -2530,17 +2530,31 @@ function printLoanDoc() {
 let accountManagers = [];
 let _amUnlocked = false;
 
-function loadAccountManagers() {
-  const saved = localStorage.getItem('chs_account_managers_v2');
-  accountManagers = saved ? JSON.parse(saved) : [];
+async function loadAccountManagers() {
+  try {
+    const r = await fetch(FB_URL + '/accountManagers.json');
+    const d = await r.json();
+    accountManagers = Array.isArray(d) ? d : [];
+  } catch(e) {
+    accountManagers = [];
+    console.warn('Could not load account managers:', e);
+  }
   accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
   updateAMDropdowns();
 }
 
-function saveAccountManagers() {
-  // Always keep sorted A-Z by name
+async function saveAccountManagers() {
   accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
-  localStorage.setItem('chs_account_managers_v2', JSON.stringify(accountManagers));
+  try {
+    await fetch(FB_URL + '/accountManagers.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(accountManagers)
+    });
+  } catch(e) {
+    console.warn('Could not save account managers:', e);
+    showToast('error', 'Could not save account managers');
+  }
   updateAMDropdowns();
 }
 
