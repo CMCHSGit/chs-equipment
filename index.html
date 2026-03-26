@@ -260,19 +260,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </head>
 <body>
 
-<!-- LOGIN -->
-<div class="login-wrap" id="login-wrap">
-  <div class="login-card">
-    <div class="login-logo">
-      <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
-    </div>
-    <div class="login-title">CMCHS Demo Equipment</div>
-    <div class="login-sub">Enter the access password to continue</div>
-    <input class="login-input" type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
-    <button class="login-btn" onclick="doLogin()">Access Equipment Tracker</button>
-    <div class="login-err" id="login-err">Incorrect password. Please try again.</div>
-  </div>
-</div>
+<!-- Login removed -->
 
 <!-- LOADING -->
 <div class="loading-overlay" id="loading-overlay">
@@ -281,7 +269,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </div>
 
 <!-- APP -->
-<div id="app" style="display:none">
+<div id="app">
   <header class="app-header">
     <div class="app-logo"><div class="app-logo-dot"></div>CMCHS Demo Equipment</div>
     <div class="header-right">
