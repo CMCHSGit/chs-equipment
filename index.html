@@ -546,6 +546,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <strong style="font-size:15px">Active Loans</strong>
         <span id="loans-count" class="row-count" style="margin-left:8px"></span>
         <select class="filter-select" id="loans-sort" onchange="renderLoans()" style="margin-left:auto">
+          <option value="manager" selected>Account Manager</option>
           <option value="added">Last added</option>
           <option value="alpha">Customer A–Z</option>
           <option value="expiry">Expiry (soonest)</option>
@@ -1705,6 +1706,11 @@ function renderLoans() {
     grouped[key].items.push(e);
   });
   let groups = Object.values(grouped).filter(g => !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q));
+  if (sortBy === 'manager') groups.sort((a,b) => {
+    const ma = (a.items[0]?.AccountManager||'zzz').toLowerCase();
+    const mb = (b.items[0]?.AccountManager||'zzz').toLowerCase();
+    return ma < mb ? -1 : ma > mb ? 1 : a.loanTo.localeCompare(b.loanTo);
+  });
   if (sortBy === 'alpha')  groups.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
   if (sortBy === 'expiry') groups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
   if (sortBy === 'start')  groups.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
@@ -1728,7 +1734,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>
+          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
@@ -2038,6 +2044,9 @@ function checkOverdueNotifications() {
 // Handle return/extend links from email
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
+  // Handle direct tab link e.g. ?tab=loans
+  const tabParam = params.get('tab');
+  if (tabParam) { switchTab(tabParam); return; }
   const returnToken = params.get('return');
   const extendToken = params.get('extend');
   const token = returnToken || extendToken;
