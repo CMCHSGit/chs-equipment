@@ -802,6 +802,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div class="detail-body" id="detail-body"></div>
     <div class="detail-footer">
+      <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
       <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
       <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
       <button class="btn btn-sm" onclick="detailAction('history')">History</button>
@@ -1537,7 +1538,7 @@ function updateBatchDevice(id, val) {
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
     window._batchStatus[id] = on
-      ? `<span style="color:var(--amber)">⚠ ${item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
+      ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
       : `<span style="color:var(--green)">✓ ${item.Model || 'Found'}</span>`;
     d.value = item.CHSAssetNo;
   } else {
@@ -1879,6 +1880,17 @@ function detailAction(action) {
   } else if (action === 'loan') {
     switchTab('scan'); setScanMode('loan');
     setTimeout(() => { document.getElementById('scan-input').value = item.CHSAssetNo; lookupAsset(item.CHSAssetNo); }, 50);
+  } else if (action === 'loan') {
+    switchTab('scan'); setScanMode('batch');
+    setTimeout(() => {
+      // Pre-fill the first device field with this asset number
+      if (batchDevices.length > 0) {
+        batchDevices[0].value = item.CHSAssetNo;
+        if (!window._batchStatus) window._batchStatus = {};
+        renderBatchDevices();
+        updateBatchDevice(batchDevices[0].id, item.CHSAssetNo);
+      }
+    }, 200);
   } else if (action === 'extend') {
     switchTab('loans');
     setTimeout(() => openExtendFromDetail(item), 400);
