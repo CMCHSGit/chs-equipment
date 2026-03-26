@@ -1798,6 +1798,10 @@ function renderLoans() {
             <div class="loan-device-desc">${esc(e.Model)}${e.SerialNo?' · '+e.SerialNo:''}</div>
           </div>
           ${e.TileUUID ? tileBtn(e.TileUUID) : ''}
+          <button class="btn btn-sm" onclick="event.stopPropagation();removeDeviceFromLoan('${e.id}','${esc(e.CHSAssetNo)}')"
+            style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from loan">
+            Remove
+          </button>
         </div>`).join('')}
       </div>
     </div>`;
@@ -2831,6 +2835,34 @@ async function confirmAddItemsToLoan() {
   closeAddItemsModal();
   renderLoans();
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
+}
+
+// ── REMOVE DEVICE FROM LOAN ───────────────────────────────────────────
+function removeDeviceFromLoan(id, assetNo) {
+  const pw = prompt('Enter admin password to remove ' + assetNo + ' from this loan:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  if (!confirm('Remove ' + assetNo + ' from this loan?\nNo history entry will be created.')) return;
+  const idx = equipment.findIndex(e => e.id === id);
+  if (idx < 0) { showToast('error', 'Device not found'); return; }
+  // Clear loan fields without creating history
+  Object.assign(equipment[idx], {
+    OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '',
+    Returned: 'Yes', BatchID: '', BorrowerEmail: '', AccountManager: ''
+  });
+  scheduleSave(); renderTable(); updateStats(); renderLoans();
+  showToast('info', assetNo + ' removed from loan');
+  // If loan doc is open, refresh it
+  if (document.getElementById('loan-doc-modal').classList.contains('open') && window._currentLoanDocInfo) {
+    const info = window._currentLoanDocInfo.loanInfo;
+    const remainingItems = window._currentLoanDocInfo.loanItems.filter(i => i.id !== id);
+    if (remainingItems.length > 0) {
+      window._currentLoanDocInfo.loanItems = remainingItems;
+      generateLoanDoc(remainingItems, info);
+    } else {
+      closeLoanDoc();
+    }
+  }
 }
 
 // ── DELETE LOAN ────────────────────────────────────────────────────────
