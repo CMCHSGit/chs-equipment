@@ -97,23 +97,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .badge-avail{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
 
 /* TABLE */
-.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:0;flex-wrap:wrap;position:sticky;top:56px;z-index:50;background:var(--bg);padding:10px 0 8px;border-bottom:1px solid var(--border);margin-left:-20px;margin-right:-20px;padding-left:20px;padding-right:20px}
-.table-toolbar + .table-wrap, .table-toolbar + div > .table-wrap{margin-top:12px}
+.table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:56px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
 .search-wrap{position:relative}
 .search-input{padding:7px 12px 7px 34px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;width:220px}
 .search-input:focus{border-color:var(--accent)}
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.table-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 180px)}
 .table-scroll{overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:900px}
 thead{background:var(--surface2)}
-th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none}
+thead tr{position:sticky;top:0;z-index:4}
+th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;background:var(--surface2)}
 th:hover{color:var(--text)}
-td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle;height:52px}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--surface2)}
 .td-mono{font-family:'DM Mono',monospace;font-size:12px}
-.td-actions{display:flex;gap:4px;min-width:180px;flex-wrap:nowrap;align-items:center}
+.td-actions{display:flex;gap:4px;flex-wrap:nowrap;align-items:center;white-space:nowrap}
 .table-empty{text-align:center;padding:48px 20px;color:var(--text3)}
 .col-sticky{position:sticky;left:0;background:var(--surface);z-index:2}
 tr:hover .col-sticky{background:var(--surface2)}
@@ -192,7 +193,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .mobile-only{display:flex!important}
   .app-header{padding:0 12px;height:52px}
   .main{padding:12px;padding-bottom:80px}
-  .table-toolbar{top:52px;margin-left:-12px;margin-right:-12px;padding-left:12px;padding-right:12px}
+  .table-toolbar{top:52px;margin:0 -12px 12px;padding:10px 12px;width:calc(100% + 24px)}
   table{min-width:700px}.stats-row{grid-template-columns:1fr 1fr}
   .form-grid,.asset-grid{grid-template-columns:1fr}
   .modal-form-grid{grid-column:1fr}
@@ -337,15 +338,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
     <!-- SCAN -->
     <div class="panel active" id="panel-scan">
-      <div id="overdue-banner" style="display:none;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:12px;display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-          <div>
-            <div style="font-weight:600;color:var(--red);font-size:14px">⚠ Overdue equipment detected</div>
-            <div id="overdue-banner-text" style="font-size:13px;color:var(--text2);margin-top:2px"></div>
-          </div>
-          <button class="btn btn-sm btn-red" onclick="viewOverdueLoans()">View overdue loans</button>
-        </div>
-      </div>
+
       <div class="stats-row">
         <div class="stat-card"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total items</div></div>
         <div class="stat-card"><div class="stat-val" style="color:var(--amber)" id="stat-onloan">0</div><div class="stat-label">On loan</div></div>
@@ -1095,20 +1088,9 @@ function updateStats() {
   document.getElementById('stat-onloan').textContent    = on;
   document.getElementById('stat-available').textContent = total - on;
   document.getElementById('stat-overdue').textContent   = od;
-  // Show/hide overdue banner
-  const banner = document.getElementById('overdue-banner');
-  if (banner) {
-    if (od > 0) {
-      banner.style.display = 'block';
-      const customers = [...new Set(odItems.map(e => e.OnLoanTo))];
-      document.getElementById('overdue-banner-text').textContent =
-        od + ' item' + (od>1?'s':'') + ' overdue from ' + customers.join(', ') + '. Overdue emails sent to borrowers.';
-      const fl = document.getElementById('overdue-filter-label');
-      if (fl) fl.style.display = 'flex';
-    } else {
-      banner.style.display = 'none';
-    }
-  }
+  // Show overdue filter label if there are overdue items
+  const fl = document.getElementById('overdue-filter-label');
+  if (fl) fl.style.display = od > 0 ? 'flex' : 'none';
 }
 
 // ── SCAN ───────────────────────────────────────────────────────────────
@@ -2302,6 +2284,9 @@ function checkOverdueNotifications() {
 // Handle return/extend links from email
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
+  if (!params.toString()) return; // nothing to handle
+  // Clear URL params after handling so they don't fire again on refresh
+  window.history.replaceState({}, '', window.location.pathname);
   // Handle direct tab link e.g. ?tab=loans
   const tabParam = params.get('tab');
   if (tabParam) { switchTab(tabParam); return; }
@@ -2322,7 +2307,7 @@ function handleReturnLink() {
         if (extendToken) openExtendLoan(gi);
         else openBatchReturn(gi);
       } else {
-        showToast('info', 'No active loan found for ' + loanTo);
+        console.log('No active loan found for', loanTo, '— may already be returned');
       }
     }, 600);
   } catch(e) { console.log('Link parse error', e); }
