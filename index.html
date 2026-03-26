@@ -280,6 +280,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="nav-tab" onclick="switchTab('history')" id="tab-history"><span>History</span></button>
         <button class="nav-tab" onclick="switchTab('loans')" id="tab-loans"><span>Active Loans</span></button>
         <button class="nav-tab" onclick="switchTab('import')" id="tab-import"><span>Import</span></button>
+        <button class="nav-tab" onclick="switchTab('retired')" id="tab-retired"><span>Sold / Retired</span></button>
       </div>
       <button class="btn btn-sm desktop-only" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
       <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
@@ -309,6 +310,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <button class="mobile-nav-item" onclick="switchTab('import');closeMobileMenu()" id="mtab-import">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         Import Data
+      </button>
+      <button class="mobile-nav-item" onclick="switchTab('retired');closeMobileMenu()" id="mtab-retired">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6l-1 14H6L5 6"/><path d="M8 6V4h8v2"/></svg>
+        Sold / Retired
       </button>
       <div style="height:1px;background:var(--border);margin:8px 0"></div>
       <button class="mobile-nav-item" onclick="downloadExcel();closeMobileMenu()">
@@ -551,6 +556,43 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div id="loans-list" style="display:flex;flex-direction:column;gap:10px"></div>
     </div>
 
+    <!-- SOLD / RETIRED -->
+    <div class="panel" id="panel-retired">
+      <div class="table-toolbar">
+        <div class="search-wrap">
+          <svg class="search-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <input class="search-input" id="retired-search" type="text" placeholder="Search…" oninput="renderRetired()">
+        </div>
+        <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+          <span id="retired-count" class="row-count"></span>
+          <button class="btn btn-sm" onclick="exportRetiredCSV()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="document.getElementById('retired-file-input').click()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import
+          </button>
+          <input type="file" id="retired-file-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleRetiredImport(event)">
+        </div>
+      </div>
+      <div class="table-wrap"><div class="table-scroll">
+        <table><thead><tr>
+          <th onclick="sortRetired('CHSAssetNo')">CHS Asset No. ↕</th>
+          <th onclick="sortRetired('Model')">Model ↕</th>
+          <th>Description</th>
+          <th>Serial No.</th>
+          <th onclick="sortRetired('Notes')">Notes ↕</th>
+          <th onclick="sortRetired('RetiredDate')">Date ↕</th>
+          <th onclick="sortRetired('RetiredReason')">Reason ↕</th>
+          <th>Part No.</th>
+          <th>NZ$</th>
+          <th>Actions</th>
+        </tr></thead>
+        <tbody id="retired-tbody"></tbody>
+        </table>
+      </div></div>
+      <div style="margin-top:8px;font-size:12px;color:var(--text3);text-align:center">Items moved here are removed from the main database. Use the "Move to Sold/Retired" option on any asset's detail panel or table row.</div>
+    </div>
+
     <!-- IMPORT -->
     <div class="panel" id="panel-import">
       <div class="scan-card">
@@ -674,6 +716,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="btn btn-sm btn-green" id="doc-save-btn" onclick="saveLoanDocChanges()" style="display:none">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Save changes
         </button>
+        <button class="btn btn-sm" onclick="addDocRow()" title="Add accessory or manual item">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add row
+        </button>
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
         </button>
@@ -681,6 +726,37 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       </div>
     </div>
     <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:80vh"></div>
+  </div>
+</div>
+
+<!-- RETIRE ASSET MODAL -->
+<div class="modal-overlay" id="retire-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="retire-modal-title">Move to Sold / Retired</div>
+      <button class="modal-close" onclick="closeRetireModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">This will remove the item from the main database and move it to the Sold / Retired tab.</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Reason <span style="color:var(--red)">*</span></label>
+      <select id="retire-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <option value="">Select reason…</option>
+        <option>Sold</option>
+        <option>Retired / End of life</option>
+        <option>Lost</option>
+        <option>Damaged / Written off</option>
+        <option>Returned to manufacturer</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Notes</label>
+      <textarea id="retire-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical" placeholder="e.g. Sold to Southland Hospital, invoice #1234"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeRetireModal()">Cancel</button>
+      <button class="btn" onclick="confirmRetire()" style="background:var(--amber);border-color:var(--amber);color:white">Move to Retired</button>
+    </div>
   </div>
 </div>
 
@@ -840,6 +916,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="detail-footer">
       <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
       <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
+      <button class="btn btn-sm" onclick="detailAction('retire')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
       <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
       <button class="btn btn-sm" onclick="detailAction('history')">History</button>
       <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
@@ -1001,6 +1078,7 @@ function switchTab(n) {
   if (n === 'history')  renderHistory();
   if (n === 'scan')     updateStats();
   if (n === 'loans')    renderLoans();
+  if (n === 'retired')  renderRetired();
 }
 
 // ── STATS ──────────────────────────────────────────────────────────────
@@ -1229,6 +1307,7 @@ function renderTable() {
         <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
         <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
         ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
+        <button class="btn btn-sm" onclick="openRetireModal('${e.id}')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
         <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
       </td></tr>`;
   }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
@@ -1508,7 +1587,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 
@@ -1992,6 +2071,8 @@ function detailAction(action) {
   } else if (action === 'extend') {
     switchTab('loans');
     setTimeout(() => openExtendFromDetail(item), 400);
+  } else if (action === 'retire') {
+    openRetireModal(item.id);
   } else if (action === 'history') {
     openItemHistory(item.CHSAssetNo, item.Model);
   } else if (action === 'delete') {
@@ -2061,7 +2142,8 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
     console.log('Loan confirmation not sent - EmailJS not ready or no AM email');
     return;
   }
-  const itemsList = loanItems.map(e =>
+  const allItems = [...loanItems, ...(window._currentLoanDocInfo?.manualRows || [])];
+  const itemsList = allItems.map(e =>
     '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')
   ).join('\n');
 
@@ -2495,6 +2577,33 @@ function closeLoanDoc() {
   window._currentLoanDocInfo = null;
 }
 
+function addDocRow() {
+  // Add a blank editable row to the loan doc equipment table
+  const tbody = document.querySelector('#printable-loan-doc table:nth-of-type(3) tbody');
+  if (!tbody) return;
+  const tr = document.createElement('tr');
+  tr.innerHTML = Array(7).fill(0).map(() =>
+    '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px;min-width:40px" title="Click to edit"></td>'
+  ).join('');
+  tbody.appendChild(tr);
+  // Track as edited
+  document.getElementById('doc-edited-note').style.display = 'block';
+  const sb = document.getElementById('doc-save-btn');
+  if (sb) sb.style.display = 'inline-flex';
+  // Focus first cell of new row
+  const firstCell = tr.querySelector('td');
+  if (firstCell) { firstCell.focus(); }
+  // Register input listeners
+  tr.querySelectorAll('td').forEach(td => {
+    td.addEventListener('input', () => {
+      document.getElementById('doc-edited-note').style.display = 'block';
+      const s = document.getElementById('doc-save-btn');
+      if (s) s.style.display = 'inline-flex';
+    });
+  });
+  showToast('info', 'Row added — type asset/accessory details directly in the cells');
+}
+
 function saveLoanDocChanges() {
   const doc = document.getElementById('printable-loan-doc');
   if (!doc || !window._currentLoanDocInfo) return;
@@ -2517,6 +2626,22 @@ function saveLoanDocChanges() {
       }
       return d;
     }
+
+    // Collect manual rows added to the doc (accessories etc)
+    const allDocRows = doc.querySelectorAll('table:nth-of-type(3) tbody tr');
+    const manualRows = [];
+    allDocRows.forEach(row => {
+      const cells = row.querySelectorAll('td');
+      if (cells.length >= 3) {
+        const assetNo = cells[0]?.innerText?.trim();
+        const desc    = cells[1]?.innerText?.trim();
+        const serial  = cells[2]?.innerText?.trim();
+        if (desc && !window._currentLoanDocInfo?.loanItems?.find(i => i.CHSAssetNo === assetNo)) {
+          manualRows.push({ CHSAssetNo: assetNo||'—', Model: desc, SerialNo: serial||'', _manual: true });
+        }
+      }
+    });
+    window._currentLoanDocInfo.manualRows = manualRows;
 
     // Update all items belonging to this loan
     const info = window._currentLoanDocInfo.loanInfo;
@@ -2971,6 +3096,184 @@ function viewOverdueLoans() {
   renderLoans();
 }
 
+// ── SOLD / RETIRED ASSETS ─────────────────────────────────────────────
+let retiredAssets = [];
+let retiredSortCol = 'RetiredDate', retiredSortDir = -1;
+let _retireItemId = null;
+
+async function loadRetiredAssets() {
+  try {
+    const r = await fetch(FB_URL + '/retired.json');
+    const d = await r.json();
+    retiredAssets = Array.isArray(d) ? d : [];
+  } catch(e) { retiredAssets = []; }
+}
+
+async function saveRetiredAssets() {
+  try {
+    await fetch(FB_URL + '/retired.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(retiredAssets)
+    });
+  } catch(e) { showToast('error', 'Could not save retired assets'); }
+}
+
+function openRetireModal(id) {
+  _retireItemId = id;
+  const item = equipment.find(e => e.id === id);
+  if (!item) return;
+  document.getElementById('retire-modal-title').textContent = 'Retire ' + (item.CHSAssetNo || '') + ' — ' + (item.Model || '');
+  document.getElementById('retire-reason').value = '';
+  document.getElementById('retire-notes').value = '';
+  document.getElementById('retire-modal').classList.add('open');
+}
+
+function closeRetireModal() {
+  document.getElementById('retire-modal').classList.remove('open');
+  _retireItemId = null;
+}
+
+async function confirmRetire() {
+  const reason = document.getElementById('retire-reason').value;
+  if (!reason) { showToast('error', 'Please select a reason'); return; }
+  const notes  = document.getElementById('retire-notes').value.trim();
+  const item   = equipment.find(e => e.id === _retireItemId);
+  if (!item) { closeRetireModal(); return; }
+  // Move to retired
+  const retiredItem = { ...item, RetiredDate: nzDate(), RetiredReason: reason, RetiredNotes: notes };
+  retiredAssets.unshift(retiredItem);
+  equipment = equipment.filter(e => e.id !== _retireItemId);
+  await saveRetiredAssets();
+  scheduleSave();
+  renderTable(); updateStats();
+  closeRetireModal();
+  showToast('success', (item.CHSAssetNo || 'Item') + ' moved to Sold / Retired');
+  if (document.getElementById('panel-retired').classList.contains('active')) renderRetired();
+}
+
+function sortRetired(col) {
+  if (retiredSortCol === col) retiredSortDir *= -1; else { retiredSortCol = col; retiredSortDir = 1; }
+  renderRetired();
+}
+
+function renderRetired() {
+  const q = (document.getElementById('retired-search')?.value || '').toLowerCase();
+  let rows = retiredAssets.filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q));
+  rows.sort((a,b) => {
+    const av = (a[retiredSortCol]||'').toString().toLowerCase();
+    const bv = (b[retiredSortCol]||'').toString().toLowerCase();
+    return av < bv ? -retiredSortDir : av > bv ? retiredSortDir : 0;
+  });
+  document.getElementById('retired-count').textContent = rows.length + ' items';
+  document.getElementById('retired-tbody').innerHTML = rows.length ? rows.map(e => `<tr>
+    <td class="td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
+    <td>${esc(e.Model)}</td>
+    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.Description)}</td>
+    <td class="td-mono" style="font-size:11px">${esc(e.SerialNo)}</td>
+    <td style="max-width:200px;font-size:12px;color:var(--text2)">${esc(e.RetiredNotes || e.Notes)}</td>
+    <td style="font-size:12px">${esc(e.RetiredDate)}</td>
+    <td><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)">${esc(e.RetiredReason)}</span></td>
+    <td class="td-mono" style="font-size:11px">${esc(e.PartNo)}</td>
+    <td>${e.NZPrice ? '$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</td>
+    <td class="td-actions">
+      <button class="btn btn-sm" onclick="restoreRetiredItem('${e.id}')">Restore</button>
+      <button class="btn btn-sm btn-red" onclick="deleteRetiredItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
+    </td>
+  </tr>`).join('') : '<tr><td colspan="10" class="table-empty">No retired assets</td></tr>';
+}
+
+function exportRetiredCSV() {
+  const cols = ['CHSAssetNo','Model','Description','SerialNo','PartNo','NZPrice','RetiredDate','RetiredReason','RetiredNotes','Notes','MfgDate','PurchaseDate','USPrice','ShelfLocation','TileNo','DeviceID','LanMAC','WlanMAC','OldCHS','TileType'];
+  const head = ['CHS Asset No.','Model','Description','Serial Number','Part Number','NZ$ Price','Retired Date','Reason','Retired Notes','Notes','Manufacture Date','Purchase Date','US$ Price','Shelf Location','Tile No.','Device ID','LAN MAC','WLAN MAC','Old CHS #','Tile Type'];
+  const csv = [head.join(','), ...retiredAssets.map(e => cols.map(c => '"' + (e[c]||'').toString().replace(/"/g,'""') + '"').join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = 'CHS-Retired-Assets-' + nzDate() + '.csv';
+  a.click();
+}
+
+async function handleRetiredImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext === 'csv' || ext === 'txt') {
+    Papa.parse(file, { header: true, skipEmptyLines: true, complete: r => processRetiredImport(r.data) });
+  } else if (ext === 'xlsx' || ext === 'xls') {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const wb = XLSX.read(ev.target.result, { type: 'array' });
+      processRetiredImport(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    showToast('error', 'Please upload CSV or Excel');
+  }
+  event.target.value = '';
+}
+
+function processRetiredImport(rows) {
+  if (!rows.length) { showToast('error', 'No data found in file'); return; }
+  // Map column headers
+  const retiredColMap = {
+    'chs asset no.': 'CHSAssetNo', 'chs asset no': 'CHSAssetNo', 'chs asset number': 'CHSAssetNo',
+    'model': 'Model', 'description': 'Description',
+    'serial number': 'SerialNo', 'serial no.': 'SerialNo', 'serial no': 'SerialNo',
+    'part number': 'PartNo', 'part no.': 'PartNo',
+    'nz$ price': 'NZPrice', 'nz price': 'NZPrice',
+    'retired date': 'RetiredDate', 'date': 'RetiredDate',
+    'reason': 'RetiredReason', 'retired reason': 'RetiredReason',
+    'retired notes': 'RetiredNotes', 'notes': 'Notes',
+    'manufacture date': 'MfgDate', 'purchase date': 'PurchaseDate',
+    'us$ price': 'USPrice', 'shelf location': 'ShelfLocation',
+    'tile no.': 'TileNo', 'tile no': 'TileNo',
+    'device id': 'DeviceID', 'lan mac': 'LanMAC', 'wlan mac': 'WlanMAC',
+    'old chs #': 'OldCHS', 'tile type': 'TileType'
+  };
+  let added = 0, updated = 0;
+  rows.forEach(row => {
+    const mapped = {};
+    Object.entries(row).forEach(([k, v]) => {
+      const m = retiredColMap[k.toLowerCase().trim()];
+      if (m) mapped[m] = v;
+    });
+    if (!mapped.CHSAssetNo && !mapped.Model) return;
+    mapped.CHSAssetNo = String(mapped.CHSAssetNo || '').trim();
+    mapped.RetiredDate = mapped.RetiredDate || nzDate();
+    mapped.RetiredReason = mapped.RetiredReason || 'Imported';
+    const existing = retiredAssets.find(e => e.CHSAssetNo && e.CHSAssetNo.toLowerCase() === mapped.CHSAssetNo.toLowerCase());
+    if (existing) { Object.assign(existing, mapped); updated++; }
+    else { retiredAssets.unshift({ id: uid(), ...mapped }); added++; }
+  });
+  saveRetiredAssets();
+  renderRetired();
+  showToast('success', 'Import done: ' + added + ' added, ' + updated + ' updated');
+}
+
+async function restoreRetiredItem(id) {
+  const item = retiredAssets.find(e => e.id === id);
+  if (!item) return;
+  if (!confirm('Restore ' + (item.CHSAssetNo||'item') + ' back to the main database?')) return;
+  const restored = { ...item };
+  delete restored.RetiredDate; delete restored.RetiredReason; delete restored.RetiredNotes;
+  equipment.unshift(restored);
+  retiredAssets = retiredAssets.filter(e => e.id !== id);
+  await saveRetiredAssets();
+  scheduleSave(); renderTable(); renderRetired(); updateStats();
+  showToast('success', (item.CHSAssetNo||'Item') + ' restored to database');
+}
+
+async function deleteRetiredItem(id, assetNo) {
+  const pw = prompt('Enter admin password to permanently delete ' + assetNo + ':');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  if (!confirm('Permanently delete ' + assetNo + '? This cannot be undone.')) return;
+  retiredAssets = retiredAssets.filter(e => e.id !== id);
+  await saveRetiredAssets();
+  renderRetired();
+  showToast('info', assetNo + ' permanently deleted');
+}
+
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
 function initDragScroll() {
   document.querySelectorAll('.table-scroll').forEach(el => {
@@ -3013,6 +3316,7 @@ function initDragScroll() {
   if (sd) sd.value = nzDate();
   initEmailJS();
   loadAccountManagers();
+  loadRetiredAssets();
   checkAuth();
   setTimeout(initDragScroll, 1000);
 })();
