@@ -547,7 +547,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <span id="loans-count" class="row-count" style="margin-left:8px"></span>
         <select class="filter-select" id="loans-sort" onchange="renderLoans()" style="margin-left:auto">
           <option value="manager" selected>Account Manager</option>
-          <option value="added">Last added</option>
+          <option value="recent">Most recent loan</option>
           <option value="alpha">Customer A–Z</option>
           <option value="expiry">Expiry (soonest)</option>
           <option value="start">Loan date</option>
@@ -680,6 +680,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <div id="doc-edited-note" style="display:none;font-size:12px;color:var(--amber);font-weight:500">● Edited</div>
+        <button class="btn btn-sm btn-green" id="doc-save-btn" onclick="saveLoanDocChanges()" style="display:none">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Save changes
+        </button>
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
         </button>
@@ -872,29 +875,12 @@ function nzNow() {
 
 // ── AUTH ───────────────────────────────────────────────────────────────
 function doLogin() {
-  const pw = document.getElementById('login-pw').value;
-  if (pw === APP_PASSWORD) {
-    sessionStorage.setItem('chs_auth', '1');
-    document.getElementById('login-wrap').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadData().then(() => setTimeout(handleReturnLink, 1200));
-  } else {
-    document.getElementById('login-err').style.display = 'block';
-    document.getElementById('login-pw').value = '';
-    document.getElementById('login-pw').focus();
-  }
+  document.getElementById('login-wrap').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  loadData().then(() => setTimeout(handleReturnLink, 1200));
 }
-function doLogout() {
-  sessionStorage.removeItem('chs_auth');
-  location.reload();
-}
-function checkAuth() {
-  if (sessionStorage.getItem('chs_auth') === '1') {
-    document.getElementById('login-wrap').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    loadData().then(() => setTimeout(handleReturnLink, 1200));
-  }
-}
+function doLogout() { location.reload(); }
+function checkAuth() { doLogin(); }
 
 // ── FIREBASE API ───────────────────────────────────────────────────────
 async function fetchBin() {
@@ -1542,16 +1528,31 @@ function debounceBatchDevice(id, val) {
 function handleBatchDeviceKey(e, id, idx) {
   if (e.key === 'Enter' || e.key === 'Tab') {
     e.preventDefault();
-    updateBatchDevice(id, e.target.value);
-    // Add new row and focus it
-    setTimeout(() => {
-      const newId = 'bd_' + Date.now();
-      batchDevices.push({ id: newId, value: '' });
-      if (!window._batchStatus) window._batchStatus = {};
-      window._batchStatus[newId] = '';
-      renderBatchDevices();
-      setTimeout(() => { const el = document.getElementById('bdinput_' + newId); if(el) el.focus(); }, 50);
-    }, 100);
+    const val = e.target.value.trim();
+    // Update value in state without triggering re-render yet
+    const d = batchDevices.find(b => b.id === id);
+    if (d) d.value = val;
+    // Validate and set status
+    if (!window._batchStatus) window._batchStatus = {};
+    if (val) {
+      const item = equipment.find(i => i.CHSAssetNo && i.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+      if (item) {
+        const on = item.OnLoanTo && item.Returned !== 'Yes';
+        window._batchStatus[id] = on
+          ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
+          : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
+        if (d) d.value = item.CHSAssetNo;
+      } else {
+        window._batchStatus[id] = `<span style="color:var(--red)">✗ Not found</span>`;
+      }
+    }
+    // Add new row and render everything once
+    const newId = 'bd_' + Date.now();
+    batchDevices.push({ id: newId, value: '' });
+    window._batchStatus[newId] = '';
+    renderBatchDevices();
+    // Focus new field
+    setTimeout(() => { const el = document.getElementById('bdinput_' + newId); if(el) el.focus(); }, 30);
   }
 }
 
@@ -1709,7 +1710,16 @@ function renderLoans() {
   if (sortBy === 'manager') groups.sort((a,b) => {
     const ma = (a.items[0]?.AccountManager||'zzz').toLowerCase();
     const mb = (b.items[0]?.AccountManager||'zzz').toLowerCase();
-    return ma < mb ? -1 : ma > mb ? 1 : a.loanTo.localeCompare(b.loanTo);
+    if (ma !== mb) return ma < mb ? -1 : 1;
+    // Within same AM, sort by most recent loan start date
+    const sa = a.startDate || '0000';
+    const sb = b.startDate || '0000';
+    return sa < sb ? 1 : sa > sb ? -1 : 0;
+  });
+  if (sortBy === 'recent') groups.sort((a,b) => {
+    const sa = a.startDate || '0000';
+    const sb = b.startDate || '0000';
+    return sa < sb ? 1 : sa > sb ? -1 : 0;
   });
   if (sortBy === 'alpha')  groups.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
   if (sortBy === 'expiry') groups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
@@ -2338,11 +2348,17 @@ function generateLoanDoc(loanItems, loanInfo) {
     </div>`;
   document.getElementById('loan-doc-modal').classList.add('open');
   document.getElementById('doc-edited-note').style.display = 'none';
+  const saveBtn = document.getElementById('doc-save-btn');
+  if (saveBtn) saveBtn.style.display = 'none';
+  // Store current loan info for saving
+  window._currentLoanDocInfo = { loanInfo, loanItems };
   // Track edits
   setTimeout(() => {
     document.querySelectorAll('#loan-doc-content [contenteditable]').forEach(el => {
       el.addEventListener('input', () => {
         document.getElementById('doc-edited-note').style.display = 'block';
+        const sb = document.getElementById('doc-save-btn');
+        if (sb) sb.style.display = 'inline-flex';
       }, { once: true });
     });
   }, 200);
@@ -2372,6 +2388,55 @@ function formatDisplayDate(d) {
 
 function closeLoanDoc() {
   document.getElementById('loan-doc-modal').classList.remove('open');
+  window._currentLoanDocInfo = null;
+}
+
+function saveLoanDocChanges() {
+  const doc = document.getElementById('printable-loan-doc');
+  if (!doc || !window._currentLoanDocInfo) return;
+
+  // Read the editable customer info row
+  const cells = doc.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
+  if (cells && cells.length >= 4) {
+    const newLoanTo   = cells[0]?.innerText?.trim() || '';
+    const newLocation = cells[1]?.innerText?.trim() || '';
+    const newEndDate  = cells[3]?.innerText?.trim() || '';  // dd/mm/yyyy format
+
+    // Convert dd/mm/yyyy back to yyyy-mm-dd for storage
+    function toISO(d) {
+      if (!d) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+        const [dd,mm,yyyy] = d.split('/');
+        return yyyy + '-' + mm.padStart(2,'0') + '-' + dd.padStart(2,'0');
+      }
+      return d;
+    }
+
+    // Update all items belonging to this loan
+    const info = window._currentLoanDocInfo.loanInfo;
+    const items = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
+    let updated = 0;
+    items.forEach(item => {
+      const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
+      if (idx >= 0) {
+        if (newLoanTo)   equipment[idx].OnLoanTo  = newLoanTo;
+        if (newLocation) equipment[idx].Location  = newLocation;
+        if (newEndDate)  equipment[idx].LoanEndDate = toISO(newEndDate);
+        updated++;
+      }
+    });
+
+    if (updated > 0) {
+      scheduleSave();
+      renderTable();
+      renderLoans();
+      document.getElementById('doc-edited-note').style.display = 'none';
+      const sb = document.getElementById('doc-save-btn');
+      if (sb) { sb.style.display = 'none'; }
+      showToast('success', 'Loan details saved — ' + updated + ' device' + (updated>1?'s':'') + ' updated');
+    }
+  }
 }
 
 function getLoanGroupByKey(key) {
