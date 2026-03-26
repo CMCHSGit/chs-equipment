@@ -97,7 +97,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .badge-avail{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
 
 /* TABLE */
-.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;position:sticky;top:56px;z-index:50;background:var(--bg);padding:10px 0 8px;margin-top:-10px}
+.table-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:0;flex-wrap:wrap;position:sticky;top:56px;z-index:50;background:var(--bg);padding:10px 0 8px;border-bottom:1px solid var(--border);margin-left:-20px;margin-right:-20px;padding-left:20px;padding-right:20px}
+.table-toolbar + .table-wrap, .table-toolbar + div > .table-wrap{margin-top:12px}
 .search-wrap{position:relative}
 .search-input{padding:7px 12px 7px 34px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;width:220px}
 .search-input:focus{border-color:var(--accent)}
@@ -112,7 +113,7 @@ td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertic
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--surface2)}
 .td-mono{font-family:'DM Mono',monospace;font-size:12px}
-.td-actions{display:flex;gap:4px}
+.td-actions{display:flex;gap:4px;min-width:180px;flex-wrap:nowrap;align-items:center}
 .table-empty{text-align:center;padding:48px 20px;color:var(--text3)}
 .col-sticky{position:sticky;left:0;background:var(--surface);z-index:2}
 tr:hover .col-sticky{background:var(--surface2)}
@@ -191,6 +192,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .mobile-only{display:flex!important}
   .app-header{padding:0 12px;height:52px}
   .main{padding:12px;padding-bottom:80px}
+  .table-toolbar{top:52px;margin-left:-12px;margin-right:-12px;padding-left:12px;padding-right:12px}
   table{min-width:700px}.stats-row{grid-template-columns:1fr 1fr}
   .form-grid,.asset-grid{grid-template-columns:1fr}
   .modal-form-grid{grid-column:1fr}
@@ -492,7 +494,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <th class="col-sticky" style="width:36px;padding:10px 8px">
             <input type="checkbox" class="db-checkbox" id="select-all-cb" onclick="toggleSelectAll(this.checked)" title="Select all">
           </th>
-          <th style="white-space:nowrap">Actions</th>
+          <th style="min-width:200px;white-space:nowrap">Actions</th>
           <th onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
           <th onclick="sortTable('Model')">Model ↕</th>
           <th>Description</th><th>Serial No.</th>
