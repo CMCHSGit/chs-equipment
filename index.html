@@ -320,6 +320,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download Excel
       </button>
+      <button class="mobile-nav-item" onclick="openAMModal();closeMobileMenu()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Account Managers
+      </button>
       <button class="mobile-nav-item" onclick="doLogout()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Lock / Sign out
@@ -350,8 +354,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <h2>Scan Equipment</h2>
         <p class="subtitle">Scan or type a CHS Asset Number — or tap the camera icon for QR codes</p>
         <div class="scan-tabs">
-          <button class="scan-tab active" id="stab-loan" onclick="setScanMode('loan')">Issue Loan</button>
-          <button class="scan-tab" id="stab-batch" onclick="setScanMode('batch')">Batch Loan</button>
+          <button class="scan-tab active" id="stab-batch" onclick="setScanMode('batch')">Issue Loan</button>
           <button class="scan-tab" id="stab-return" onclick="setScanMode('return')">Return Equipment</button>
           <button class="scan-tab" id="stab-count" onclick="setScanMode('count')">Count / Audit</button>
         </div>
@@ -370,6 +373,8 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="asset-field"><label>Model</label><span id="prev-model">—</span></div>
               <div class="asset-field"><label>Serial Number</label><span id="prev-serial" style="font-family:'DM Mono',monospace;font-size:12px">—</span></div>
               <div class="asset-field"><label>Status</label><span id="prev-status">—</span></div>
+              <div class="asset-field"><label>On Loan To</label><span id="prev-loaned-to">—</span></div>
+              <div class="asset-field"><label>Location</label><span id="prev-location">—</span></div>
             </div>
           </div>
           <!-- LOAN FORM -->
@@ -422,6 +427,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
               <div class="form-group"><label>Borrower Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
+              <div class="form-group"><label>Account Manager</label><select id="b-account-manager"><option value=""></option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include</div>
@@ -432,7 +438,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             <div id="batch-feedback" style="display:none"></div>
             <div class="form-actions">
               <button class="btn btn-primary" id="btn-batch" onclick="submitBatchLoan()">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Batch Loan
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Loan
               </button>
               <button class="btn" onclick="clearScan()">Cancel</button>
             </div>
@@ -524,7 +530,13 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="table-toolbar">
         <strong style="font-size:15px">Active Loans</strong>
         <span id="loans-count" class="row-count" style="margin-left:8px"></span>
-        <div class="search-wrap" style="margin-left:auto">
+        <select class="filter-select" id="loans-sort" onchange="renderLoans()" style="margin-left:auto">
+          <option value="added">Last added</option>
+          <option value="alpha">Customer A–Z</option>
+          <option value="expiry">Expiry (soonest)</option>
+          <option value="start">Loan date</option>
+        </select>
+        <div class="search-wrap">
           <svg class="search-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input class="search-input" id="loans-search" type="text" placeholder="Search customer…" oninput="renderLoans()">
         </div>
@@ -608,6 +620,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="form-group"><label>Old CHS #</label><input type="text" id="m-OldCHS"></div>
       <div class="form-group"><label>Tile Type</label><input type="text" id="m-TileType"></div>
       <div class="form-group"><label>Tile UUID</label><input type="text" id="m-TileUUID" placeholder="e.g. abc12345-..."></div>
+      <div class="form-group"><label>Account Manager</label><select id="m-AccountManager"><option value=""></option></select></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -710,6 +723,25 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<!-- ACCOUNT MANAGER SETTINGS MODAL -->
+<div class="modal-overlay" id="am-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">Account Managers</div>
+      <button class="modal-close" onclick="closeAMModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Add or remove account managers from the dropdown list.</div>
+    <div id="am-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;max-height:280px;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px">
+      <input type="text" id="am-new-input" placeholder="New account manager name" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addAccountManager()">
+      <button class="btn btn-primary" onclick="addAccountManager()">Add</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeAMModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <!-- BATCH RETURN MODAL -->
 <div class="modal-overlay" id="batch-return-modal">
   <div class="modal" style="max-width:620px">
@@ -751,7 +783,6 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="detail-body" id="detail-body"></div>
     <div class="detail-footer">
       <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
-      <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
       <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
       <button class="btn btn-sm" onclick="detailAction('history')">History</button>
       <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
@@ -864,6 +895,7 @@ async function loadData() {
     historyLog = Array.isArray(data.history)     ? data.history    : [];
     setSync('ok', 'Live — auto-saving');
     updateStats(); renderTable(); renderHistory();
+    setScanMode('batch');
     hideLoading();
     await loadSentNotifications();
     setTimeout(() => checkOverdueNotifications(), 500);
@@ -960,12 +992,13 @@ function updateStats() {
 // ── SCAN ───────────────────────────────────────────────────────────────
 function setScanMode(m) {
   scanMode = m;
-  ['loan','batch','return','count'].forEach(x => {
+  ['batch','return','count'].forEach(x => {
     const el = document.getElementById('stab-'+x);
     if (el) el.classList.toggle('active', x===m);
   });
   document.getElementById('batch-form').style.display = m === 'batch' ? 'block' : 'none';
-  document.getElementById('scan-input').closest('.scan-input-wrap').style.display = m === 'batch' ? 'none' : 'block';
+  const siw = document.getElementById('scan-input').closest('.scan-input-wrap');
+  if (siw) siw.style.display = m === 'batch' ? 'none' : 'block';
   document.getElementById('scan-feedback').style.display = 'none';
   document.getElementById('asset-preview').style.display = 'none';
   if (m === 'batch') { initBatchForm(); return; }
@@ -990,6 +1023,8 @@ function showAssetPreview(item) {
   document.getElementById('prev-asset-no').textContent = item.CHSAssetNo || '—';
   document.getElementById('prev-model').textContent    = item.Model || '—';
   document.getElementById('prev-serial').textContent   = item.SerialNo || '—';
+  document.getElementById('prev-loaned-to').textContent = item.OnLoanTo || '—';
+  document.getElementById('prev-location').textContent  = item.Location || '—';
   const today = nzDate();
   const on = item.OnLoanTo && item.Returned !== 'Yes';
   const od = on && item.LoanEndDate && item.LoanEndDate < today;
@@ -1149,7 +1184,7 @@ function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;
 function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
-const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID'];
+const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','AccountManager'];
 
 function openAddModal() { editingId=null; document.getElementById('modal-title').textContent='Add Equipment'; MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';}); document.getElementById('item-modal').classList.add('open'); }
 function openEditModal(id) {
@@ -1416,7 +1451,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 
@@ -1441,12 +1476,34 @@ function renderBatchDevices() {
       <input type="text" value="${d.value}" placeholder="CHS Asset Number"
         style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:14px;outline:none"
         id="bdinput_${d.id}"
-        onblur="updateBatchDevice('${d.id}', this.value)"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();updateBatchDevice('${d.id}',this.value);}">
+        oninput="debounceBatchDevice('${d.id}', this.value)"
+        onkeydown="handleBatchDeviceKey(event,'${d.id}',${i})">
       <div style="font-size:12px;min-width:130px">${statusHtml}</div>
       ${batchDevices.length > 1 ? `<button class="btn btn-sm btn-red" onclick="removeBatchDevice('${d.id}')" style="flex-shrink:0">✕</button>` : ''}
     </div>`;
   }).join('');
+}
+
+const _batchDebounceTimers = {};
+function debounceBatchDevice(id, val) {
+  clearTimeout(_batchDebounceTimers[id]);
+  _batchDebounceTimers[id] = setTimeout(() => updateBatchDevice(id, val), 300);
+}
+
+function handleBatchDeviceKey(e, id, idx) {
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    updateBatchDevice(id, e.target.value);
+    // Add new row and focus it
+    setTimeout(() => {
+      const newId = 'bd_' + Date.now();
+      batchDevices.push({ id: newId, value: '' });
+      if (!window._batchStatus) window._batchStatus = {};
+      window._batchStatus[newId] = '';
+      renderBatchDevices();
+      setTimeout(() => { const el = document.getElementById('bdinput_' + newId); if(el) el.focus(); }, 50);
+    }, 100);
+  }
 }
 
 function updateBatchDevice(id, val) {
@@ -1544,11 +1601,12 @@ async function submitBatchLoan() {
   const endDate   = document.getElementById('b-end-date').value;
   const notes     = document.getElementById('b-notes').value;
   const batchEmail = document.getElementById('b-email').value.trim();
+  const batchAM = document.getElementById('b-account-manager')?.value || '';
 
   for (const d of devicesToLoan) {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     if (idx < 0) continue;
-    Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail });
+    Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId });
   }
 
@@ -1580,8 +1638,8 @@ async function submitBatchLoan() {
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
 function renderLoans() {
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
+  const sortBy = document.getElementById('loans-sort')?.value || 'added';
   const today = nzDate();
-  // Group equipment on loan by customer
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
   const grouped = {};
   onLoan.forEach(e => {
@@ -1589,7 +1647,10 @@ function renderLoans() {
     if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [] };
     grouped[key].items.push(e);
   });
-  const groups = Object.values(grouped).filter(g => !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q));
+  let groups = Object.values(grouped).filter(g => !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q));
+  if (sortBy === 'alpha')  groups.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
+  if (sortBy === 'expiry') groups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
+  if (sortBy === 'start')  groups.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
   document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.length + ' devices';
   if (!groups.length) {
     document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
@@ -2279,6 +2340,69 @@ function printLoanDoc() {
   w.document.close();
 }
 
+// ── ACCOUNT MANAGERS ──────────────────────────────────────────────────
+let accountManagers = [];
+
+function loadAccountManagers() {
+  const saved = localStorage.getItem('chs_account_managers');
+  accountManagers = saved ? JSON.parse(saved) : [];
+  updateAMDropdowns();
+}
+
+function saveAccountManagers() {
+  localStorage.setItem('chs_account_managers', JSON.stringify(accountManagers));
+  updateAMDropdowns();
+}
+
+function updateAMDropdowns() {
+  const opts = '<option value=""></option>' + accountManagers.map(am => `<option value="${esc(am)}">${esc(am)}</option>`).join('');
+  ['m-AccountManager','b-account-manager'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      const current = el.value;
+      el.innerHTML = opts;
+      el.value = current;
+    }
+  });
+}
+
+function openAMModal() {
+  renderAMList();
+  document.getElementById('am-modal').classList.add('open');
+  setTimeout(() => document.getElementById('am-new-input').focus(), 100);
+}
+
+function closeAMModal() {
+  document.getElementById('am-modal').classList.remove('open');
+}
+
+function renderAMList() {
+  document.getElementById('am-list').innerHTML = accountManagers.length
+    ? accountManagers.map((am, i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)">
+        <span style="flex:1;font-size:13px">${esc(am)}</span>
+        <button class="btn btn-sm btn-red" onclick="removeAccountManager(${i})">Remove</button>
+      </div>`).join('')
+    : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers added yet</div>';
+}
+
+function addAccountManager() {
+  const name = document.getElementById('am-new-input').value.trim();
+  if (!name) return;
+  if (accountManagers.includes(name)) { showToast('error', 'Already exists'); return; }
+  accountManagers.push(name);
+  saveAccountManagers();
+  renderAMList();
+  document.getElementById('am-new-input').value = '';
+  document.getElementById('am-new-input').focus();
+}
+
+function removeAccountManager(i) {
+  accountManagers.splice(i, 1);
+  saveAccountManagers();
+  renderAMList();
+}
+
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
 function initDragScroll() {
   document.querySelectorAll('.table-scroll').forEach(el => {
@@ -2318,6 +2442,7 @@ function initDragScroll() {
 document.getElementById('f-start-date').value = nzDate();
 document.getElementById('login-pw').focus();
 initEmailJS();
+loadAccountManagers();
 checkAuth();
 setTimeout(initDragScroll, 1000);
 </script>
