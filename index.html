@@ -897,8 +897,6 @@ function nzNow() {
 
 // ── AUTH ───────────────────────────────────────────────────────────────
 function doLogin() {
-  document.getElementById('login-wrap').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
   loadData().then(() => setTimeout(handleReturnLink, 1200));
 }
 function doLogout() { location.reload(); }
@@ -2984,7 +2982,6 @@ function initDragScroll() {
 
 // ── START ──────────────────────────────────────────────────────────────
 document.getElementById('f-start-date').value = nzDate();
-document.getElementById('login-pw').focus();
 initEmailJS();
 loadAccountManagers();
 checkAuth();
