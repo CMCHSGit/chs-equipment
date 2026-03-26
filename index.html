@@ -433,8 +433,8 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
+              <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
-              <div class="form-group"><label>Account Manager</label><select id="b-account-manager"><option value=""></option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include (Asset Numbers)</div>
@@ -1132,6 +1132,15 @@ function clearScan() {
   hideFeedback();
   ['f-loan-to','f-location','f-end-date','f-notes','f-email'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('f-start-date').value = nzDate();
+  // Also reset batch form
+  batchDevices = [{ id: 'bd_0', value: '' }];
+  window._batchStatus = {};
+  ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+  const bsEl = document.getElementById('b-start-date'); if(bsEl) bsEl.value = nzDate();
+  const fb = document.getElementById('batch-feedback'); if(fb) { fb.style.display='none'; fb.innerHTML=''; }
+  const badge = document.getElementById('loan-confirmed-badge'); if(badge) badge.style.display='none';
+  const bdl = document.getElementById('batch-devices-list'); if(bdl) renderBatchDevices();
   document.getElementById('scan-input').focus();
 }
 
@@ -1248,10 +1257,13 @@ function saveItem() {
 }
 
 function deleteItem(id, assetNo) {
-  if (!confirm(`Delete ${assetNo}? This cannot be undone.`)) return;
+  const pw = prompt(`Enter admin password to delete ${assetNo}:`);
+  if (pw === null) return; // cancelled
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  if (!confirm(`Permanently delete ${assetNo}? This cannot be undone.`)) return;
   equipment = equipment.filter(e=>e.id!==id);
   scheduleSave(); renderTable(); updateStats();
-  showToast('info','Item deleted');
+  showToast('info', `${assetNo} deleted`);
 }
 
 // ── ITEM HISTORY ───────────────────────────────────────────────────────
@@ -1580,14 +1592,20 @@ async function submitBatchLoan() {
   const loanTo   = document.getElementById('b-loan-to').value.trim();
   const location = document.getElementById('b-location').value.trim();
   const batchEmailCheck = document.getElementById('b-email').value.trim();
+  const batchAMCheck    = document.getElementById('b-account-manager')?.value || '';
   if (!loanTo || !location) {
     document.getElementById('batch-feedback').style.display = 'block';
     document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please fill in "On Loan To" and "Location".</div>';
     return;
   }
+  if (!batchAMCheck) {
+    document.getElementById('batch-feedback').style.display = 'block';
+    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please select an Account Manager.</div>';
+    return;
+  }
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) {
     document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please enter a valid Borrower Email address.</div>';
+    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please enter a valid Account Manager Email address.</div>';
     return;
   }
 
@@ -1658,7 +1676,7 @@ async function submitBatchLoan() {
   // Show success toast
   // Show green confirmed badge
   const badge = document.getElementById('loan-confirmed-badge');
-  if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display='none', 5000); }
+  if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display='none', 120000); }
 
   // Reset batch form to fresh state
   btn.disabled = false; btn.textContent = 'Confirm Loan';
@@ -1667,6 +1685,7 @@ async function submitBatchLoan() {
   ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => {
     const el = document.getElementById(id); if(el) el.value = '';
   });
+  const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
   document.getElementById('b-start-date').value = nzDate();
   document.getElementById('batch-feedback').style.display = 'none';
   renderBatchDevices();
