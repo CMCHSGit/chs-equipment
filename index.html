@@ -263,7 +263,19 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </head>
 <body>
 
-<!-- Login removed -->
+<!-- LOGIN -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+    </div>
+    <div class="login-title">CMCHS Demo Equipment</div>
+    <div class="login-sub">Enter the access password to continue</div>
+    <input class="login-input" type="password" id="login-pw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">Access Equipment Tracker</button>
+    <div class="login-err" id="login-err">Incorrect password. Please try again.</div>
+  </div>
+</div>
 
 <!-- LOADING -->
 <div class="loading-overlay" id="loading-overlay">
@@ -272,7 +284,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </div>
 
 <!-- APP -->
-<div id="app">
+<div id="app" style="display:none">
   <header class="app-header">
     <div class="app-logo"><div class="app-logo-dot"></div>CMCHS Demo Equipment</div>
     <div class="header-right">
@@ -973,10 +985,29 @@ function nzNow() {
 
 // ── AUTH ───────────────────────────────────────────────────────────────
 function doLogin() {
-  loadData().then(() => setTimeout(handleReturnLink, 1200));
+  const pw = document.getElementById('login-pw').value;
+  if (pw === APP_PASSWORD) {
+    sessionStorage.setItem('chs_auth','1');
+    document.getElementById('login-wrap').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadData().then(() => setTimeout(handleReturnLink, 1200));
+  } else {
+    document.getElementById('login-err').style.display = 'block';
+    document.getElementById('login-pw').value = '';
+    document.getElementById('login-pw').focus();
+  }
 }
-function doLogout() { location.reload(); }
-function checkAuth() { doLogin(); }
+function doLogout() {
+  sessionStorage.removeItem('chs_auth');
+  location.reload();
+}
+function checkAuth() {
+  if (sessionStorage.getItem('chs_auth') === '1') {
+    document.getElementById('login-wrap').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    loadData().then(() => setTimeout(handleReturnLink, 1200));
+  }
+}
 
 // ── FIREBASE API ───────────────────────────────────────────────────────
 async function fetchBin() {
@@ -1168,7 +1199,13 @@ function submitLoan() {
     Notes: document.getElementById('f-notes').value || equipment[idx].Notes || '',
     BorrowerEmail: borrowerEmail
   });
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value });
+  const singleLoanKey = 'loan_' + uid();
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value, _pdfKey: singleLoanKey });
+  // Store PDF after generation
+  setTimeout(() => {
+    const docEl = document.getElementById('printable-loan-doc');
+    if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[singleLoanKey] = docEl.innerHTML; }
+  }, 300);
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
   scheduleSave(); updateStats(); renderTable();
   // Generate loan document
@@ -2652,14 +2689,29 @@ function viewHistoryPDF(pdfKey) {
 }
 
 function addDocRow() {
-  // Add a blank editable row to the loan doc equipment table
-  const tbody = document.querySelector('#printable-loan-doc table:nth-of-type(3) tbody');
+  // Find the equipment table - has CHS Asset # header
+  const tables = document.querySelectorAll('#printable-loan-doc table');
+  let equipTable = null;
+  for (const t of tables) {
+    const ths = t.querySelectorAll('th');
+    for (const th of ths) { if (th.textContent.includes('CHS Asset')) { equipTable = t; break; } }
+    if (equipTable) break;
+  }
+  const tbody = equipTable ? equipTable.querySelector('tbody') : null;
   if (!tbody) return;
+  // Find last row that has content (not blank placeholder rows)
+  const rows = tbody.querySelectorAll('tr');
+  let insertBefore = null;
+  for (const row of rows) {
+    const hasContent = Array.from(row.querySelectorAll('td')).some(td => td.innerText.trim());
+    if (!hasContent && !insertBefore) insertBefore = row;
+  }
   const tr = document.createElement('tr');
   tr.innerHTML = Array(7).fill(0).map(() =>
-    '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px;min-width:40px" title="Click to edit"></td>'
+    '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px;min-width:40px;background:#fffef0" title="Click to edit"></td>'
   ).join('');
-  tbody.appendChild(tr);
+  if (insertBefore) tbody.insertBefore(tr, insertBefore);
+  else tbody.appendChild(tr);
   // Track as edited
   document.getElementById('doc-edited-note').style.display = 'block';
   const sb = document.getElementById('doc-save-btn');
@@ -2702,7 +2754,9 @@ function saveLoanDocChanges() {
     }
 
     // Collect manual rows added to the doc (accessories etc)
-    const allDocRows = doc.querySelectorAll('table:nth-of-type(3) tbody tr');
+    const tables = doc.querySelectorAll('table');
+    const equipTable = tables[2];
+    const allDocRows = equipTable ? equipTable.querySelectorAll('tbody tr') : [];
     const manualRows = [];
     allDocRows.forEach(row => {
       const cells = row.querySelectorAll('td');
@@ -3194,6 +3248,9 @@ async function saveRetiredAssets() {
 }
 
 function openRetireModal(id) {
+  const pw = prompt('Enter admin password to retire this asset:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   _retireItemId = id;
   const item = equipment.find(e => e.id === id);
   if (!item) return;
@@ -3209,6 +3266,9 @@ function closeRetireModal() {
 }
 
 async function confirmRetire() {
+  const pw = prompt('Enter admin password to retire this asset:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   const reason = document.getElementById('retire-reason').value;
   const notes  = document.getElementById('retire-notes').value.trim();
   const item   = equipment.find(e => e.id === _retireItemId);
@@ -3391,6 +3451,7 @@ function initDragScroll() {
   loadAccountManagers();
   loadRetiredAssets();
   checkAuth();
+  const lpw = document.getElementById('login-pw'); if (lpw) lpw.focus();
   setTimeout(initDragScroll, 1000);
 })();
 </script>
