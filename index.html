@@ -357,10 +357,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="panel active" id="panel-scan">
 
       <div class="stats-row">
-        <div class="stat-card"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total items</div></div>
-        <div class="stat-card"><div class="stat-val" style="color:var(--amber)" id="stat-onloan">0</div><div class="stat-label">On loan</div></div>
-        <div class="stat-card"><div class="stat-val" style="color:var(--green)" id="stat-available">0</div><div class="stat-label">Available</div></div>
-        <div class="stat-card"><div class="stat-val" style="color:var(--red)" id="stat-overdue">0</div><div class="stat-label">Overdue</div></div>
+        <div class="stat-card" onclick="filterDB('')" style="cursor:pointer" title="View all items"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total items</div></div>
+        <div class="stat-card" onclick="filterDB('on-loan')" style="cursor:pointer" title="Filter by on loan"><div class="stat-val" style="color:var(--amber)" id="stat-onloan">0</div><div class="stat-label">On loan</div></div>
+        <div class="stat-card" onclick="filterDB('available')" style="cursor:pointer" title="Filter by available"><div class="stat-val" style="color:var(--green)" id="stat-available">0</div><div class="stat-label">Available</div></div>
+        <div class="stat-card" onclick="filterDB('overdue')" style="cursor:pointer" title="Filter by overdue"><div class="stat-val" style="color:var(--red)" id="stat-overdue">0</div><div class="stat-label">Overdue</div></div>
       </div>
       <div class="scan-card">
         <h2>Scan Equipment</h2>
@@ -539,7 +539,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </button>
       </div>
       <div class="table-wrap"><div class="table-scroll"><table>
-        <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>End Date</th><th>Notes</th><th>Loan Form</th></tr></thead>
+        <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>Loan Date</th><th>End Date</th><th>Notes</th><th>Loan Form</th></tr></thead>
         <tbody id="hist-tbody"></tbody>
       </table></div></div>
     </div>
@@ -911,7 +911,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </div>
 
 <!-- DETAIL PANEL -->
-<div class="detail-overlay" id="detail-overlay" onclick="if(event.target===this)closeDetail()">
+<div class="detail-overlay" id="detail-overlay">
   <div class="detail-panel" id="detail-panel">
     <div class="detail-header">
       <div>
@@ -1229,11 +1229,17 @@ function submitReturn() {
 function submitCount() {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
-  equipment[idx].Counted = 'Yes';
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', notes: '' });
+  const countedValue = 'Counted ' + formatDisplayDate(nzDate());
+  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+  // Mark as counted + return if on loan
+  Object.assign(equipment[idx], {
+    Counted: countedValue,
+    OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes'
+  });
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
-  scheduleSave(); clearScan();
-  showToast('success', `${currentItem.CHSAssetNo} marked as counted`);
+  scheduleSave(); updateStats(); renderTable(); clearScan();
+  showToast('success', `${currentItem.CHSAssetNo} counted and marked as returned`);
 }
 
 function clearScan() {
@@ -1278,10 +1284,10 @@ function renderHistory() {
   const aL = { Loan:'Loaned out', Return:'Returned', Count:'Counted' }, aC = { Loan:'badge-loan', Return:'badge-avail', Count:'badge-avail' };
   document.getElementById('hist-tbody').innerHTML = rows.length
     ? rows.map(h => `<tr>
-        <td style="font-size:12px;color:var(--text2);white-space:nowrap">${h.ts ? new Date(h.ts).toLocaleString() : '—'}</td>
+        <td style="font-size:12px;color:var(--text2);white-space:nowrap">${h.ts ? new Date(h.ts).toLocaleDateString('en-NZ',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
         <td class="td-mono">${esc(h.chsAssetNo)}</td><td>${esc(h.model)}</td>
         <td><span class="status-badge ${aC[h.action]||''}">${aL[h.action]||h.action}</span></td>
-        <td>${esc(h.loanTo)}</td><td>${esc(h.location)}</td><td>${esc(h.loanEnd)}</td>
+        <td>${esc(h.loanTo)}</td><td>${esc(h.location)}</td><td style="font-size:12px">${formatDisplayDate(h.loanStart)}</td><td style="font-size:12px">${formatDisplayDate(h.loanEnd)}</td>
         <td style="font-size:12px;color:var(--text2)">${esc(h.notes)}</td>
         <td>${h.action==='Loan' && h._pdfKey && window._loanPDFs && window._loanPDFs[h._pdfKey] ? `<button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')" style="font-size:11px;padding:3px 8px">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>` : ''}</td></tr>`).join('')
@@ -1317,6 +1323,7 @@ function renderTable() {
         <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
         <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
         ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
+        <div style="flex:1"></div>
         <button class="btn btn-sm" onclick="openRetireModal('${e.id}')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
         <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
       </td>
@@ -1336,7 +1343,7 @@ function renderTable() {
       <td class="td-mono" style="font-size:11px">${esc(e.WlanMAC)}</td>
       <td class="td-mono" style="font-size:11px">${esc(e.OldCHS)}</td>
       <td>${esc(e.TileType)}</td>
-      <td>${e.Counted==='Yes'?'<span class="chip chip-yes">✓ Yes</span>':'<span class="chip chip-no">No</span>'}</td>
+      <td style="font-size:11px">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
       </tr>`;
   }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
 }
@@ -1630,6 +1637,13 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 ['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
+// Detail overlay - use mousedown+mouseup tracking to avoid drag-to-close
+(function() {
+  const overlay = document.getElementById('detail-overlay');
+  let mouseDownOnOverlay = false;
+  overlay.addEventListener('mousedown', e => { mouseDownOnOverlay = e.target === overlay; });
+  overlay.addEventListener('mouseup', e => { if (mouseDownOnOverlay && e.target === overlay) closeDetail(); mouseDownOnOverlay = false; });
+})();
 
 // ── BATCH LOAN ────────────────────────────────────────────────────────
 let batchDevices = [];
@@ -2119,7 +2133,7 @@ function openRetiredDetail(id) {
   document.getElementById('detail-overlay').classList.add('open');
   // Swap footer to show Restore instead of loan actions
   document.querySelector('.detail-footer').innerHTML = `
-    <button class="btn btn-sm btn-primary" onclick="restoreRetiredItem('${item.id}');closeDetail()">Restore to Database</button>
+    <button class="btn btn-sm btn-primary" onclick="promptRestoreRetired('${item.id}');closeDetail()">Restore to Database</button>
     <button class="btn btn-sm btn-red" onclick="deleteRetiredItem('${item.id}','${esc(item.CHSAssetNo)}');closeDetail()" style="margin-left:auto">Delete Permanently</button>
   `;
 }
@@ -3405,6 +3419,22 @@ async function deleteRetiredItem(id, assetNo) {
   await saveRetiredAssets();
   renderRetired();
   showToast('info', assetNo + ' permanently deleted');
+}
+
+// ── FILTER DB FROM STATS ──────────────────────────────────────────────
+function filterDB(status) {
+  switchTab('database');
+  const sel = document.getElementById('db-status');
+  if (sel) sel.value = status;
+  renderTable();
+}
+
+// ── PASSWORD PROTECTED RESTORE ─────────────────────────────────────────
+async function promptRestoreRetired(id) {
+  const pw = prompt('Enter admin password to restore this asset:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  await restoreRetiredItem(id);
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
