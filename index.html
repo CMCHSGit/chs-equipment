@@ -483,6 +483,27 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <option value="">All statuses</option><option value="available">Available</option>
           <option value="on-loan">On loan</option><option value="overdue">Overdue</option>
         </select>
+        <!-- SELECTION ACTION BAR -->
+        <div id="selection-bar" style="display:none;align-items:center;gap:6px;padding:5px 10px;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:var(--radius);flex-wrap:wrap">
+          <span id="selection-label" style="font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap">0 selected</span>
+          <div style="width:1px;height:16px;background:#bfdbfe;flex-shrink:0"></div>
+          <button class="btn btn-sm btn-primary" onclick="issueLoanFromSelection()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Issue Loan
+          </button>
+          <button class="btn btn-sm" id="sel-btn-edit" onclick="editFromSelectionSingle()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
+          </button>
+          <button class="btn btn-sm" id="sel-btn-history" onclick="historyFromSelectionSingle()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>History
+          </button>
+          <button class="btn btn-sm" onclick="retireFromSelection()" style="color:var(--amber);border-color:var(--amber-border)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6l-1 14H6L5 6"/><path d="M8 6V4h8v2"/></svg>Retire
+          </button>
+          <button class="btn btn-sm btn-red" onclick="deleteFromSelection()">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>Delete
+          </button>
+          <button class="btn btn-sm" onclick="clearSelection()">✕ Clear</button>
+        </div>
         <div style="margin-left:auto;display:flex;gap:8px">
           <button class="btn btn-sm" onclick="loadData()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>Refresh
@@ -490,11 +511,6 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <button class="btn btn-sm" onclick="exportCSV()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
           </button>
-          <button class="btn btn-sm btn-primary" id="btn-issue-selected" onclick="issueLoanFromSelection()" style="display:none;background:var(--accent);border-color:var(--accent);color:#fff">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Add Item (<span id="selected-count">0</span>)
-          </button>
-          <button class="btn btn-sm" id="btn-clear-selection" onclick="clearSelection()" style="display:none">Clear selection</button>
-
         </div>
       </div>
       <div class="table-wrap"><div class="table-scroll">
@@ -502,7 +518,6 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <th class="col-sticky" style="width:36px;padding:10px 8px">
             <input type="checkbox" class="db-checkbox" id="select-all-cb" onclick="toggleSelectAll(this.checked)" title="Select all">
           </th>
-          <th style="min-width:200px;white-space:nowrap">Actions</th>
           <th onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
           <th onclick="sortTable('Model')">Model ↕</th>
           <th>Description</th><th>Serial No.</th>
@@ -516,7 +531,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <th>Old CHS #</th><th>Tile Type</th>
           <th>Counted</th>
         </tr></thead>
-        <tbody id="main-tbody"><tr><td colspan="20" class="table-empty">Loading…</td></tr></tbody>
+        <tbody id="main-tbody"><tr><td colspan="19" class="table-empty">Loading…</td></tr></tbody>
         </table>
       </div></div>
       <div style="margin-top:8px;display:flex;justify-content:flex-end"><span id="db-row-count" class="row-count"></span></div>
@@ -1319,33 +1334,27 @@ function renderTable() {
       <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
         <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
       </td>
-      <td class="td-actions" onclick="event.stopPropagation()">
-        <button class="btn btn-sm" onclick="openEditModal('${e.id}')">Edit</button>
-        <button class="btn btn-sm" onclick="openItemHistory('${esc(e.CHSAssetNo)}','${esc(e.Model)}')">History</button>
-        ${e.TileUUID ? `<span>${tileBtn(e.TileUUID)}</span>` : ''}
-        <div style="flex:1"></div>
-        <button class="btn btn-sm" onclick="openRetireModal('${e.id}')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
-        <button class="btn btn-sm btn-red" onclick="deleteItem('${e.id}','${esc(e.CHSAssetNo)}')">Del</button>
-      </td>
-      <td class="td-mono" style="font-weight:500">${esc(e.CHSAssetNo)}</td>
-      <td>${esc(e.Model)}</td>
+
+      <td class="td-mono" style="font-weight:500;white-space:nowrap">${esc(e.CHSAssetNo)}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Model)}">${esc(e.Model)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.SerialNo)}</td>
-      <td>${on?`<span class="status-badge badge-loan">${od?'⚠ Overdue':'On loan'}</span>`:'<span class="status-badge badge-avail">Available</span>'}</td>
-      <td>${esc(e.OnLoanTo)}</td><td>${esc(e.Location)}</td>
-      <td style="font-size:12px;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.TileNo)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.PartNo)}</td>
-      <td>${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.ShelfLocation)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.DeviceID)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.LanMAC)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.WlanMAC)}</td>
-      <td class="td-mono" style="font-size:11px">${esc(e.OldCHS)}</td>
-      <td>${esc(e.TileType)}</td>
-      <td style="font-size:11px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.SerialNo)}</td>
+      <td style="white-space:nowrap">${on?`<span class="status-badge badge-loan">${od?'⚠ Overdue':'On loan'}</span>`:'<span class="status-badge badge-avail">Available</span>'}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.OnLoanTo)}">${esc(e.OnLoanTo)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Location)}">${esc(e.Location)}</td>
+      <td style="font-size:12px;white-space:nowrap;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.TileNo)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.PartNo)}</td>
+      <td style="white-space:nowrap">${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.ShelfLocation)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.DeviceID)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.LanMAC)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.WlanMAC)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.OldCHS)}</td>
+      <td style="white-space:nowrap">${esc(e.TileType)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
       </tr>`;
-  }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
+  }).join('') : `<tr><td colspan="18" class="table-empty">No matching items</td></tr>`;
 }
 
 function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -3019,12 +3028,15 @@ function toggleSelectAll(checked) {
 
 function updateSelectionBar() {
   const n = _selectedIds.size;
-  const issueBtn  = document.getElementById('btn-issue-selected');
-  const clearBtn  = document.getElementById('btn-clear-selection');
-  const countSpan = document.getElementById('selected-count');
-  if (issueBtn)  issueBtn.style.display  = n > 0 ? 'inline-flex' : 'none';
-  if (clearBtn)  clearBtn.style.display  = n > 0 ? 'inline-flex' : 'none';
-  if (countSpan) countSpan.textContent   = n;
+  const bar = document.getElementById('selection-bar');
+  const label = document.getElementById('selection-label');
+  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
+  if (label) label.textContent = n + ' selected';
+  // Show Edit/History only when exactly 1 row selected
+  const editBtn = document.getElementById('sel-btn-edit');
+  const histBtn = document.getElementById('sel-btn-history');
+  if (editBtn) editBtn.style.display = n === 1 ? 'inline-flex' : 'none';
+  if (histBtn) histBtn.style.display = n === 1 ? 'inline-flex' : 'none';
   // Update select-all checkbox state
   const allCbs = document.querySelectorAll('#main-tbody .db-checkbox');
   const selectAllCb = document.getElementById('select-all-cb');
@@ -3032,6 +3044,48 @@ function updateSelectionBar() {
     const visibleSelected = [...allCbs].filter(cb => cb.checked).length;
     selectAllCb.indeterminate = visibleSelected > 0 && visibleSelected < allCbs.length;
     selectAllCb.checked = visibleSelected === allCbs.length;
+  }
+}
+
+function editFromSelectionSingle() {
+  if (_selectedIds.size !== 1) return;
+  const id = [..._selectedIds][0];
+  clearSelection();
+  openEditModal(id);
+}
+
+function historyFromSelectionSingle() {
+  if (_selectedIds.size !== 1) return;
+  const id = [..._selectedIds][0];
+  const item = equipment.find(e => e.id === id);
+  if (item) openItemHistory(item.CHSAssetNo, item.Model);
+}
+
+function retireFromSelection() {
+  if (_selectedIds.size === 0) return;
+  if (_selectedIds.size === 1) {
+    const id = [..._selectedIds][0];
+    clearSelection();
+    openRetireModal(id);
+  } else {
+    showToast('error', 'Please select only one item to retire at a time');
+  }
+}
+
+function deleteFromSelection() {
+  if (_selectedIds.size === 0) return;
+  const ids = [..._selectedIds];
+  if (ids.length === 1) {
+    const item = equipment.find(e => e.id === ids[0]);
+    if (item) { clearSelection(); deleteItem(item.id, item.CHSAssetNo); }
+  } else {
+    const pw = prompt(`Enter admin password to delete ${ids.length} items:`);
+    if (pw === null) return;
+    if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+    if (!confirm(`Permanently delete ${ids.length} items? This cannot be undone.`)) return;
+    ids.forEach(id => { equipment = equipment.filter(e => e.id !== id); });
+    scheduleSave(); clearSelection(); renderTable(); updateStats();
+    showToast('info', `${ids.length} items deleted`);
   }
 }
 
