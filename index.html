@@ -92,7 +92,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .form-group input,.form-group select,.form-group textarea{padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
 .form-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-.status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:500}
+.status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:500;white-space:nowrap}
 .badge-loan{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
 .badge-avail{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
 
@@ -121,7 +121,7 @@ tr:hover .col-sticky{background:var(--surface2)}
 thead .col-sticky{background:var(--surface2);z-index:3}
 .row-count{font-size:12px;color:var(--text3);margin-left:auto}
 .filter-select{padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none}
-.chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
 .chip-yes{background:var(--green-light);color:var(--green)}.chip-no{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
 
 /* MODALS */
@@ -1343,7 +1343,7 @@ function renderTable() {
       <td class="td-mono" style="font-size:11px">${esc(e.WlanMAC)}</td>
       <td class="td-mono" style="font-size:11px">${esc(e.OldCHS)}</td>
       <td>${esc(e.TileType)}</td>
-      <td style="font-size:11px">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
+      <td style="font-size:11px;white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes" style="max-width:110px;overflow:hidden;text-overflow:ellipsis;display:inline-block;vertical-align:middle">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
       </tr>`;
   }).join('') : `<tr><td colspan="19" class="table-empty">No matching items</td></tr>`;
 }
