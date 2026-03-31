@@ -369,7 +369,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <h2>Scan Equipment</h2>
         <p class="subtitle">Scan or type a CHS Asset Number — or tap the camera icon for QR codes</p>
         <div class="scan-tabs">
-          <button class="scan-tab active" id="stab-batch" onclick="setScanMode('batch')">Issue Loan</button>
+          <button class="scan-tab active" id="stab-batch" onclick="setScanMode('batch')">Add Item</button>
           <button class="scan-tab" id="stab-return" onclick="setScanMode('return')">Return Equipment</button>
           <button class="scan-tab" id="stab-count" onclick="setScanMode('count')">Count / Audit</button>
         </div>
@@ -491,7 +491,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <span id="selection-label" style="font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap">0 selected</span>
           <div style="width:1px;height:16px;background:#bfdbfe;flex-shrink:0"></div>
           <button class="btn btn-sm btn-primary" onclick="issueLoanFromSelection()">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Issue Loan
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Add Item
           </button>
           <button class="btn btn-sm btn-green" onclick="returnFromSelection()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Return
@@ -960,7 +960,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div class="detail-body" id="detail-body"></div>
     <div class="detail-footer">
-      <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
+      <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Add Item</button>
       <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
       <button class="btn btn-sm" onclick="detailAction('retire')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
       <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
@@ -2165,7 +2165,7 @@ function openDetail(id) {
   document.getElementById('detail-overlay').classList.add('open');
   // Reset footer to normal state
   document.querySelector('.detail-footer').innerHTML = `
-    <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Issue Loan</button>
+    <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Add Item</button>
     <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
     <button class="btn btn-sm" onclick="detailAction('retire')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
     <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
