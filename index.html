@@ -103,8 +103,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .search-input:focus{border-color:var(--accent)}
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
-.table-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 180px)}
-.table-scroll{overflow-x:auto}
+.table-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 195px)}
 table{width:100%;border-collapse:collapse;min-width:900px}
 thead{background:var(--surface2)}
 thead tr{position:sticky;top:0;z-index:4}
@@ -122,7 +121,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .row-count{font-size:12px;color:var(--text3);margin-left:auto}
 .filter-select{padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none}
 .chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
-.chip-yes{background:var(--green-light);color:var(--green)}.chip-no{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
+.chip-yes{background:var(--green-light);color:var(--green);display:inline-flex;align-items:center;max-width:100%}.chip-no{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
 
 /* MODALS */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;display:none;align-items:center;justify-content:center;padding:20px}
@@ -194,7 +193,11 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .app-header{padding:0 12px;height:52px}
   .main{padding:12px;padding-bottom:80px}
   .table-toolbar{top:52px;margin:0 -12px 12px;padding:10px 12px;width:calc(100% + 24px)}
-  table{min-width:700px}.stats-row{grid-template-columns:1fr 1fr}
+  table{min-width:700px}
+  .td-actions{min-width:160px;padding:0 8px}
+  .btn-sm{font-size:11px;padding:3px 7px}
+  .table-scroll{max-height:calc(100vh - 160px)}
+  .stats-row{grid-template-columns:1fr 1fr}
   .form-grid,.asset-grid{grid-template-columns:1fr}
   .modal-form-grid{grid-column:1fr}
   .modal{margin:10px;max-height:calc(100vh - 20px)}
@@ -1004,7 +1007,7 @@ const EJS_SERVICE           = 'service_ig1n6ut';
 const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder template
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
-const APP_URL      = 'https://cmchsgit.github.io/chs-equipment';
+const APP_URL      = 'http://demo.chsnz.co.nz';
 
 // NZ timezone date helper
 function nzDate() {
@@ -1386,7 +1389,7 @@ function renderTable() {
       <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.WlanMAC)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.OldCHS)}</td>
       <td style="white-space:nowrap">${esc(e.TileType)}</td>
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
+      <td style="max-width:150px" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:145px">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
       </tr>`;
   }).join('') : `<tr><td colspan="18" class="table-empty">No matching items</td></tr>`;
 }
@@ -2310,7 +2313,9 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
     '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')
   ).join('\n');
 
-  const manageLink = APP_URL + '?tab=loans';
+  const manageLink  = APP_URL + '?tab=loans';
+  const returnLink  = buildReturnLink(loanInfo.loanTo, loanInfo.endDate);
+  const extendLink  = APP_URL + '?extend=' + loanReturnToken(loanInfo.loanTo, loanInfo.endDate);
 
   try {
     await emailjs.send(EJS_SERVICE, EJS_LOAN_TEMPLATE, {
@@ -2321,7 +2326,9 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
       loan_start:        formatDisplayDate(loanInfo.startDate || nzDate()),
       loan_end:          formatDisplayDate(loanInfo.endDate   || ''),
       items:             itemsList,
-      manage_link:       manageLink
+      manage_link:       manageLink,
+      return_link:       returnLink,
+      extend_link:       extendLink
     });
     console.log('Loan confirmation sent to', amEmail);
   } catch(err) {
