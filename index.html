@@ -573,6 +573,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <label id="overdue-filter-label" style="display:none;align-items:center;gap:6px;font-size:13px;cursor:pointer;margin-left:auto;padding:5px 10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);color:var(--red);font-weight:500">
           <input type="checkbox" id="loans-overdue-only" onchange="renderLoans()" style="cursor:pointer">Overdue only
         </label>
+        <select class="filter-select" id="loans-am-filter" onchange="renderLoans()" title="Filter by account manager">
+          <option value="">All Account Managers</option>
+        </select>
         <select class="filter-select" id="loans-sort" onchange="renderLoans()">
           <option value="manager" selected>Account Manager</option>
           <option value="recent">Most recent loan</option>
@@ -802,6 +805,35 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="modal-footer">
       <button class="btn" onclick="closeRetireModal()">Cancel</button>
       <button class="btn" onclick="confirmRetire()" style="background:var(--amber);border-color:var(--amber);color:white">Move to Retired</button>
+    </div>
+  </div>
+</div>
+
+<!-- REASSIGN ACCOUNT MANAGER MODAL -->
+<div class="modal-overlay" id="reassign-am-modal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="reassign-am-title">Reassign Account Manager</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="reassign-am-subtitle"></div>
+      </div>
+      <button class="modal-close" onclick="closeReassignAMModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="form-group" style="margin-bottom:8px">
+      <label>Account Manager <span style="color:var(--red)">*</span></label>
+      <select id="reassign-am-select" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <option value="">Select account manager...</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Account Manager Email</label>
+      <input type="email" id="reassign-am-email" placeholder="Email address" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeReassignAMModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmReassignAM()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Reassign
+      </button>
     </div>
   </div>
 </div>
@@ -1699,7 +1731,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 // Detail overlay - use mousedown+mouseup tracking to avoid drag-to-close
@@ -1954,10 +1986,19 @@ function renderLoans() {
     grouped[key].items.push(e);
   });
   const overdueOnly = document.getElementById('loans-overdue-only')?.checked;
+  const amFilter = document.getElementById('loans-am-filter')?.value || '';
+  // Populate AM filter dropdown with current AMs in active loans
+  const amFilterEl = document.getElementById('loans-am-filter');
+  if (amFilterEl) {
+    const currentVal = amFilterEl.value;
+    const activeAMs = [...new Set(Object.values(grouped).map(g => g.items[0]?.AccountManager||'').filter(Boolean))].sort();
+    amFilterEl.innerHTML = '<option value="">All Account Managers</option>' + activeAMs.map(a => `<option value="${esc(a)}" ${a===currentVal?'selected':''}>${esc(a)}</option>`).join('');
+  }
   let groups = Object.values(grouped).filter(g => {
     const matchQ = !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q);
     const matchOverdue = !overdueOnly || (g.endDate && g.endDate < today);
-    return matchQ && matchOverdue;
+    const matchAM = !amFilter || (g.items[0]?.AccountManager || '') === amFilter;
+    return matchQ && matchOverdue && matchAM;
   });
   if (sortBy === 'manager') groups.sort((a,b) => {
     const ma = (a.items[0]?.AccountManager||'zzz').toLowerCase();
@@ -2004,6 +2045,9 @@ function renderLoans() {
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}')" title="Reassign account manager" style="font-size:11px">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign
+          </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey('${key}')" title="Add more devices to this loan">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items
           </button>
@@ -3448,6 +3492,53 @@ function removeDeviceFromLoan(id, assetNo) {
       closeLoanDoc();
     }
   }
+}
+
+// ── REASSIGN ACCOUNT MANAGER ──────────────────────────────────────────
+let _reassignLoanKey = null;
+
+function openReassignAMByKey(key) {
+  const g = getLoanGroupByKey(key);
+  if (!g) return;
+  _reassignLoanKey = key;
+  document.getElementById('reassign-am-title').textContent = 'Reassign AM — ' + g.loanTo;
+  document.getElementById('reassign-am-subtitle').textContent = g.items.length + ' device' + (g.items.length !== 1 ? 's' : '');
+  // Populate dropdown
+  const sel = document.getElementById('reassign-am-select');
+  sel.innerHTML = '<option value="">Select account manager...</option>' +
+    accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === (g.items[0]?.AccountManager||'') ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
+  // Auto-fill email from current AM
+  const currentAM = accountManagers.find(a => a.name === g.items[0]?.AccountManager);
+  document.getElementById('reassign-am-email').value = currentAM?.email || g.items[0]?.BorrowerEmail || '';
+  // Wire up auto-fill on selection change
+  sel.onchange = () => {
+    const am = accountManagers.find(a => a.name === sel.value);
+    if (am) document.getElementById('reassign-am-email').value = am.email || '';
+  };
+  document.getElementById('reassign-am-modal').classList.add('open');
+}
+
+function closeReassignAMModal() {
+  document.getElementById('reassign-am-modal').classList.remove('open');
+  _reassignLoanKey = null;
+}
+
+function confirmReassignAM() {
+  const newAM    = document.getElementById('reassign-am-select').value;
+  const newEmail = document.getElementById('reassign-am-email').value.trim();
+  if (!newAM) { showToast('error', 'Please select an account manager'); return; }
+  const g = getLoanGroupByKey(_reassignLoanKey);
+  if (!g) { closeReassignAMModal(); return; }
+  g.items.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id);
+    if (idx >= 0) {
+      equipment[idx].AccountManager = newAM;
+      if (newEmail) equipment[idx].BorrowerEmail = newEmail;
+    }
+  });
+  scheduleSave(); renderLoans(); renderTable();
+  closeReassignAMModal();
+  showToast('success', 'Loan reassigned to ' + newAM);
 }
 
 // ── DELETE LOAN ────────────────────────────────────────────────────────
