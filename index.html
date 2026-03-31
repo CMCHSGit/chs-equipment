@@ -1000,7 +1000,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────
-const APP_PASSWORD = 'CHS2024';          // ← change this to your password
+let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 // EmailJS config
@@ -1019,7 +1019,8 @@ function nzNow() {
 }
 
 // ── AUTH ───────────────────────────────────────────────────────────────
-function doLogin() {
+async function doLogin() {
+  if (!APP_PASSWORD) await loadConfig();
   const pw = document.getElementById('login-pw').value;
   if (pw === APP_PASSWORD) {
     sessionStorage.setItem('chs_auth','1');
@@ -1036,11 +1037,28 @@ function doLogout() {
   sessionStorage.removeItem('chs_auth');
   location.reload();
 }
-function checkAuth() {
+async function checkAuth() {
+  await loadConfig();
   if (sessionStorage.getItem('chs_auth') === '1') {
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     loadData().then(() => setTimeout(handleReturnLink, 1200));
+  }
+}
+
+// ── FIREBASE CONFIG (passwords loaded at runtime) ─────────────────────
+async function loadConfig() {
+  try {
+    const r = await fetch(FB_URL + '/config.json');
+    const d = await r.json();
+    if (d && d.appPassword)   APP_PASSWORD   = d.appPassword;
+    if (d && d.adminPassword) ADMIN_PASSWORD = d.adminPassword;
+    if (!APP_PASSWORD || !ADMIN_PASSWORD) throw new Error('Missing passwords in config');
+  } catch(e) {
+    console.error('Could not load config:', e);
+    // Fallback — show error on login screen
+    const sub = document.getElementById('login-sub');
+    if (sub) sub.textContent = 'Configuration error — please contact your administrator.';
   }
 }
 
@@ -1996,9 +2014,9 @@ function renderLoans() {
         </div>
       </div>
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
-        ${g.items.map(e => `<div class="loan-device">
+        ${g.items.map(e => `<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo('${esc(e.CHSAssetNo)}')" title="View in database">
           <div class="loan-device-info">
-            <div class="loan-device-assetno">${esc(e.CHSAssetNo)}</div>
+            <div class="loan-device-assetno" style="color:var(--accent)">${esc(e.CHSAssetNo)}</div>
             <div class="loan-device-desc">${esc(e.Model)}${e.SerialNo?' · '+e.SerialNo:''}</div>
           </div>
           ${e.TileUUID ? tileBtn(e.TileUUID) : ''}
@@ -2077,6 +2095,13 @@ function closeBatchReturn() {
 
 // ── DETAIL PANEL ──────────────────────────────────────────────────────
 let currentDetailItem = null;
+
+function openDetailByAssetNo(assetNo) {
+  const item = equipment.find(e => e.CHSAssetNo === assetNo);
+  if (!item) { showToast('error', assetNo + ' not found in database'); return; }
+  switchTab('database');
+  setTimeout(() => openDetail(item.id), 150);
+}
 
 function openDetail(id) {
   const item = equipment.find(e => e.id === id);
@@ -2518,7 +2543,7 @@ function openExtendFromDetail(item) {
 }
 
 // ── HISTORY MANAGEMENT ─────────────────────────────────────────────────
-const ADMIN_PASSWORD = 'notouchy';
+let ADMIN_PASSWORD = null; // loaded from Firebase /config.json
 let _histMgmtUnlocked = false;
 let _histMgmtChecked = {};
 
