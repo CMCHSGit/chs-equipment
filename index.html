@@ -1269,7 +1269,7 @@ function submitReturn() {
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
   Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes' });
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Returned', loanTo: prev.loanTo, location: prev.loc });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   showToast('success', `${currentItem.CHSAssetNo} returned`);
@@ -2058,7 +2058,7 @@ async function confirmBatchReturn() {
     if (idx < 0) return;
     const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
     Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: '' });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   });
   scheduleSave(); renderTable(); updateStats();
   closeBatchReturn();
@@ -3234,7 +3234,7 @@ function returnFromSelection() {
   selectedItems.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx < 0) return;
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Return', loanTo: item.OnLoanTo, location: item.Location });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Return', loanTo: item.OnLoanTo, location: item.Location, notes: 'Returned ' + formatDisplayDate(nzDate()) });
     Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes' });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
