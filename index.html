@@ -96,6 +96,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:500;white-space:nowrap}
 .badge-loan{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
 .badge-avail{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
+.badge-upcoming{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
+.badge-upcoming-sm{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;white-space:nowrap}
 
 /* TABLE */
 .table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:64px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
@@ -510,6 +512,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           </button>
           <button class="btn btn-sm btn-green" onclick="returnFromSelection()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Return
+          </button>
+          <button class="btn btn-sm" onclick="countFromSelection()" style="color:var(--accent);border-color:var(--accent)">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Count
           </button>
           <button class="btn btn-sm" id="sel-btn-edit" onclick="editFromSelectionSingle()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
@@ -1176,6 +1181,7 @@ async function saveBin(data) {
 
 // ── STATE ──────────────────────────────────────────────────────────────
 let equipment = [], historyLog = [], sortCol = 'CHSAssetNo', sortDir = 1;
+let upcomingLoans = []; // [{id,loanTo,location,startDate,endDate,accountManager,borrowerEmail,items:[{id,CHSAssetNo}]}]
 let scanMode = 'loan', currentItem = null, editingId = null, sessionItems = [];
 let saveTimer = null;
 
@@ -1191,7 +1197,12 @@ async function loadData() {
     setScanMode('batch');
     hideLoading();
     await loadSentNotifications();
-    setTimeout(() => checkOverdueNotifications(), 500);
+    await loadUpcomingLoans();
+    setTimeout(async () => {
+      await activateUpcomingLoans();
+      checkOverdueNotifications();
+      checkUpcomingLoanReminders();
+    }, 500);
     return true;
   } catch(e) {
     setSync('err', 'Load failed');
@@ -1467,6 +1478,17 @@ function renderHistory() {
 // ── TABLE ──────────────────────────────────────────────────────────────
 function sortTable(col) { if (sortCol===col) sortDir*=-1; else { sortCol=col; sortDir=1; } renderTable(); }
 
+// Build status cell HTML — extracted to avoid nested template literals
+function buildStatusCell(e, on, od) {
+  const upcoming = getUpcomingLoanForItem(e.id);
+  const upcomingTag = upcoming
+    ? '<span class="badge-upcoming-sm" style="margin-left:4px" title="Upcoming loan for ' + esc(upcoming.loanTo) + ' from ' + upcoming.startDate + '">⏳ ' + esc(upcoming.loanTo) + '</span>'
+    : '';
+  if (on) return '<span class="status-badge badge-loan">' + (od ? '⚠ Overdue' : 'On loan') + '</span>' + upcomingTag;
+  if (upcoming) return '<span class="status-badge badge-avail">Available</span><span class="badge-upcoming-sm" style="margin-left:4px">⏳ Due for ' + esc(upcoming.loanTo) + '</span>';
+  return '<span class="status-badge badge-avail">Available</span>';
+}
+
 function renderTable() {
   const q   = (document.getElementById('db-search').value || '').toLowerCase();
   const sf  = document.getElementById('db-status').value;
@@ -1494,7 +1516,7 @@ function renderTable() {
       <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Model)}">${esc(e.Model)}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.SerialNo)}</td>
-      <td style="white-space:nowrap">${on?`<span class="status-badge badge-loan">${od?'⚠ Overdue':'On loan'}</span>`:'<span class="status-badge badge-avail">Available</span>'}</td>
+      <td style="white-space:nowrap">${buildStatusCell(e, on, od)}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.OnLoanTo)}">${esc(e.OnLoanTo)}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Location)}">${esc(e.Location)}</td>
       <td style="font-size:12px;white-space:nowrap;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
@@ -1885,9 +1907,12 @@ function updateBatchDevice(id, val) {
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
-    window._batchStatus[id] = on
-      ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
+    const upcomingForItem = getUpcomingLoanForItem(item.id);
+    let statusHtml = on
+      ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — on loan to ${item.OnLoanTo}</span>`
       : `<span style="color:var(--green)">✓ ${item.Model || 'Found'}</span>`;
+    if (upcomingForItem) statusHtml += ` <span style="color:#6d28d9;font-size:11px">⏳ Due for ${esc(upcomingForItem.loanTo)} ${formatDisplayDate(upcomingForItem.startDate)}</span>`;
+    window._batchStatus[id] = statusHtml;
     d.value = item.CHSAssetNo;
   } else {
     window._batchStatus[id] = `<span style="color:var(--red)">✗ Not found</span>`;
@@ -1962,11 +1987,13 @@ function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
         </div>`).join('')}
     </div>`;
   }
-  html += `<div style="font-size:12px;color:var(--text2);padding:4px 0">Clicking <strong>Proceed Anyway</strong> will confirm the loan. Update the current customer's end date or arrange logistics as needed.</div>`;
+  html += '<div style="font-size:12px;color:var(--text2);padding:4px 0;margin-top:4px"><strong>These items will be scheduled as an Upcoming loan</strong> &mdash; the existing loan stays active until its end date. A reminder email will be sent to the current account manager 2 days before the new loan starts.</div>';
 
   document.getElementById('conflict-body').innerHTML = html;
-  document.getElementById('conflict-confirm-btn').style.background = hasOverlap ? 'var(--red)' : 'var(--green)';
-  document.getElementById('conflict-confirm-btn').style.borderColor = hasOverlap ? 'var(--red)' : 'var(--green)';
+  document.getElementById('conflict-confirm-btn').textContent = '';
+  document.getElementById('conflict-confirm-btn').innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Schedule as Upcoming Loan';
+  document.getElementById('conflict-confirm-btn').style.background = '#6d28d9';
+  document.getElementById('conflict-confirm-btn').style.borderColor = '#6d28d9';
   _conflictProceedCallback = onProceed;
   document.getElementById('conflict-modal').classList.add('open');
 }
@@ -2078,9 +2105,50 @@ async function submitBatchLoan() {
     return;
   }
 
-  // Show conflict modal — user must review and confirm before proceeding
-  showConflictModal(conflicts, loanTo, startDate, () => {
-    doLoan([...cleanDevices, ...alreadyOnLoan]);
+  // Show conflict modal — user must review before creating upcoming loan
+  showConflictModal(conflicts, loanTo, startDate, async () => {
+    // Create upcoming loan for conflicted items — don't overwrite existing loans
+    const upcomingItems = alreadyOnLoan.map(d => {
+      const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+      return item ? { id: item.id, CHSAssetNo: item.CHSAssetNo } : null;
+    }).filter(Boolean);
+
+    if (upcomingItems.length > 0) {
+      const batchEmail = document.getElementById('b-email').value.trim();
+      const batchAM    = document.getElementById('b-account-manager')?.value || '';
+      const upcomingId = 'upcoming_' + Date.now();
+      const newUpcoming = {
+        id: upcomingId, loanTo, location, startDate, endDate,
+        accountManager: batchAM, borrowerEmail: batchEmail,
+        items: upcomingItems, status: 'upcoming',
+        notes: document.getElementById('b-notes').value
+      };
+      upcomingLoans.push(newUpcoming);
+      // Mark each equipment item with upcoming loan reference
+      upcomingItems.forEach(ui => {
+        const idx = equipment.findIndex(e => e.id === ui.id);
+        if (idx >= 0) equipment[idx]._upcomingLoanId = upcomingId;
+      });
+      await saveUpcomingLoans();
+      scheduleSave();
+    }
+    // Clean devices (no current loan) proceed as normal
+    if (cleanDevices.length > 0) await doLoan(cleanDevices);
+    else {
+      // Batch reset when only upcoming
+      const btn = document.getElementById('btn-batch');
+      if (btn) { btn.disabled = false; btn.textContent = 'Confirm Loan'; }
+      batchDevices = [{ id: 'bd_0', value: '' }];
+      window._batchStatus = {};
+      ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+      const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+      document.getElementById('b-start-date').value = nzDate();
+      document.getElementById('batch-feedback').style.display = 'none';
+      renderBatchDevices(); renderLoans();
+    }
+    renderTable(); updateStats();
+    const total = upcomingItems.length + cleanDevices.length;
+    showToast('success', (cleanDevices.length ? cleanDevices.length + ' loan' + (cleanDevices.length>1?'s':'') + ' confirmed' + (upcomingItems.length?' · ':'') : '') + (upcomingItems.length ? upcomingItems.length + ' upcoming loan' + (upcomingItems.length>1?'s':'') + ' scheduled for ' + formatDisplayDate(startDate) : ''));
   });
 }
 
@@ -2128,10 +2196,13 @@ function renderLoans() {
   if (sortBy === 'alpha')  groups.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
   if (sortBy === 'expiry') groups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
   if (sortBy === 'start')  groups.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
-  document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.length + ' devices';
+  const upcomingDeviceCount = upcomingLoans.reduce((sum, u) => sum + u.items.length, 0);
+  document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.length + ' devices' + (upcomingLoans.length ? ' · ' + upcomingLoans.length + ' upcoming' : '');
   if (!groups.length) {
-    document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
-    return;
+    if (!upcomingLoans.length) {
+      document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
+      return;
+    }
   }
   // Store groups by key for reliable lookup
   window._loanGroupMap = {};
@@ -2140,6 +2211,43 @@ function renderLoans() {
     window._loanGroupMap[key] = g;
   });
   window._loanGroups = groups;
+
+  // Build upcoming loan cards HTML (no nested backticks — uses string concat)
+  const upcomingCards = upcomingLoans.map(u => {
+    const daysUntilStart = daysBetween(today, u.startDate);
+    const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
+    const itemsHtml = u.items.map(uItem => {
+      const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+      if (!eq) return '';
+      const currentLoan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
+      return '<div class="loan-device">' +
+        '<div class="loan-device-info">' +
+        '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
+        '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') +
+        (currentLoan ? ' · <span style="color:var(--amber)">Currently with ' + esc(currentLoan) + '</span>' : '') +
+        '</div></div></div>';
+    }).join('');
+    return '<div class="loan-card" style="border-color:#c4b5fd">' +
+      '<div class="loan-card-header" onclick="toggleLoanCard(\'ulc_' + u.id + '\')">' +
+      '<div>' +
+      '<div class="loan-card-customer" style="color:#4c1d95">' + esc(u.loanTo) + '</div>' +
+      '<div class="loan-card-meta">' +
+        (u.accountManager ? '<span style="color:#6d28d9;font-weight:500">' + esc(u.accountManager) + '</span> · ' : '') +
+        esc(u.location) + ' · Starts: ' + formatDisplayDate(u.startDate) +
+        ' <span style="color:var(--text3)">(' + daysLabel + ')</span>' +
+        ' · ' + u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
+      '</div>' +
+      '</div>' +
+      '<div class="loan-card-badge">' +
+        '<span class="status-badge badge-upcoming">⏳ Upcoming</span>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" style="color:var(--red);border-color:var(--red-border)" title="Cancel upcoming loan">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
+        '</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="loan-card-body" id="ulc_' + u.id + '" style="display:none">' + itemsHtml + '</div>' +
+      '</div>';
+  }).join('');
 
   document.getElementById('loans-list').innerHTML = groups.map((g, gi) => {
     const overdue = g.endDate && g.endDate < today;
@@ -2182,7 +2290,7 @@ function renderLoans() {
         </div>`).join('')}
       </div>
     </div>`;
-  }).join('');
+  }).join('') + (upcomingLoans.length ? '<div style="margin:16px 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:#6d28d9;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Upcoming Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>' : '') + upcomingCards;
 }
 
 function toggleLoanCard(id) {
@@ -3414,6 +3522,25 @@ async function deleteFromRetiredSelection() {
   showToast('info', `${ids.length} item${ids.length>1?'s':''} permanently deleted`);
 }
 
+function countFromSelection() {
+  const selectedItems = equipment.filter(e => _selectedIds.has(e.id));
+  if (!selectedItems.length) return;
+  const countedValue = 'Counted ' + formatDisplayDate(nzDate());
+  if (!confirm('Mark ' + selectedItems.length + ' item' + (selectedItems.length>1?'s':'') + ' as counted?')) return;
+  selectedItems.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id);
+    if (idx < 0) return;
+    const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+    equipment[idx].Counted = countedValue;
+    if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
+      Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
+    }
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
+  });
+  scheduleSave(); renderTable(); updateStats(); clearSelection();
+  showToast('success', selectedItems.length + ' item' + (selectedItems.length>1?'s':'') + ' counted');
+}
+
 function returnFromSelection() {
   const selectedItems = equipment.filter(e => _selectedIds.has(e.id) && e.OnLoanTo && e.Returned !== 'Yes');
   if (!selectedItems.length) { showToast('error', 'No on-loan items selected to return'); return; }
@@ -3606,9 +3733,12 @@ function updateAddItemRow(id, val) {
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
-    _addItemsStatus[id] = on
+    const upcoming = getUpcomingLoanForItem(item.id);
+    let statusHtml = on
       ? `<span style="color:var(--amber)">⚠ ${item.Model||val} — on loan to ${item.OnLoanTo}</span>`
       : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
+    if (upcoming) statusHtml += ` <span style="color:#6d28d9;font-size:11px">⏳ Due for ${esc(upcoming.loanTo)} ${formatDisplayDate(upcoming.startDate)}</span>`;
+    _addItemsStatus[id] = statusHtml;
     r.value = item.CHSAssetNo;
   } else {
     _addItemsStatus[id] = `<span style="color:var(--red)">✗ Not found</span>`;
@@ -3751,6 +3881,21 @@ function confirmReassignAM() {
   showToast('success', 'Loan reassigned to ' + newAM);
 }
 
+// ── UPCOMING LOAN MANAGEMENT ──────────────────────────────────────────
+async function deleteUpcomingLoanPrompt(id) {
+  const u = upcomingLoans.find(x => x.id === id);
+  if (!u) return;
+  if (!confirm('Cancel upcoming loan for ' + u.loanTo + ' starting ' + formatDisplayDate(u.startDate) + '?\n\nThis will remove the upcoming loan. The current loans will not be affected.')) return;
+  // Clear _upcomingLoanId from affected equipment
+  u.items.forEach(uItem => {
+    const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+    if (idx >= 0 && equipment[idx]._upcomingLoanId === id) equipment[idx]._upcomingLoanId = null;
+  });
+  await deleteUpcomingLoan(id);
+  scheduleSave(); renderLoans(); renderTable();
+  showToast('info', 'Upcoming loan for ' + u.loanTo + ' cancelled');
+}
+
 // ── DELETE LOAN ────────────────────────────────────────────────────────
 function deleteLoanByKey(key) {
   const g = getLoanGroupByKey(key);
@@ -3790,6 +3935,128 @@ async function loadRetiredAssets() {
     const d = await r.json();
     retiredAssets = Array.isArray(d) ? d : [];
   } catch(e) { retiredAssets = []; }
+}
+
+// ── UPCOMING LOANS ─────────────────────────────────────────────────────
+async function loadUpcomingLoans() {
+  try {
+    const r = await fetch(FB_URL + '/upcomingLoans.json');
+    const d = await r.json();
+    upcomingLoans = d ? Object.values(d) : [];
+  } catch(e) { upcomingLoans = []; }
+}
+
+async function saveUpcomingLoans() {
+  const obj = {};
+  upcomingLoans.forEach(u => { obj[u.id] = u; });
+  try {
+    await fetch(FB_URL + '/upcomingLoans.json', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(obj)
+    });
+  } catch(e) { console.warn('Could not save upcoming loans', e); }
+}
+
+async function deleteUpcomingLoan(id) {
+  upcomingLoans = upcomingLoans.filter(u => u.id !== id);
+  try {
+    await fetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
+  } catch(e) { console.warn('Could not delete upcoming loan', e); }
+}
+
+// Get upcoming loan for a given equipment id (if any)
+function getUpcomingLoanForItem(equipId) {
+  return upcomingLoans.find(u => u.items.some(i => i.id === equipId || i.CHSAssetNo === equipId));
+}
+function getUpcomingLoanForAssetNo(assetNo) {
+  return upcomingLoans.find(u => u.items.some(i => i.CHSAssetNo === assetNo));
+}
+
+// Called on app load — activate any upcoming loans whose start date has arrived
+async function activateUpcomingLoans() {
+  const today = nzDate();
+  const toActivate = upcomingLoans.filter(u => u.startDate && u.startDate <= today);
+  if (!toActivate.length) return;
+  let changed = false;
+  for (const upcoming of toActivate) {
+    for (const uItem of upcoming.items) {
+      const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+      if (idx < 0) continue;
+      const prev = equipment[idx];
+      const prevLoanTo = prev.OnLoanTo || '';
+      const prevLoc    = prev.Location  || '';
+      // Log transfer history
+      if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
+        historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
+          action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
+          loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
+          notes: 'Transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ')'
+        });
+      }
+      // Activate: update equipment
+      Object.assign(equipment[idx], {
+        OnLoanTo: upcoming.loanTo, Location: upcoming.location,
+        LoanStartDate: upcoming.startDate, LoanEndDate: upcoming.endDate,
+        Returned: 'No', BatchID: upcoming.id,
+        AccountManager: upcoming.accountManager || '',
+        BorrowerEmail: upcoming.borrowerEmail || '',
+        _upcomingLoanId: null
+      });
+      changed = true;
+    }
+    // Remove from upcoming list
+    await deleteUpcomingLoan(upcoming.id);
+  }
+  if (changed) {
+    scheduleSave();
+    renderTable(); updateStats(); renderLoans();
+  }
+}
+
+// Check for upcoming loans starting in 2 days → send reminder to current AM
+async function checkUpcomingLoanReminders() {
+  const today = nzDate();
+  for (const upcoming of upcomingLoans) {
+    if (!upcoming.startDate) continue;
+    const daysUntilStart = daysBetween(today, upcoming.startDate);
+    if (daysUntilStart !== 2) continue; // Only trigger on exactly 2 days out
+    const notifKey = 'upcoming_reminder_' + upcoming.id;
+    if (_sentNotifications[notifKey]) continue; // already sent today
+    // Send to each unique current AM of affected equipment
+    const affectedAMs = {};
+    for (const uItem of upcoming.items) {
+      const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+      if (!eq || !eq.OnLoanTo || eq.Returned === 'Yes') continue;
+      const amEmail = eq.BorrowerEmail || getAMEmail(eq.AccountManager) || '';
+      if (!amEmail) continue;
+      if (!affectedAMs[amEmail]) affectedAMs[amEmail] = { am: eq.AccountManager || eq.OnLoanTo, loanTo: eq.OnLoanTo, items: [] };
+      affectedAMs[amEmail].items.push(eq);
+    }
+    for (const [email, info] of Object.entries(affectedAMs)) {
+      await sendUpcomingTransferReminder(email, info.am, info.loanTo, info.items, upcoming);
+    }
+    await markNotificationSent(notifKey);
+  }
+}
+
+async function sendUpcomingTransferReminder(toEmail, toName, currentLoanTo, items, upcoming) {
+  if (!_ejsReady || !toEmail) return;
+  const itemsList = items.map(e => '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')).join('\n');
+  const newAM = upcoming.accountManager || 'the next Account Manager';
+  try {
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email:    toEmail,
+      to_name:     toName || currentLoanTo,
+      items:       itemsList,
+      due_date:    upcoming.startDate,
+      return_link: APP_URL + '?tab=loans',
+      extend_link: APP_URL + '?tab=loans',
+      // Override subject/body via template variables if template supports it
+      custom_subject: 'Action Required: Demo Equipment Booked for ' + upcoming.loanTo,
+      custom_message: 'The following equipment is booked for a new demo loan to ' + upcoming.loanTo + ' starting ' + formatDisplayDate(upcoming.startDate) + '.\n\nPlease arrange shipping directly to:\n' + upcoming.location + '\n\nNew Account Manager: ' + newAM + '\n\nEquipment:\n' + itemsList
+    });
+    console.log('Transfer reminder sent to', toEmail);
+  } catch(e) { console.error('Transfer reminder failed', e); }
 }
 
 async function saveRetiredAssets() {
