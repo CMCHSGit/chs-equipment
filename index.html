@@ -117,6 +117,17 @@ tr:hover td{background:var(--surface2)}
 .td-actions{display:flex;gap:4px;min-width:200px;flex-wrap:nowrap;align-items:center;padding:8px 12px}
 .table-empty{text-align:center;padding:48px 20px;color:var(--text3)}
 .col-sticky{position:sticky;left:0;background:var(--surface);z-index:2}
+/* LOAN BASKET */
+.basket-panel{background:var(--surface);border:1.5px solid var(--accent);border-radius:var(--radius-lg);margin-top:12px;overflow:hidden;box-shadow:0 4px 16px rgba(29,78,216,.12)}
+.basket-header{background:var(--accent-light);padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #bfdbfe}
+.basket-title{font-size:14px;font-weight:600;color:var(--accent);flex:1}
+.basket-item{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);font-size:13px}
+.basket-item:last-child{border-bottom:none}
+.basket-item.basket-locked{background:var(--surface2);opacity:.75}
+.basket-item-info{flex:1}
+.basket-item-asset{font-family:'DM Mono',monospace;font-size:12px;font-weight:600}
+.basket-item-desc{font-size:12px;color:var(--text2)}
+.basket-footer{padding:12px 16px;display:flex;gap:8px;align-items:center;background:var(--accent-light);border-top:1px solid #bfdbfe}
 tr:hover .col-sticky{background:var(--surface2)}
 thead .col-sticky{background:var(--surface2);z-index:3}
 .row-count{font-size:12px;color:var(--text3);margin-left:auto}
@@ -369,7 +380,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <h2>Scan Equipment</h2>
         <p class="subtitle">Scan or type a CHS Asset Number — or tap the camera icon for QR codes</p>
         <div class="scan-tabs">
-          <button class="scan-tab active" id="stab-batch" onclick="setScanMode('batch')">Issue Loan</button>
+          <button class="scan-tab active" id="stab-batch" onclick="setScanMode('batch')">Add Item</button>
           <button class="scan-tab" id="stab-return" onclick="setScanMode('return')">Return Equipment</button>
           <button class="scan-tab" id="stab-count" onclick="setScanMode('count')">Count / Audit</button>
         </div>
@@ -491,7 +502,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <span id="selection-label" style="font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap">0 selected</span>
           <div style="width:1px;height:16px;background:#bfdbfe;flex-shrink:0"></div>
           <button class="btn btn-sm btn-primary" onclick="issueLoanFromSelection()">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Add Item
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Add to Basket
           </button>
           <button class="btn btn-sm btn-green" onclick="returnFromSelection()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Return
@@ -541,6 +552,26 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </table>
       </div></div>
       <div style="margin-top:8px;display:flex;justify-content:flex-end"><span id="db-row-count" class="row-count"></span></div>
+
+      <!-- LOAN BASKET -->
+      <div id="loan-basket" style="display:none">
+        <div class="basket-panel">
+          <div class="basket-header">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+            <span class="basket-title" id="basket-title">Loan Basket</span>
+            <span id="basket-count" style="font-size:12px;color:var(--accent);font-weight:500"></span>
+          </div>
+          <div id="basket-items-list"></div>
+          <div class="basket-footer">
+            <button class="btn btn-primary" onclick="proceedFromBasket()">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <span id="basket-proceed-label">Proceed to Loan</span>
+            </button>
+            <button class="btn btn-sm" onclick="clearBasket()" style="color:var(--red);border-color:var(--red-border)">Clear basket</button>
+            <span id="basket-locked-note" style="display:none;font-size:12px;color:var(--text2);margin-left:4px">Grey items are already on this loan</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- HISTORY -->
@@ -1181,6 +1212,11 @@ function switchTab(n) {
   const sd2 = document.getElementById('sync-dot'); const sl2 = document.getElementById('sync-label');
   if(sd&&sd2) sd.className = sd2.className;
   if(sl&&sl2) sl.textContent = sl2.textContent;
+  // Clear basket context but keep items if switching away from database accidentally
+  if (n !== 'database' && _basketLoanKey !== null) {
+    // If switching away while in "add to loan" mode, ask or just clear
+    // We'll just close the basket context so it doesn't confuse on return
+  }
   // Reset import lock when leaving import tab
   if (n !== 'import' && typeof _importUnlocked !== 'undefined' && _importUnlocked) {
     _importUnlocked = false;
@@ -3319,7 +3355,7 @@ function returnFromSelection() {
   showToast('success', selectedItems.length + ' device' + (selectedItems.length > 1 ? 's' : '') + ' returned');
 }
 
-function clearSelection() {
+function clearSelection(alsoBasket) {
   _selectedIds.clear();
   document.querySelectorAll('#main-tbody .db-checkbox').forEach(cb => cb.checked = false);
   document.querySelectorAll('#main-tbody tr').forEach(r => r.classList.remove('row-selected'));
@@ -3328,14 +3364,108 @@ function clearSelection() {
   updateSelectionBar();
 }
 
+// ── LOAN BASKET ──────────────────────────────────────────────────────
+// _basketItems: [{ id, CHSAssetNo, Model, Description, SerialNo, locked }]
+// locked = true means already in an existing loan (from "Add items" on Active Loans)
+let _basketItems = [];
+let _basketLoanKey = null; // null = new loan, otherwise existing loan key
+
 function issueLoanFromSelection() {
   if (_selectedIds.size === 0) return;
   const selectedItems = equipment.filter(e => _selectedIds.has(e.id));
+  // Add to basket (skip duplicates)
+  selectedItems.forEach(item => {
+    if (!_basketItems.find(b => b.id === item.id)) {
+      _basketItems.push({ id: item.id, CHSAssetNo: item.CHSAssetNo, Model: item.Model, Description: item.Description, SerialNo: item.SerialNo, locked: false });
+    }
+  });
+  // Clear search so database is fully browsable
+  const search = document.getElementById('db-search');
+  if (search) { search.value = ''; renderTable(); }
+  clearSelection();
+  renderBasket();
+}
+
+function renderBasket() {
+  const basket = document.getElementById('loan-basket');
+  if (!basket) return;
+  if (!_basketItems.length) { basket.style.display = 'none'; return; }
+  basket.style.display = 'block';
+  const newItems = _basketItems.filter(b => !b.locked);
+  const lockedItems = _basketItems.filter(b => b.locked);
+  // Update header
+  const isAddMode = _basketLoanKey !== null;
+  document.getElementById('basket-title').textContent = isAddMode
+    ? 'Adding to Loan — ' + (getLoanGroupByKey(_basketLoanKey)?.loanTo || '')
+    : 'Loan Basket';
+  document.getElementById('basket-count').textContent = newItems.length + ' item' + (newItems.length !== 1 ? 's' : '') + ' to add';
+  document.getElementById('basket-proceed-label').textContent = isAddMode ? 'Add to Loan' : 'Proceed to Loan';
+  document.getElementById('basket-locked-note').style.display = lockedItems.length ? 'inline' : 'none';
+  document.getElementById('basket-items-list').innerHTML = _basketItems.map(b => `
+    <div class="basket-item ${b.locked ? 'basket-locked' : ''}">
+      <div class="basket-item-info">
+        <div class="basket-item-asset">${esc(b.CHSAssetNo)}</div>
+        <div class="basket-item-desc">${esc(b.Model)}${b.SerialNo ? ' · ' + b.SerialNo : ''}</div>
+      </div>
+      ${b.locked
+        ? '<span style="font-size:11px;color:var(--text3);padding:2px 8px;background:var(--surface2);border-radius:20px;border:1px solid var(--border)">Already on loan</span>'
+        : `<button class="btn btn-sm" onclick="removeFromBasket('${b.id}')" style="color:var(--red);border-color:var(--red-border);padding:3px 8px;font-size:11px">✕</button>`
+      }
+    </div>`).join('');
+  // Scroll basket into view
+  basket.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function removeFromBasket(id) {
+  _basketItems = _basketItems.filter(b => b.id !== id);
+  renderBasket();
+}
+
+function clearBasket() {
+  _basketItems = [];
+  _basketLoanKey = null;
+  document.getElementById('loan-basket').style.display = 'none';
+}
+
+function proceedFromBasket() {
+  const newItems = _basketItems.filter(b => !b.locked);
+  if (!newItems.length) { showToast('error', 'No new items in basket'); return; }
+
+  if (_basketLoanKey !== null) {
+    // Adding to existing loan
+    const g = getLoanGroupByKey(_basketLoanKey);
+    if (!g) { showToast('error', 'Could not find loan'); return; }
+    const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
+    let added = 0;
+    newItems.forEach(b => {
+      const idx = equipment.findIndex(e => e.id === b.id);
+      if (idx < 0) return;
+      if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
+        showToast('error', b.CHSAssetNo + ' is already on loan — skipped');
+        return;
+      }
+      Object.assign(equipment[idx], {
+        OnLoanTo: g.loanTo, Location: g.location,
+        LoanStartDate: g.startDate || nzDate(),
+        LoanEndDate: g.endDate || '',
+        Returned: 'No', BatchID: batchId,
+        AccountManager: g.items[0]?.AccountManager || '',
+        BorrowerEmail: g.items[0]?.BorrowerEmail || ''
+      });
+      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+      added++;
+    });
+    scheduleSave(); renderTable(); updateStats(); renderLoans();
+    clearBasket();
+    showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
+    return;
+  }
+
+  // New loan — switch to scan/batch and pre-fill
   switchTab('scan');
   setScanMode('batch');
   setTimeout(() => {
-    // Pre-fill batch form with selected asset numbers
-    batchDevices = selectedItems.map((e, i) => ({ id: 'bd_sel_' + i, value: e.CHSAssetNo }));
+    batchDevices = newItems.map((b, i) => ({ id: 'bd_bsk_' + i, value: b.CHSAssetNo }));
     if (!window._batchStatus) window._batchStatus = {};
     batchDevices.forEach(d => {
       const item = equipment.find(e => e.CHSAssetNo === d.value);
@@ -3347,9 +3477,8 @@ function issueLoanFromSelection() {
       }
     });
     renderBatchDevices();
-    // Clear selection after transfer
-    clearSelection();
-  }, 200);
+    clearBasket();
+  }, 150);
 }
 
 // ── ADD ITEMS TO LOAN ─────────────────────────────────────────────────
@@ -3360,17 +3489,23 @@ let _addItemsStatus = {};
 function openAddItemsToLoanByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
-  _addItemsGroup = g;
-  _addItemsRows = [{ id: 'ai_0', value: '' }];
-  _addItemsStatus = {};
-  document.getElementById('add-items-title').textContent = 'Add Items — ' + g.loanTo;
-  document.getElementById('add-items-subtitle').textContent =
-    g.location + (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
-    ' · ' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') + ' currently';
-  document.getElementById('add-items-feedback').style.display = 'none';
-  renderAddItemsRows();
-  document.getElementById('add-items-modal').classList.add('open');
-  setTimeout(() => { const el = document.getElementById('aiinput_ai_0'); if (el) el.focus(); }, 100);
+  // Switch to database and pre-populate basket with existing loan items (locked)
+  _basketLoanKey = key;
+  _basketItems = g.items.map(item => {
+    const eq = equipment.find(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo) || item;
+    return { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: true };
+  });
+  // Clear search and switch to database
+  switchTab('database');
+  const search = document.getElementById('db-search');
+  if (search) { search.value = ''; }
+  const statusFilter = document.getElementById('db-status');
+  if (statusFilter) statusFilter.value = 'available'; // default to available
+  setTimeout(() => {
+    renderTable();
+    renderBasket();
+    showToast('info', 'Tick items in the database to add to this loan, then click "Add to Loan"');
+  }, 150);
 }
 
 function renderAddItemsRows() {
