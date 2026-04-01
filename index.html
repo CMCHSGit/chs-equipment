@@ -450,8 +450,8 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             <div class="form-grid" style="margin-bottom:12px">
               <div class="form-group"><label>On Loan To <span style="color:var(--red)">*</span></label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
-              <div class="form-group"><label>Loan Start Date</label><input type="date" id="b-start-date"></div>
-              <div class="form-group"><label>Loan End Date</label><input type="date" id="b-end-date"></div>
+              <div class="form-group"><label>Loan Start Date <span style="color:var(--red)">*</span></label><input type="date" id="b-start-date" required></div>
+              <div class="form-group"><label>Loan End Date <span style="color:var(--red)">*</span></label><input type="date" id="b-end-date" required></div>
               <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
@@ -1060,6 +1060,25 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- LOAN CONFLICT MODAL -->
+<div class="modal-overlay" id="conflict-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="conflict-title">Equipment Availability Check</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="conflict-subtitle"></div>
+      </div>
+    </div>
+    <div id="conflict-body" style="margin-bottom:4px"></div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn" onclick="closeConflictModal()">Cancel</button>
+      <button class="btn btn-primary" id="conflict-confirm-btn" onclick="confirmConflictAndProceed()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Proceed Anyway
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────
@@ -1767,7 +1786,7 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal'].forEach(id=>{
   document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
 });
 // Detail overlay - use mousedown+mouseup tracking to avoid drag-to-close
@@ -1878,28 +1897,93 @@ function removeBatchDevice(id) {
   renderBatchDevices();
 }
 
+// Conflict modal state
+let _conflictPendingDevices = [];
+let _conflictProceedCallback = null;
+
+function closeConflictModal() {
+  document.getElementById('conflict-modal').classList.remove('open');
+  _conflictProceedCallback = null;
+}
+function confirmConflictAndProceed() {
+  document.getElementById('conflict-modal').classList.remove('open');
+  if (_conflictProceedCallback) _conflictProceedCallback();
+}
+
+// Build and show the conflict modal, call onProceed() if user confirms
+function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
+  const hasOverlap = conflicts.some(c => c.type === 'overlap');
+  const hasAvail   = conflicts.some(c => c.type === 'available');
+
+  document.getElementById('conflict-title').textContent = hasOverlap
+    ? '⚠ Equipment Availability Conflict'
+    : '✓ Equipment Availability Check';
+  document.getElementById('conflict-subtitle').textContent =
+    'New loan: ' + newLoanTo + ' · Starts: ' + formatDisplayDate(newStart);
+
+  let html = '';
+  if (hasAvail) {
+    html += `<div style="background:var(--green-light);border:1px solid var(--green-border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">
+      <div style="font-weight:600;color:var(--green);margin-bottom:6px;font-size:13px">✓ Equipment returning before your loan starts</div>
+      ${conflicts.filter(c=>c.type==='available').map(c=>`
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--green-border);font-size:13px">
+          <div style="flex:1">
+            <span style="font-family:'DM Mono',monospace;font-weight:600">${c.assetNo}</span>
+            <span style="color:var(--text2)"> · ${c.model}</span>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">Currently on loan to <strong>${c.currentLoanTo}</strong> · Due back: <strong>${formatDisplayDate(c.currentEnd)}</strong></div>
+            <div style="font-size:12px;color:var(--green);margin-top:1px">Equipment should be available before your loan starts (${formatDisplayDate(newStart)}). Ensure shipment is arranged from ${c.currentLoanTo}.</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+  if (hasOverlap) {
+    html += `<div style="background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px">
+      <div style="font-weight:600;color:var(--red);margin-bottom:6px;font-size:13px">⚠ Overlapping loans — action required</div>
+      ${conflicts.filter(c=>c.type==='overlap').map(c=>`
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-top:1px solid var(--red-border);font-size:13px">
+          <div style="flex:1">
+            <span style="font-family:'DM Mono',monospace;font-weight:600">${c.assetNo}</span>
+            <span style="color:var(--text2)"> · ${c.model}</span>
+            <div style="font-size:12px;color:var(--text2);margin-top:2px">Currently on loan to <strong>${c.currentLoanTo}</strong> · Due back: <strong>${formatDisplayDate(c.currentEnd)}</strong></div>
+            <div style="font-size:12px;color:var(--red);margin-top:1px">Overlap of <strong>${c.overlapDays} day${c.overlapDays!==1?'s':''}</strong> — your loan starts ${formatDisplayDate(newStart)} but this item isn't due back until ${formatDisplayDate(c.currentEnd)}. Arrange early return or direct shipment from ${c.currentLoanTo}.</div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+  }
+  html += `<div style="font-size:12px;color:var(--text2);padding:4px 0">Clicking <strong>Proceed Anyway</strong> will confirm the loan. Update the current customer's end date or arrange logistics as needed.</div>`;
+
+  document.getElementById('conflict-body').innerHTML = html;
+  document.getElementById('conflict-confirm-btn').style.background = hasOverlap ? 'var(--red)' : 'var(--green)';
+  document.getElementById('conflict-confirm-btn').style.borderColor = hasOverlap ? 'var(--red)' : 'var(--green)';
+  _conflictProceedCallback = onProceed;
+  document.getElementById('conflict-modal').classList.add('open');
+}
+
+function daysBetween(dateA, dateB) {
+  // positive = B is after A, negative = B is before A
+  return Math.round((new Date(dateB) - new Date(dateA)) / 86400000);
+}
+
 async function submitBatchLoan() {
   const loanTo   = document.getElementById('b-loan-to').value.trim();
   const location = document.getElementById('b-location').value.trim();
+  const startDate = document.getElementById('b-start-date').value;
+  const endDate   = document.getElementById('b-end-date').value;
   const batchEmailCheck = document.getElementById('b-email').value.trim();
   const batchAMCheck    = document.getElementById('b-account-manager')?.value || '';
-  if (!loanTo || !location) {
+
+  function showErr(msg) {
     document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please fill in "On Loan To" and "Location".</div>';
-    return;
-  }
-  if (!batchAMCheck) {
-    document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please select an Account Manager.</div>';
-    return;
-  }
-  if (!batchEmailCheck || !batchEmailCheck.includes('@')) {
-    document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">Please enter a valid Account Manager Email address.</div>';
-    return;
+    document.getElementById('batch-feedback').innerHTML = `<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">${msg}</div>`;
   }
 
-  // Separate valid and already-on-loan devices
+  if (!loanTo || !location) { showErr('Please fill in "On Loan To" and "Location".'); return; }
+  if (!startDate) { showErr('Please select a Loan Start Date.'); return; }
+  if (!endDate)   { showErr('Please select a Loan End Date.'); return; }
+  if (endDate <= startDate) { showErr('Loan End Date must be after the Start Date.'); return; }
+  if (!batchAMCheck) { showErr('Please select an Account Manager.'); return; }
+  if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
+
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
   const alreadyOnLoan = allFound.filter(d => {
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
@@ -1910,103 +1994,82 @@ async function submitBatchLoan() {
     return item && !(item.OnLoanTo && item.Returned !== 'Yes');
   });
 
-  if (!allFound.length) {
-    document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found. Check asset numbers above.</div>';
-    return;
-  }
+  if (!allFound.length) { showErr('No valid devices found. Check asset numbers above.'); return; }
 
-  // Confirm overwrite of already-on-loan devices
-  let devicesToLoan = [...cleanDevices];
-  if (alreadyOnLoan.length > 0) {
-    const alreadyDetails = alreadyOnLoan.map(d => {
-      const item = equipment.find(e => e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-      return item.CHSAssetNo + ' (' + (item.Model||'') + ') currently on loan to ' + item.OnLoanTo;
-    }).join('\n');
-    const confirmed = confirm(
-      'The following device' + (alreadyOnLoan.length>1?'s are':' is') + ' already on loan:\n\n' +
-      alreadyDetails + '\n\nDo you want to override and reassign ' +
-      (alreadyOnLoan.length>1?'these devices':'this device') + ' to ' + loanTo + '?'
-    );
-    if (confirmed) devicesToLoan = [...cleanDevices, ...alreadyOnLoan];
-    else if (!cleanDevices.length) return; // nothing to do
-  }
-
-  if (!devicesToLoan.length) {
-    document.getElementById('batch-feedback').style.display = 'block';
-    document.getElementById('batch-feedback').innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No devices selected to loan.</div>';
-    return;
-  }
-
-  const btn = document.getElementById('btn-batch');
-  btn.disabled = true; btn.textContent = 'Saving…';
-  const batchId  = 'batch_' + Date.now();
-  const startDate = document.getElementById('b-start-date').value;
-  const endDate   = document.getElementById('b-end-date').value;
-  const notes     = document.getElementById('b-notes').value;
-  const batchEmail = document.getElementById('b-email').value.trim();
-  const batchAM = document.getElementById('b-account-manager')?.value || '';
-
-  for (const d of devicesToLoan) {
-    const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-    if (idx < 0) continue;
-    Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
-  }
-
-  scheduleSave(); renderTable(); updateStats();
-
-  // Store last loan doc info for re-opening from Active Loans
-  const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
-  window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate } };
-  window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
-  // Generate loan document
-  generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate });
-  generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM });
-  // Store loan doc data in Firebase for permanent history viewing
-  setTimeout(async () => {
-    const docEl = document.getElementById('printable-loan-doc');
-    if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
-    // Persist to Firebase
-    try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          loanTo, location, startDate, endDate, accountManager: batchAM,
-          items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo }))
-        })
-      });
-    } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
-  }, 300);
-
-  // Send confirmation email to account manager
-  const amEmailForConfirm = batchEmail || getAMEmail(batchAM);
-  if (amEmailForConfirm) {
-    sendLoanConfirmationEmail(
-      batchLoanItems,
-      { loanTo, location, startDate, endDate },
-      amEmailForConfirm,
-      batchAM
-    );
-  }
-  // Show success toast
-  // Show green confirmed badge
-  const badge = document.getElementById('loan-confirmed-badge');
-  if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display='none', 120000); }
-
-  // Reset batch form to fresh state
-  btn.disabled = false; btn.textContent = 'Confirm Loan';
-  batchDevices = [{ id: 'bd_0', value: '' }];
-  window._batchStatus = {};
-  ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => {
-    const el = document.getElementById(id); if(el) el.value = '';
+  // Build conflict info for already-on-loan devices
+  const conflicts = alreadyOnLoan.map(d => {
+    const item = equipment.find(e => e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+    const currentEnd = item.LoanEndDate || '';
+    const overlapDays = currentEnd ? Math.max(0, daysBetween(startDate, currentEnd)) : 0;
+    return {
+      assetNo: item.CHSAssetNo, model: item.Model || '',
+      currentLoanTo: item.OnLoanTo, currentEnd,
+      type: (!currentEnd || currentEnd < startDate) ? 'available' : 'overlap',
+      overlapDays
+    };
   });
-  const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
-  document.getElementById('b-start-date').value = nzDate();
-  document.getElementById('batch-feedback').style.display = 'none';
-  renderBatchDevices();
-  renderLoans();
+
+  // Helper to actually do the loan after all checks pass
+  const doLoan = async (devicesToLoan) => {
+    if (!devicesToLoan.length) { showErr('No devices selected to loan.'); return; }
+    const btn        = document.getElementById('btn-batch');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    const batchId    = 'batch_' + Date.now();
+    const notes      = document.getElementById('b-notes').value;
+    const batchEmail = document.getElementById('b-email').value.trim();
+    const batchAM    = document.getElementById('b-account-manager')?.value || '';
+
+    for (const d of devicesToLoan) {
+      const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+      if (idx < 0) continue;
+      Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
+      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
+    }
+
+    scheduleSave(); renderTable(); updateStats();
+
+    const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
+    window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
+    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM });
+
+    setTimeout(async () => {
+      const docEl = document.getElementById('printable-loan-doc');
+      if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
+      try {
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ loanTo, location, startDate, endDate, accountManager: batchAM,
+            items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) })
+        });
+      } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
+    }, 300);
+
+    const amEmailForConfirm = batchEmail || getAMEmail(batchAM);
+    if (amEmailForConfirm) sendLoanConfirmationEmail(batchLoanItems, { loanTo, location, startDate, endDate }, amEmailForConfirm, batchAM);
+
+    const badge = document.getElementById('loan-confirmed-badge');
+    if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
+
+    btn.disabled = false; btn.textContent = 'Confirm Loan';
+    batchDevices = [{ id: 'bd_0', value: '' }];
+    window._batchStatus = {};
+    ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+    document.getElementById('b-start-date').value = nzDate();
+    document.getElementById('batch-feedback').style.display = 'none';
+    renderBatchDevices(); renderLoans();
+  }; // end doLoan
+
+  // If no conflicts, proceed immediately
+  if (conflicts.length === 0) {
+    await doLoan([...cleanDevices, ...alreadyOnLoan]);
+    return;
+  }
+
+  // Show conflict modal — user must review and confirm before proceeding
+  showConflictModal(conflicts, loanTo, startDate, () => {
+    doLoan([...cleanDevices, ...alreadyOnLoan]);
+  });
 }
 
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
