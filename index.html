@@ -118,16 +118,20 @@ tr:hover td{background:var(--surface2)}
 .table-empty{text-align:center;padding:48px 20px;color:var(--text3)}
 .col-sticky{position:sticky;left:0;background:var(--surface);z-index:2}
 /* LOAN BASKET */
-.basket-panel{background:var(--surface);border:1.5px solid var(--accent);border-radius:var(--radius-lg);margin-top:12px;overflow:hidden;box-shadow:0 4px 16px rgba(29,78,216,.12)}
-.basket-header{background:var(--accent-light);padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #bfdbfe}
-.basket-title{font-size:14px;font-weight:600;color:var(--accent);flex:1}
-.basket-item{display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);font-size:13px}
+.db-with-basket{display:flex;gap:16px;align-items:flex-start}
+.db-table-area{flex:1;min-width:0}
+.basket-panel{background:var(--surface);border:1.5px solid var(--accent);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 4px 16px rgba(29,78,216,.12);width:280px;flex-shrink:0;position:sticky;top:128px;max-height:calc(100vh - 160px);display:flex;flex-direction:column}
+.basket-header{background:var(--accent-light);padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #bfdbfe;flex-shrink:0}
+.basket-title{font-size:13px;font-weight:600;color:var(--accent);flex:1}
+.basket-items-scroll{overflow-y:auto;flex:1}
+.basket-item{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:13px}
 .basket-item:last-child{border-bottom:none}
 .basket-item.basket-locked{background:var(--surface2);opacity:.75}
-.basket-item-info{flex:1}
+.basket-item-info{flex:1;min-width:0}
 .basket-item-asset{font-family:'DM Mono',monospace;font-size:12px;font-weight:600}
-.basket-item-desc{font-size:12px;color:var(--text2)}
-.basket-footer{padding:12px 16px;display:flex;gap:8px;align-items:center;background:var(--accent-light);border-top:1px solid #bfdbfe}
+.basket-item-desc{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.basket-footer{padding:10px 14px;display:flex;flex-direction:column;gap:6px;background:var(--accent-light);border-top:1px solid #bfdbfe;flex-shrink:0}
+@media(max-width:700px){.db-with-basket{flex-direction:column-reverse}.basket-panel{width:100%;position:static;max-height:none}}
 tr:hover .col-sticky{background:var(--surface2)}
 thead .col-sticky{background:var(--surface2);z-index:3}
 .row-count{font-size:12px;color:var(--text3);margin-left:auto}
@@ -530,48 +534,56 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           </button>
         </div>
       </div>
-      <div class="table-wrap"><div class="table-scroll">
-        <table><thead><tr>
-          <th class="col-sticky" style="width:36px;padding:10px 8px">
-            <input type="checkbox" class="db-checkbox" id="select-all-cb" onclick="toggleSelectAll(this.checked)" title="Select all">
-          </th>
-          <th onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
-          <th onclick="sortTable('Model')">Model ↕</th>
-          <th>Description</th><th>Serial No.</th>
-          <th onclick="sortTable('_status')">Status ↕</th>
-          <th onclick="sortTable('OnLoanTo')">On Loan To ↕</th>
-          <th>Location</th>
-          <th onclick="sortTable('LoanEndDate')">End Date ↕</th>
-          <th>Tile No.</th><th>Part No.</th>
-          <th onclick="sortTable('NZPrice')">NZ$ ↕</th>
-          <th>Shelf Location</th><th>Device ID</th><th>LAN MAC</th><th>WLAN MAC</th>
-          <th>Old CHS #</th><th>Tile Type</th>
-          <th>Counted</th>
-        </tr></thead>
-        <tbody id="main-tbody"><tr><td colspan="19" class="table-empty">Loading…</td></tr></tbody>
-        </table>
-      </div></div>
-      <div style="margin-top:8px;display:flex;justify-content:flex-end"><span id="db-row-count" class="row-count"></span></div>
+      <!-- FLEX ROW: basket left, table right -->
+      <div class="db-with-basket">
 
-      <!-- LOAN BASKET -->
-      <div id="loan-basket" style="display:none">
-        <div class="basket-panel">
-          <div class="basket-header">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-            <span class="basket-title" id="basket-title">Loan Basket</span>
-            <span id="basket-count" style="font-size:12px;color:var(--accent);font-weight:500"></span>
-          </div>
-          <div id="basket-items-list"></div>
-          <div class="basket-footer">
-            <button class="btn btn-primary" onclick="proceedFromBasket()">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-              <span id="basket-proceed-label">Proceed to Loan</span>
-            </button>
-            <button class="btn btn-sm" onclick="clearBasket()" style="color:var(--red);border-color:var(--red-border)">Clear basket</button>
-            <span id="basket-locked-note" style="display:none;font-size:12px;color:var(--text2);margin-left:4px">Grey items are already on this loan</span>
+        <!-- LOAN BASKET (left sidebar) -->
+        <div id="loan-basket" style="display:none">
+          <div class="basket-panel">
+            <div class="basket-header">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              <span class="basket-title" id="basket-title">Loan Basket</span>
+              <span id="basket-count" style="font-size:11px;color:var(--accent);font-weight:600;background:#dbeafe;padding:2px 7px;border-radius:20px"></span>
+            </div>
+            <div class="basket-items-scroll" id="basket-items-list"></div>
+            <div class="basket-footer">
+              <button class="btn btn-primary" onclick="proceedFromBasket()" style="width:100%;justify-content:center">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                <span id="basket-proceed-label">Proceed to Loan</span>
+              </button>
+              <button class="btn btn-sm" onclick="clearBasket()" style="color:var(--red);border-color:var(--red-border);width:100%;justify-content:center">Clear basket</button>
+              <span id="basket-locked-note" style="display:none;font-size:11px;color:var(--text2);text-align:center">Grey = already on this loan</span>
+            </div>
           </div>
         </div>
-      </div>
+
+        <!-- TABLE (right, takes remaining width) -->
+        <div class="db-table-area">
+          <div class="table-wrap"><div class="table-scroll">
+            <table><thead><tr>
+              <th class="col-sticky" style="width:36px;padding:10px 8px">
+                <input type="checkbox" class="db-checkbox" id="select-all-cb" onclick="toggleSelectAll(this.checked)" title="Select all">
+              </th>
+              <th onclick="sortTable('CHSAssetNo')">CHS Asset No. ↕</th>
+              <th onclick="sortTable('Model')">Model ↕</th>
+              <th>Description</th><th>Serial No.</th>
+              <th onclick="sortTable('_status')">Status ↕</th>
+              <th onclick="sortTable('OnLoanTo')">On Loan To ↕</th>
+              <th>Location</th>
+              <th onclick="sortTable('LoanEndDate')">End Date ↕</th>
+              <th>Tile No.</th><th>Part No.</th>
+              <th onclick="sortTable('NZPrice')">NZ$ ↕</th>
+              <th>Shelf Location</th><th>Device ID</th><th>LAN MAC</th><th>WLAN MAC</th>
+              <th>Old CHS #</th><th>Tile Type</th>
+              <th>Counted</th>
+            </tr></thead>
+            <tbody id="main-tbody"><tr><td colspan="19" class="table-empty">Loading…</td></tr></tbody>
+            </table>
+          </div></div>
+          <div style="margin-top:8px;display:flex;justify-content:flex-end"><span id="db-row-count" class="row-count"></span></div>
+        </div>
+
+      </div><!-- end db-with-basket -->
     </div>
 
     <!-- HISTORY -->
