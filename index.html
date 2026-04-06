@@ -2901,10 +2901,18 @@ function unlockImport() {
 // ── LOAN DOCUMENT ──────────────────────────────────────────────────────
 let _currentLoanDocItems = [];
 
-function generateLoanDoc(loanItems, loanInfo) {
+function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   _currentLoanDocItems = loanItems;
   const today = nzDate();
-  const rows = loanItems.map(e => `
+  const spare = 3;
+  let rows, blank;
+  if (savedRows && savedRows.length > 0) {
+    rows = savedRows.map(r => '<tr>' + r.map(cell =>
+      '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">' + (cell || '') + '</td>'
+    ).join('') + '</tr>').join('');
+    blank = '';
+  } else {
+    rows = loanItems.map(e => `
     <tr>
       <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${e.CHSAssetNo||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit">${e.Description||e.Model||''}</td>
@@ -2914,9 +2922,8 @@ function generateLoanDoc(loanItems, loanInfo) {
       <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
     </tr>`).join('');
-  // Add 3 spare editable rows below items
-  const spare = 3;
-  const blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:28px;font-size:12px" title="Click to edit"></td>'.repeat(7) + '</tr>').join('');
+    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:28px;font-size:12px" title="Click to edit"></td>'.repeat(7) + '</tr>').join('');
+  }
 
   document.getElementById('loan-doc-content').innerHTML = `
     <div id="printable-loan-doc" style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto">
@@ -2972,11 +2979,11 @@ function generateLoanDoc(loanItems, loanInfo) {
       <table style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to add notes"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to add notes">${savedExtra?.notesCell||''}</td>
         </tr>
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to add authorisation"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to add authorisation">${savedExtra?.authCell||''}</td>
         </tr>
       </table>
       <!-- FOOTER -->
@@ -3056,7 +3063,9 @@ async function viewHistoryPDF(pdfKey) {
     const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
     const d = await r.json();
     if (d && d.items) {
-      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' });
+      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'' });
+      window._currentLoanDocInfo = window._currentLoanDocInfo || {};
+      window._currentLoanDocInfo._pdfKey = pdfKey;
     } else {
       showToast('error', 'Loan document not found');
     }
@@ -3105,72 +3114,96 @@ function addDocRow() {
   showToast('info', 'Row added — type asset/accessory details directly in the cells');
 }
 
-function saveLoanDocChanges() {
+async function saveLoanDocChanges() {
   const doc = document.getElementById('printable-loan-doc');
   if (!doc || !window._currentLoanDocInfo) return;
 
-  // Read the editable customer info row
-  const cells = doc.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
-  if (cells && cells.length >= 4) {
-    const newLoanTo   = cells[0]?.innerText?.trim() || '';
-    const newLocation = cells[1]?.innerText?.trim() || '';
-    const newEndDate  = cells[3]?.innerText?.trim() || '';  // dd/mm/yyyy format
-    const newAM       = cells[4]?.innerText?.trim() || '';
-
-    // Convert dd/mm/yyyy back to yyyy-mm-dd for storage
-    function toISO(d) {
-      if (!d) return '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
-        const [dd,mm,yyyy] = d.split('/');
-        return yyyy + '-' + mm.padStart(2,'0') + '-' + dd.padStart(2,'0');
-      }
-      return d;
+  function toISO(d) {
+    if (!d) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+      const [dd,mm,yyyy] = d.split('/');
+      return yyyy + '-' + mm.padStart(2,'0') + '-' + dd.padStart(2,'0');
     }
-
-    // Collect manual rows added to the doc (accessories etc)
-    const tables = doc.querySelectorAll('table');
-    const equipTable = tables[2];
-    const allDocRows = equipTable ? equipTable.querySelectorAll('tbody tr') : [];
-    const manualRows = [];
-    allDocRows.forEach(row => {
-      const cells = row.querySelectorAll('td');
-      if (cells.length >= 3) {
-        const assetNo = cells[0]?.innerText?.trim();
-        const desc    = cells[1]?.innerText?.trim();
-        const serial  = cells[2]?.innerText?.trim();
-        if (desc && !window._currentLoanDocInfo?.loanItems?.find(i => i.CHSAssetNo === assetNo)) {
-          manualRows.push({ CHSAssetNo: assetNo||'—', Model: desc, SerialNo: serial||'', _manual: true });
-        }
-      }
-    });
-    window._currentLoanDocInfo.manualRows = manualRows;
-
-    // Update all items belonging to this loan
-    const info = window._currentLoanDocInfo.loanInfo;
-    const items = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
-    let updated = 0;
-    items.forEach(item => {
-      const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
-      if (idx >= 0) {
-        if (newLoanTo)   equipment[idx].OnLoanTo       = newLoanTo;
-        if (newLocation) equipment[idx].Location       = newLocation;
-        if (newEndDate)  equipment[idx].LoanEndDate    = toISO(newEndDate);
-        if (newAM)       equipment[idx].AccountManager = newAM;
-        updated++;
-      }
-    });
-
-    if (updated > 0) {
-      scheduleSave();
-      renderTable();
-      renderLoans();
-      document.getElementById('doc-edited-note').style.display = 'none';
-      const sb = document.getElementById('doc-save-btn');
-      if (sb) { sb.style.display = 'none'; }
-      showToast('success', 'Loan details saved — ' + updated + ' device' + (updated>1?'s':'') + ' updated');
-    }
+    return d;
   }
+
+  const cells = doc.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
+  const newLoanTo    = cells?.[0]?.innerText?.trim() || '';
+  const newLocation  = cells?.[1]?.innerText?.trim() || '';
+  const newStartDate = cells?.[2]?.innerText?.trim() || '';
+  const newEndDate   = cells?.[3]?.innerText?.trim() || '';
+  const newAM        = cells?.[4]?.innerText?.trim() || '';
+
+  // Capture every row from the equipment table (original items + accessories)
+  const tables = doc.querySelectorAll('table');
+  const equipTable = tables[2];
+  const savedRows = [];
+  if (equipTable) {
+    equipTable.querySelectorAll('tbody tr').forEach(row => {
+      const vals = Array.from(row.querySelectorAll('td')).map(td => td.innerText?.trim() || '');
+      if (vals.some(v => v)) savedRows.push(vals);
+    });
+  }
+
+  // Capture notes and auth fields
+  const lastTable = tables[tables.length - 1];
+  const notesCell = lastTable?.querySelectorAll('tr')[0]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
+  const authCell  = lastTable?.querySelectorAll('tr')[1]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
+
+  const info = window._currentLoanDocInfo.loanInfo;
+  const loanItems = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
+
+  // Find the pdfKey
+  let pdfKey = window._currentLoanDocInfo._pdfKey;
+  if (!pdfKey && loanItems.length > 0) {
+    const assetNos = new Set(loanItems.map(i => i.CHSAssetNo));
+    const match = historyLog.find(h => h.action === 'Loan' && assetNos.has(h.chsAssetNo) && h._pdfKey);
+    if (match) pdfKey = match._pdfKey;
+  }
+  if (!pdfKey) {
+    pdfKey = 'loan_' + encodeURIComponent((newLoanTo || info.loanTo) + '|||' + (toISO(newEndDate) || info.endDate));
+  }
+  window._currentLoanDocInfo._pdfKey = pdfKey;
+
+  // Persist full doc state to Firebase
+  try {
+    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        loanTo: newLoanTo || info.loanTo || '',
+        location: newLocation || info.location || '',
+        startDate: toISO(newStartDate) || info.startDate || '',
+        endDate: toISO(newEndDate) || info.endDate || '',
+        accountManager: newAM || info.accountManager || '',
+        items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
+        savedRows,
+        notesCell,
+        authCell
+      })
+    });
+  } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
+
+  // Update equipment records
+  let updated = 0;
+  loanItems.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
+    if (idx >= 0) {
+      if (newLoanTo)    equipment[idx].OnLoanTo       = newLoanTo;
+      if (newLocation)  equipment[idx].Location       = newLocation;
+      if (newEndDate)   equipment[idx].LoanEndDate    = toISO(newEndDate);
+      if (newStartDate) equipment[idx].LoanStartDate  = toISO(newStartDate);
+      if (newAM)        equipment[idx].AccountManager = newAM;
+      updated++;
+    }
+  });
+  if (updated > 0) { scheduleSave(); renderTable(); renderLoans(); }
+
+  document.getElementById('doc-edited-note').style.display = 'none';
+  const sb = document.getElementById('doc-save-btn');
+  if (sb) sb.style.display = 'none';
+  showToast('success', 'Loan form saved' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
 }
 
 function getLoanGroupByKey(key) {
@@ -3182,7 +3215,7 @@ function viewLoanDoc(gi) {
   if (g) { const key = encodeURIComponent(g.loanTo + '|||' + g.endDate); viewLoanDocByKey(key); }
 }
 
-function viewLoanDocByKey(key) {
+async function viewLoanDocByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) { showToast('error','Could not find loan data'); return; }
   const items = g.items.map(i =>
@@ -3190,10 +3223,23 @@ function viewLoanDocByKey(key) {
     equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) || i
   ).filter(Boolean);
   if (!items.length) { showToast('error','No items found for this loan'); return; }
-  // Get startDate from group or fall back to first item's LoanStartDate
   const startDate = g.startDate || (items[0] && items[0].LoanStartDate) || '';
   const am = items[0]?.AccountManager || '';
-  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am });
+  // Try to load saved rows from Firebase
+  const batchId = items[0]?.BatchID;
+  let savedRows = null, savedExtra = {};
+  if (batchId) {
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+      const d = await r.json();
+      if (d && d.savedRows) { savedRows = d.savedRows; savedExtra = { notesCell: d.notesCell||'', authCell: d.authCell||'' }; }
+    } catch(e) { /* generate fresh */ }
+  }
+  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am }, savedRows, savedExtra);
+  if (batchId) {
+    window._currentLoanDocInfo = window._currentLoanDocInfo || {};
+    window._currentLoanDocInfo._pdfKey = batchId;
+  }
 }
 
 function openExtendLoanByKey(key) {
