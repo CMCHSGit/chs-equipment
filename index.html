@@ -1562,7 +1562,7 @@ function openEditModal(id) {
 }
 function closeModal() { document.getElementById('item-modal').classList.remove('open'); }
 
-function saveItem() {
+async function saveItem() {
   const assetNo = document.getElementById('m-CHSAssetNo').value.trim();
   if (!assetNo) { showToast('error','CHS Asset Number is required'); return; }
   const obj = { id: editingId || uid() };
@@ -1573,8 +1573,16 @@ function saveItem() {
   } else {
     equipment.unshift(obj);
   }
-  scheduleSave(); closeModal(); renderTable(); updateStats();
-  showToast('success', editingId ? 'Item updated' : 'Item added');
+  closeModal(); renderTable(); updateStats();
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+    showToast('success', editingId ? 'Item updated' : 'Item added');
+  } catch(e) {
+    setSync('err', 'Save failed');
+    showToast('error', 'Save failed: ' + e.message);
+  }
 }
 
 function deleteItem(id, assetNo) {
@@ -1820,15 +1828,29 @@ function hideFeedback() { document.getElementById('scan-feedback').style.display
 function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
+// Use mousedown + mouseleave + mouseup tracking instead of click events.
+// The click event fires on the lowest common ancestor of mousedown+mouseup,
+// so dragging from inside the modal to outside (or releasing outside the
+// browser window and re-entering) can spuriously close the modal.
+// Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
+// and reset the flag if the mouse leaves the overlay in between.
 ['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal'].forEach(id=>{
-  document.getElementById(id).addEventListener('click',function(e){if(e.target===this){if(id==='qr-modal')closeQR();else this.classList.remove('open');}});
+  const el = document.getElementById(id);
+  let _md = false;
+  el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
+  el.addEventListener('mouseleave', function(){ _md = false; });
+  el.addEventListener('mouseup', function(e){
+    if (_md && e.target === this) { if (id==='qr-modal') closeQR(); else this.classList.remove('open'); }
+    _md = false;
+  });
 });
-// Detail overlay - use mousedown+mouseup tracking to avoid drag-to-close
+// Detail overlay — same pattern
 (function() {
   const overlay = document.getElementById('detail-overlay');
-  let mouseDownOnOverlay = false;
-  overlay.addEventListener('mousedown', e => { mouseDownOnOverlay = e.target === overlay; });
-  overlay.addEventListener('mouseup', e => { if (mouseDownOnOverlay && e.target === overlay) closeDetail(); mouseDownOnOverlay = false; });
+  let _md = false;
+  overlay.addEventListener('mousedown', e => { _md = (e.target === overlay); });
+  overlay.addEventListener('mouseleave', () => { _md = false; });
+  overlay.addEventListener('mouseup', e => { if (_md && e.target === overlay) closeDetail(); _md = false; });
 })();
 
 // ── BATCH LOAN ────────────────────────────────────────────────────────
@@ -2065,7 +2087,19 @@ async function submitBatchLoan() {
       historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
     }
 
-    scheduleSave(); renderTable(); updateStats();
+    // Use immediate save — scheduleSave() is debounced 800ms and can be lost
+    // on page refresh, leaving only the BatchID in Firebase with no loan data.
+    setSync('saving', 'Saving...');
+    try {
+      await saveBin({ equipment, history: historyLog });
+      setSync('ok', 'Saved');
+    } catch(saveErr) {
+      setSync('err', 'Save failed');
+      showToast('error', 'Loan save failed — please try again. ' + saveErr.message);
+      btn.disabled = false; btn.textContent = 'Confirm Loan';
+      return;
+    }
+    renderTable(); updateStats();
 
     const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
     window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
