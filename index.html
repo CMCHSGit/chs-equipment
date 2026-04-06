@@ -3008,7 +3008,8 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   const saveBtn = document.getElementById('doc-save-btn');
   if (saveBtn) saveBtn.style.display = 'none';
   // Store current loan info for saving
-  window._currentLoanDocInfo = { loanInfo, loanItems };
+  window._currentLoanDocInfo = { loanInfo, loanItems, _pdfKey: window._pendingLoanDocPdfKey || null };
+  window._pendingLoanDocPdfKey = null;
   // Track edits
   setTimeout(() => {
     document.querySelectorAll('#loan-doc-content [contenteditable]').forEach(el => {
@@ -3063,9 +3064,8 @@ async function viewHistoryPDF(pdfKey) {
     const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
     const d = await r.json();
     if (d && d.items) {
+      window._pendingLoanDocPdfKey = pdfKey;
       generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'' });
-      window._currentLoanDocInfo = window._currentLoanDocInfo || {};
-      window._currentLoanDocInfo._pdfKey = pdfKey;
     } else {
       showToast('error', 'Loan document not found');
     }
@@ -3103,7 +3103,7 @@ function addDocRow() {
   // Focus first cell of new row
   const firstCell = tr.querySelector('td');
   if (firstCell) { firstCell.focus(); }
-  // Register input listeners
+  // Register input listeners on new row cells
   tr.querySelectorAll('td').forEach(td => {
     td.addEventListener('input', () => {
       document.getElementById('doc-edited-note').style.display = 'block';
@@ -3111,7 +3111,7 @@ function addDocRow() {
       if (s) s.style.display = 'inline-flex';
     });
   });
-  showToast('info', 'Row added — type asset/accessory details directly in the cells');
+  showToast('info', 'Row added — fill in details then click Save Changes');
 }
 
 async function saveLoanDocChanges() {
@@ -3135,7 +3135,7 @@ async function saveLoanDocChanges() {
   const newEndDate   = cells?.[3]?.innerText?.trim() || '';
   const newAM        = cells?.[4]?.innerText?.trim() || '';
 
-  // Capture every row from the equipment table (original items + accessories)
+  // Capture EVERY row from the equipment table — items + accessories + blank placeholders with content
   const tables = doc.querySelectorAll('table');
   const equipTable = tables[2];
   const savedRows = [];
@@ -3146,7 +3146,7 @@ async function saveLoanDocChanges() {
     });
   }
 
-  // Capture notes and auth fields
+  // Capture notes and auth fields (bottom table, rows 0 and 1, cell index 1)
   const lastTable = tables[tables.length - 1];
   const notesCell = lastTable?.querySelectorAll('tr')[0]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
   const authCell  = lastTable?.querySelectorAll('tr')[1]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
@@ -3154,7 +3154,7 @@ async function saveLoanDocChanges() {
   const info = window._currentLoanDocInfo.loanInfo;
   const loanItems = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
 
-  // Find the pdfKey
+  // Resolve pdfKey: stored on _currentLoanDocInfo, or find from history, or build from loan details
   let pdfKey = window._currentLoanDocInfo._pdfKey;
   if (!pdfKey && loanItems.length > 0) {
     const assetNos = new Set(loanItems.map(i => i.CHSAssetNo));
@@ -3162,11 +3162,11 @@ async function saveLoanDocChanges() {
     if (match) pdfKey = match._pdfKey;
   }
   if (!pdfKey) {
-    pdfKey = 'loan_' + encodeURIComponent((newLoanTo || info.loanTo) + '|||' + (toISO(newEndDate) || info.endDate));
+    pdfKey = 'loandoc_' + encodeURIComponent((newLoanTo || info.loanTo || '') + '|||' + (toISO(newEndDate) || info.endDate || ''));
   }
   window._currentLoanDocInfo._pdfKey = pdfKey;
 
-  // Persist full doc state to Firebase
+  // Persist to Firebase — this is what makes it survive page reloads
   try {
     await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
       method: 'PUT',
@@ -3183,9 +3183,12 @@ async function saveLoanDocChanges() {
         authCell
       })
     });
-  } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
+  } catch(e) {
+    showToast('error', 'Could not save to database: ' + e.message);
+    return;
+  }
 
-  // Update equipment records
+  // Also update live equipment records so database stays in sync
   let updated = 0;
   loanItems.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
@@ -3203,7 +3206,7 @@ async function saveLoanDocChanges() {
   document.getElementById('doc-edited-note').style.display = 'none';
   const sb = document.getElementById('doc-save-btn');
   if (sb) sb.style.display = 'none';
-  showToast('success', 'Loan form saved' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
+  showToast('success', 'Loan form saved ✓' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
 }
 
 function getLoanGroupByKey(key) {
@@ -3225,21 +3228,21 @@ async function viewLoanDocByKey(key) {
   if (!items.length) { showToast('error','No items found for this loan'); return; }
   const startDate = g.startDate || (items[0] && items[0].LoanStartDate) || '';
   const am = items[0]?.AccountManager || '';
-  // Try to load saved rows from Firebase
+  // Load any previously saved doc rows from Firebase
   const batchId = items[0]?.BatchID;
   let savedRows = null, savedExtra = {};
   if (batchId) {
     try {
       const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       const d = await r.json();
-      if (d && d.savedRows) { savedRows = d.savedRows; savedExtra = { notesCell: d.notesCell||'', authCell: d.authCell||'' }; }
-    } catch(e) { /* generate fresh */ }
+      if (d && d.savedRows) {
+        savedRows = d.savedRows;
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '' };
+      }
+    } catch(e) { /* no saved doc yet, generate fresh */ }
   }
+  window._pendingLoanDocPdfKey = batchId || null;
   generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am }, savedRows, savedExtra);
-  if (batchId) {
-    window._currentLoanDocInfo = window._currentLoanDocInfo || {};
-    window._currentLoanDocInfo._pdfKey = batchId;
-  }
 }
 
 function openExtendLoanByKey(key) {
