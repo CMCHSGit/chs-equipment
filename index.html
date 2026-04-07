@@ -407,6 +407,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="asset-field"><label>Status</label><span id="prev-status">—</span></div>
               <div class="asset-field"><label>On Loan To</label><span id="prev-loaned-to">—</span></div>
               <div class="asset-field"><label>Location</label><span id="prev-location">—</span></div>
+              <div class="asset-field" id="prev-counted-wrap" style="display:none"><label>Last Counted</label><span id="prev-counted">—</span></div>
             </div>
           </div>
           <!-- LOAN FORM -->
@@ -1130,7 +1131,7 @@ let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 // EmailJS config
-const EJS_SERVICE           = '';
+const EJS_SERVICE           = 'service_ig1n6ut';
 const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder template
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
@@ -1373,6 +1374,17 @@ function showAssetPreview(item) {
   document.getElementById('loan-form').style.display   = scanMode === 'loan'   ? 'block' : 'none';
   document.getElementById('return-form').style.display = scanMode === 'return' ? 'block' : 'none';
   document.getElementById('count-form').style.display  = scanMode === 'count'  ? 'block' : 'none';
+  const prevCountedWrap = document.getElementById('prev-counted-wrap');
+  const prevCounted     = document.getElementById('prev-counted');
+  if (prevCountedWrap && prevCounted) {
+    if (scanMode === 'count') {
+      prevCountedWrap.style.display = 'block';
+      prevCounted.textContent = item.Counted && item.Counted !== 'No' && item.Counted !== '' ? item.Counted : 'Not yet counted';
+      prevCounted.style.color = item.Counted && item.Counted !== 'No' ? 'var(--green)' : 'var(--text3)';
+    } else {
+      prevCountedWrap.style.display = 'none';
+    }
+  }
   if (scanMode === 'loan') {
     document.getElementById('f-start-date').value = today;
     if (on) { showFeedback('warn', `Already on loan to ${item.OnLoanTo}.`); document.getElementById('f-loan-to').value = item.OnLoanTo; document.getElementById('f-location').value = item.Location; document.getElementById('f-end-date').value = item.LoanEndDate; }
@@ -3422,7 +3434,7 @@ async function saveLoanDocChanges() {
 
   // Capture EVERY row from the equipment table — items + accessories + blank placeholders with content
   const tables = doc.querySelectorAll('table');
-  const equipTable = tables[2];
+  const equipTable = document.getElementById('loan-doc-equip-table') || tables[2];
   const savedRows = [];
   if (equipTable) {
     equipTable.querySelectorAll('tbody tr').forEach(row => {
@@ -3431,12 +3443,9 @@ async function saveLoanDocChanges() {
     });
   }
 
-  // Use the stable ID on the notes/auth table to avoid fragile table-counting.
-  // querySelectorAll('table') returns nested tables too (e.g. the footer
-  // signature table), so counting from the end is unreliable.
-  const notesAuthTable = doc.getElementById
-    ? doc.getElementById('loan-doc-notes-table')
-    : document.getElementById('loan-doc-notes-table');
+  // Use the stable IDs to find tables -- never count by index.
+  // doc is a div element (not document) so it has querySelector but not getElementById.
+  const notesAuthTable = document.getElementById('loan-doc-notes-table');
   const notesCell = notesAuthTable?.querySelectorAll('tr')[0]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
   const authCell  = notesAuthTable?.querySelectorAll('tr')[1]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
 
@@ -3526,9 +3535,15 @@ async function viewLoanDocByKey(key) {
       const d = await r.json();
       if (d && d.savedRows) {
         savedRows = d.savedRows;
-        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: d.notes || '' };
+        const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes };
       } else if (d) {
-        savedExtra = { notesCell: '', authCell: '', batchNotes: d.notes || '' };
+        const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes };
+      } else {
+        // No Firebase doc at all -- try equipment Notes field
+        const fallbackNotes = items.find(e => e.Notes)?.Notes || '';
+        savedExtra = { notesCell: '', authCell: '', batchNotes: fallbackNotes };
       }
     } catch(e) { /* no saved doc yet, generate fresh */ }
   }
