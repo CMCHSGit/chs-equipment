@@ -832,6 +832,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
+    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border);background:var(--surface2)">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Notes <span style="font-weight:400;color:var(--text3)">(auto-saves)</span></label>
+      <textarea id="loan-doc-notes-input" rows="2" placeholder="Enter notes for this loan..." style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;outline:none;box-sizing:border-box;margin-bottom:10px" oninput="syncLoanDocNotes(this.value)" onblur="saveLoanDocNotes(this.value)"></textarea>
+    </div>
     <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:calc(80vh - 90px)"></div>
   </div>
 </div>
