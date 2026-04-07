@@ -2378,13 +2378,18 @@ async function submitBatchLoan() {
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
 
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
-  // A device is only a conflict if it is currently on loan AND its active loan
-  // ends AFTER the new loan starts. If the active loan ends on or before the new
-  // start date, the equipment will be back in time -- treat as clean.
+  // True overlap check: new loan [startDate, endDate] vs existing [existingStart, existingEnd].
+  // Two date ranges overlap only when newStart < existingEnd AND newEnd > existingStart.
   function isDateConflict(item) {
     if (!item.OnLoanTo || item.Returned === 'Yes') return false;
-    if (!item.LoanEndDate) return true; // no end date -- assume conflict
-    return item.LoanEndDate > startDate; // ends strictly after new loan starts
+    const existingStart = item.LoanStartDate || '';
+    const existingEnd   = item.LoanEndDate   || '';
+    // Existing loan already ended before new loan starts — no conflict
+    if (existingEnd && existingEnd <= startDate) return false;
+    // Existing loan hasn't started yet and won't start until after new loan ends — no conflict
+    if (existingStart && endDate && existingStart >= endDate) return false;
+    // No end date on existing loan — assume indefinite, treat as conflict
+    return true;
   }
   const alreadyOnLoan = allFound.filter(d => {
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
@@ -2400,13 +2405,19 @@ async function submitBatchLoan() {
   // Build conflict info for already-on-loan devices
   const conflicts = alreadyOnLoan.map(d => {
     const item = equipment.find(e => e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-    const currentEnd = item.LoanEndDate || '';
-    const overlapDays = currentEnd ? Math.max(0, daysBetween(startDate, currentEnd)) : 0;
+    const existingStart = item.LoanStartDate || '';
+    const existingEnd   = item.LoanEndDate   || '';
+    // Overlap period = intersection of [startDate,endDate] and [existingStart,existingEnd]
+    const overlapStart = (!existingStart || existingStart < startDate) ? startDate : existingStart;
+    const overlapEnd   = (!existingEnd   || existingEnd   > endDate)   ? endDate   : existingEnd;
+    const overlapDays  = (overlapStart && overlapEnd && overlapStart < overlapEnd)
+      ? Math.max(0, daysBetween(overlapStart, overlapEnd)) : 0;
+    // type: overlap = both loans active at same time; available = existing ends before new starts (shouldn't reach here but guard)
+    const type = (!existingEnd || existingEnd <= startDate) ? 'available' : 'overlap';
     return {
       assetNo: item.CHSAssetNo, model: item.Model || '',
-      currentLoanTo: item.OnLoanTo, currentEnd,
-      type: (!currentEnd || currentEnd <= startDate) ? 'available' : 'overlap',
-      overlapDays
+      currentLoanTo: item.OnLoanTo, currentEnd: existingEnd, currentStart: existingStart,
+      type, overlapDays
     };
   });
 
@@ -2430,11 +2441,15 @@ async function submitBatchLoan() {
           _dataVersion = latest._v || _dataVersion;
           renderTable(); updateStats(); renderLoans();
 
-          // Re-check: are any of the requested devices now on loan?
+          // Re-check: are any of the requested devices now conflicting? (same overlap logic)
           const nowConflicting = devicesToLoan.filter(d => {
             const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
             if (!item || !item.OnLoanTo || item.Returned === 'Yes') return false;
-            return !item.LoanEndDate || item.LoanEndDate > startDate;
+            const exStart = item.LoanStartDate || '';
+            const exEnd   = item.LoanEndDate   || '';
+            if (exEnd && exEnd <= startDate) return false;
+            if (exStart && endDate && exStart >= endDate) return false;
+            return true;
           });
           if (nowConflicting.length) {
             btn.disabled = false; btn.textContent = 'Confirm Loan';
