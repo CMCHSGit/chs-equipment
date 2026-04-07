@@ -314,6 +314,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="nav-tab" onclick="switchTab('database')" id="tab-database"><span>Database</span></button>
         <button class="nav-tab" onclick="switchTab('history')" id="tab-history"><span>History</span></button>
         <button class="nav-tab" onclick="switchTab('loans')" id="tab-loans"><span>Active Loans</span></button>
+        <button class="nav-tab" onclick="switchTab('calendar')" id="tab-calendar"><span>📅 Calendar</span></button>
         <button class="nav-tab" onclick="switchTab('import')" id="tab-import"><span>Import</span></button>
         <button class="nav-tab" onclick="switchTab('retired')" id="tab-retired"><span>Sold / Retired</span></button>
       </div>
@@ -650,6 +651,27 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
 
     <!-- SOLD / RETIRED -->
+    <div class="panel" id="panel-calendar">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:18px;font-weight:600">Loan Calendar</div>
+          <div style="font-size:13px;color:var(--text2);margin-top:2px">Timeline of all active and upcoming loans</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="calShift(-1)">&#8592; Back</button>
+          <button class="btn btn-sm" onclick="calToday()">Today</button>
+          <button class="btn btn-sm" onclick="calShift(1)">Forward &#8594;</button>
+          <select class="filter-select" id="cal-range" onchange="renderCalendar()" style="font-size:13px">
+            <option value="4">4 weeks</option>
+            <option value="8" selected>8 weeks</option>
+            <option value="12">12 weeks</option>
+            <option value="24">6 months</option>
+          </select>
+        </div>
+      </div>
+      <div id="calendar-container" style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 240px)"></div>
+    </div>
+
     <div class="panel" id="panel-retired">
       <div class="table-toolbar">
         <div class="search-wrap">
@@ -812,7 +834,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <!-- LOAN DOCUMENT MODAL -->
 <div class="modal-overlay" id="loan-doc-modal">
-  <div class="modal" style="max-width:960px;padding:0;max-height:96vh;display:flex;flex-direction:column">
+  <div class="modal" style="width:95vw;max-width:1200px;padding:0;max-height:96vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-size:16px;font-weight:600">Loan Form</div>
@@ -1361,6 +1383,7 @@ function switchTab(n) {
   if (n === 'history')  renderHistory();
   if (n === 'scan')     updateStats();
   if (n === 'loans')    renderLoans();
+  if (n === 'calendar') renderCalendar();
   if (n === 'retired')  { clearRetiredSelection(); renderRetired(); }
 }
 
@@ -4894,6 +4917,215 @@ function initDragScroll() {
 
 // ── START ──────────────────────────────────────────────────────────────
 // Start app
+
+// ── LOAN CALENDAR ──────────────────────────────────────────────────────
+let _loanColors   = {};   // { colorKey: '#hexcolor' }
+let _calStartDate = null; // ISO string — left edge of the visible window
+
+const CAL_PALETTE = [
+  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
+  '#06b6d4','#f97316','#84cc16','#ec4899','#6366f1',
+  '#14b8a6','#a855f7','#fb923c','#4ade80','#f43f5e'
+];
+let _palIdx = 0;
+
+function _nextColor() {
+  const c = CAL_PALETTE[_palIdx % CAL_PALETTE.length];
+  _palIdx++;
+  return c;
+}
+
+function _colorKeyForGroup(g) {
+  // Stable key: loanTo + endDate (same as loan group key logic)
+  return (g.loanTo + '|||' + (g.endDate || '')).replace(/[^a-zA-Z0-9|]/g, '_');
+}
+
+async function loadLoanColors() {
+  try {
+    const r = await fetch(FB_URL + '/loanColors.json');
+    if (r.ok) { const d = await r.json(); if (d) _loanColors = d; }
+  } catch(e) {}
+}
+
+async function saveLoanColor(key, color) {
+  _loanColors[key] = color;
+  try {
+    await fetch(FB_URL + '/loanColors/' + encodeURIComponent(key) + '.json', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(color)
+    });
+  } catch(e) {}
+}
+
+function calToday() {
+  _calStartDate = nzDate();
+  renderCalendar();
+}
+
+function calShift(dir) {
+  const weeks = parseInt(document.getElementById('cal-range')?.value || '8');
+  const base  = _calStartDate || nzDate();
+  const d     = new Date(base);
+  d.setDate(d.getDate() + dir * Math.round(weeks / 2) * 7);
+  _calStartDate = d.toISOString().slice(0, 10);
+  renderCalendar();
+}
+
+function renderCalendar() {
+  const container = document.getElementById('calendar-container');
+  if (!container) return;
+
+  const weeks    = parseInt(document.getElementById('cal-range')?.value || '8');
+  const totalDays = weeks * 7;
+  const today    = nzDate();
+  const winStart = _calStartDate || today;
+
+  // Build date array
+  const dates = [];
+  const ws = new Date(winStart);
+  for (let i = 0; i < totalDays; i++) {
+    const d = new Date(ws);
+    d.setDate(ws.getDate() + i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  const winEnd = dates[dates.length - 1];
+
+  // Collect all loans (active + upcoming) that intersect the window
+  const rows = [];
+
+  // Active loans from equipment
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
+  const grouped = {};
+  onLoan.forEach(e => {
+    const key = e.OnLoanTo + '|||' + (e.Location || '') + '|||' + (e.LoanEndDate || '');
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location || '',
+      startDate: e.LoanStartDate || '', endDate: e.LoanEndDate || '', items: [], type: 'active' };
+    grouped[key].items.push(e);
+  });
+  Object.values(grouped).forEach(g => {
+    if (g.endDate && g.endDate < winStart) return; // entirely before window
+    if (g.startDate && g.startDate > winEnd) return; // entirely after window
+    rows.push(g);
+  });
+
+  // Upcoming loans
+  upcomingLoans.forEach(u => {
+    if (u.endDate && u.endDate < winStart) return;
+    if (u.startDate && u.startDate > winEnd) return;
+    rows.push({ loanTo: u.loanTo, location: u.location || '',
+      startDate: u.startDate || '', endDate: u.endDate || '',
+      items: u.items, type: 'upcoming' });
+  });
+
+  // Sort by start date
+  rows.sort((a, b) => (a.startDate || '9999') < (b.startDate || '9999') ? -1 : 1);
+
+  if (!rows.length) {
+    container.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text3)">No loans in this date range</div>';
+    return;
+  }
+
+  // Assign colors — reuse saved, assign new for unknown
+  rows.forEach(g => {
+    const key = _colorKeyForGroup(g);
+    if (!_loanColors[key]) _loanColors[key] = _nextColor();
+  });
+
+  // Build header row (dates)
+  // Group by month for the month header, show day numbers
+  const DAY_W = 28; // px per day cell
+  const ROW_H = 44;
+  const LABEL_W = 200;
+
+  // Month spans for header
+  const months = [];
+  let curMonth = '', curCount = 0, curStart = 0;
+  dates.forEach((d, i) => {
+    const mo = d.slice(0, 7); // YYYY-MM
+    if (mo !== curMonth) {
+      if (curMonth) months.push({ label: new Date(curMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' }), count: curCount, startIdx: curStart });
+      curMonth = mo; curCount = 1; curStart = i;
+    } else { curCount++; }
+  });
+  months.push({ label: new Date(curMonth + '-01').toLocaleString('default', { month: 'long', year: 'numeric' }), count: curCount, startIdx: curStart });
+
+  // Today column index
+  const todayIdx = dates.indexOf(today);
+
+  let html = '<div style="position:relative;min-width:' + (LABEL_W + totalDays * DAY_W) + 'px">';
+
+  // Month header
+  html += '<div style="display:flex;position:sticky;top:0;z-index:20;background:var(--surface)">';
+  html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;border-right:2px solid var(--border2);border-bottom:1px solid var(--border);background:var(--surface2)"></div>';
+  months.forEach(m => {
+    html += '<div style="width:' + (m.count * DAY_W) + 'px;min-width:' + (m.count * DAY_W) + 'px;padding:4px 8px;font-size:11px;font-weight:700;color:var(--text2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface2);overflow:hidden;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em">' + m.label + '</div>';
+  });
+  html += '</div>';
+
+  // Day header
+  html += '<div style="display:flex;position:sticky;top:24px;z-index:20;background:var(--surface)">';
+  html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;border-right:2px solid var(--border2);border-bottom:2px solid var(--border2);background:var(--surface2);padding:4px 8px;font-size:11px;font-weight:600;color:var(--text2)">Loan</div>';
+  dates.forEach((d, i) => {
+    const dd = parseInt(d.slice(8));
+    const isToday = d === today;
+    const dow = new Date(d).getDay(); // 0=Sun,6=Sat
+    const isWeekend = dow === 0 || dow === 6;
+    html += '<div style="width:' + DAY_W + 'px;min-width:' + DAY_W + 'px;text-align:center;padding:4px 0;font-size:10px;font-weight:' + (isToday ? '800' : '500') + ';color:' + (isToday ? 'var(--accent)' : isWeekend ? 'var(--text3)' : 'var(--text2)') + ';border-right:1px solid var(--border);border-bottom:2px solid var(--border2);background:' + (isToday ? 'var(--accent-light)' : 'var(--surface2)') + '">' + dd + '</div>';
+  });
+  html += '</div>';
+
+  // Loan rows
+  rows.forEach((g, ri) => {
+    const key   = _colorKeyForGroup(g);
+    const color = _loanColors[key] || '#3b82f6';
+    const alpha = color + '22';
+    const isUpcoming = g.type === 'upcoming';
+
+    // Bar start/end clamped to window
+    const barStart = g.startDate && g.startDate > winStart ? g.startDate : winStart;
+    const barEnd   = g.endDate   && g.endDate   < winEnd   ? g.endDate   : winEnd;
+    const barStartIdx = dates.indexOf(barStart);
+    const barEndIdx   = dates.indexOf(barEnd);
+
+    html += '<div style="display:flex;align-items:stretch;min-height:' + ROW_H + 'px;border-bottom:1px solid var(--border)">';
+
+    // Label cell
+    html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden">';
+    html += '<input type="color" value="' + color + '" title="Pick colour" style="width:20px;height:20px;border:none;border-radius:4px;cursor:pointer;flex-shrink:0;padding:0" onchange="saveLoanColor(\'' + key + '\',this.value);renderCalendar()">';
+    html += '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (isUpcoming ? '#6d28d9' : 'var(--text)') + '">' + esc(g.loanTo) + (isUpcoming ? ' <span style="font-size:10px;opacity:.7">⏳</span>' : '') + '</div>';
+    html += '<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') + (g.endDate ? ' · ' + formatDisplayDate(g.endDate) : '') + '</div></div>';
+    html += '</div>';
+
+    // Day cells
+    dates.forEach((d, di) => {
+      const inBar     = di >= barStartIdx && di <= barEndIdx && barStartIdx >= 0 && barEndIdx >= 0;
+      const isFirst   = di === barStartIdx;
+      const isLast    = di === barEndIdx;
+      const isToday2  = d === today;
+      const dow       = new Date(d).getDay();
+      const isWeekend = dow === 0 || dow === 6;
+
+      let bg = inBar ? alpha : (isWeekend ? 'var(--surface2)' : 'transparent');
+      let borderLeft = isFirst ? ('3px solid ' + color) : '1px solid var(--border)';
+
+      html += '<div style="width:' + DAY_W + 'px;min-width:' + DAY_W + 'px;position:relative;border-right:' + (isLast && inBar ? ('2px solid ' + color) : '1px solid var(--border)') + ';background:' + bg + ';border-left:' + borderLeft + '">';
+      if (isToday2) html += '<div style="position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--accent);opacity:.5;transform:translateX(-50%)"></div>';
+      html += '</div>';
+    });
+
+    html += '</div>';
+  });
+
+  // Today vertical overlay label at top
+  if (todayIdx >= 0) {
+    const todayLeft = LABEL_W + todayIdx * DAY_W + DAY_W / 2;
+    html += '<div style="position:absolute;top:0;left:' + todayLeft + 'px;width:2px;height:100%;background:var(--accent);opacity:.25;pointer-events:none;z-index:5"></div>';
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+}
+
 // ── REAL-TIME SYNC ─────────────────────────────────────────────────────
 // Silently merge fresh Firebase data into local state and re-render.
 // Called by the 30-second poller when it detects a version change.
@@ -4967,6 +5199,7 @@ function startAutoSync() {
   const lpw = document.getElementById('login-pw'); if (lpw) lpw.focus();
   setTimeout(initDragScroll, 1000);
   startAutoSync();
+  loadLoanColors();
 
   // Auto-refresh after 1 hour of inactivity — ensures stale sessions get fresh data
   // when someone returns to a tab they left open.
