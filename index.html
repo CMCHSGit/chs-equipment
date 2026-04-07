@@ -107,7 +107,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
 .table-scroll{overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 195px)}
-table{width:100%;border-collapse:collapse;min-width:900px}
+table{width:100%;border-collapse:collapse}
 thead{background:var(--surface2)}
 thead tr{position:sticky;top:0;z-index:4}
 th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;background:var(--surface2)}
@@ -670,7 +670,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <select class="filter-select" id="cal-sort" onchange="renderCalendar()" style="font-size:13px">
             <option value="start-asc">Start date (earliest first)</option>
             <option value="start-desc">Start date (latest first)</option>
-            <option value="end-asc">Expiry (soonest first)</option>
+            <option value="end-asc" selected>Expiry (soonest first)</option>
             <option value="end-desc">Expiry (latest first)</option>
             <option value="dur-asc">Duration (shortest first)</option>
             <option value="dur-desc">Duration (longest first)</option>
@@ -3463,7 +3463,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   }
 
   document.getElementById('loan-doc-content').innerHTML = `
-    <div id="printable-loan-doc" style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto">
+    <div id="printable-loan-doc" style="font-family:Arial,sans-serif;width:100%">
       <!-- HEADER -->
       <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
         <tr>
@@ -3568,6 +3568,26 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
     };
   }
 
+}
+
+function navigateToLoanByKey(key) {
+  // key = "loanTo|||endDate" (URL-decoded before being passed in)
+  const sep = key.indexOf('|||');
+  const loanTo = sep >= 0 ? key.slice(0, sep) : key;
+  switchTab('loans');
+  setTimeout(() => {
+    const cards = document.querySelectorAll('#loans-list .loan-card');
+    for (const card of cards) {
+      const customerEl = card.querySelector('.loan-card-customer');
+      if (customerEl && customerEl.textContent.trim() === loanTo) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.style.transition = 'box-shadow .3s';
+        card.style.boxShadow = '0 0 0 3px var(--accent)';
+        setTimeout(() => { card.style.boxShadow = ''; }, 2000);
+        break;
+      }
+    }
+  }, 150);
 }
 
 function _loanDocNotesFocusOut(e) {
@@ -5117,7 +5137,8 @@ function renderCalendar() {
     html += '<div style="display:flex;align-items:stretch;min-height:' + ROW_H + 'px;border-bottom:1px solid var(--border)">';
 
     // Label cell
-    html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden">';
+    const _navKey = encodeURIComponent(g.loanTo) + '|||' + (g.endDate || '');
+    html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer" onclick="navigateToLoanByKey(decodeURIComponent(\'' + _navKey + '\'))" title="Go to this loan in Active Loans">';
     html += '<input type="color" value="' + color + '" title="Pick colour" style="width:20px;height:20px;border:none;border-radius:4px;cursor:pointer;flex-shrink:0;padding:0" onchange="saveLoanColor(\'' + key + '\',this.value);renderCalendar()">';
     html += '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (isUpcoming ? '#6d28d9' : 'var(--text)') + '">' + esc(g.loanTo) + (isUpcoming ? ' <span style="font-size:10px;opacity:.7">⏳</span>' : '') + '</div>';
     html += '<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') + (g.endDate ? ' · ' + formatDisplayDate(g.endDate) : '') + '</div></div>';
