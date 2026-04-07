@@ -2320,6 +2320,7 @@ async function submitBatchLoan() {
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
+    clearBasket(); // clear basket now that loan is confirmed
     renderBatchDevices(); renderLoans();
   }; // end doLoan
 
@@ -2377,6 +2378,30 @@ async function submitBatchLoan() {
 }
 
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
+
+// Build a single device row for an active loan card body.
+// Uses string concatenation (no nested backticks) per code rules.
+function buildLoanDeviceRow(e) {
+  const upcoming = getUpcomingLoanForItem(e.id);
+  const upcomingBadge = upcoming
+    ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer to <strong>' + esc(upcoming.loanTo) + '</strong> &mdash; starts ' + formatDisplayDate(upcoming.startDate) + '</div>'
+    : '';
+  const notesBadge = e.Notes
+    ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ' + esc(e.Notes) + '</div>'
+    : '';
+  return '<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
+    '<div class="loan-device-info">' +
+    '<div class="loan-device-assetno" style="color:var(--accent)">' + esc(e.CHSAssetNo) + '</div>' +
+    '<div class="loan-device-desc">' + esc(e.Model) + (e.SerialNo ? ' &middot; ' + e.SerialNo : '') + '</div>' +
+    upcomingBadge + notesBadge +
+    '</div>' +
+    (e.TileUUID ? tileBtn(e.TileUUID) : '') +
+    '<button class="btn btn-sm" onclick="event.stopPropagation();removeDeviceFromLoan(\'' + e.id + '\',\'' + esc(e.CHSAssetNo) + '\')" ' +
+    'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from loan">' +
+    'Remove</button>' +
+    '</div>';
+}
+
 function renderLoans() {
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
   const sortBy = document.getElementById('loans-sort')?.value || 'added';
@@ -2431,7 +2456,7 @@ function renderLoans() {
   // Store groups by key for reliable lookup
   window._loanGroupMap = {};
   groups.forEach((g, gi) => {
-    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate);
+    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
     window._loanGroupMap[key] = g;
   });
   window._loanGroups = groups;
@@ -2475,7 +2500,7 @@ function renderLoans() {
 
   document.getElementById('loans-list').innerHTML = groups.map((g, gi) => {
     const overdue = g.endDate && g.endDate < today;
-    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate);
+    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
     return `<div class="loan-card">
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
@@ -2501,17 +2526,7 @@ function renderLoans() {
         </div>
       </div>
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
-        ${g.items.map(e => `<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo('${esc(e.CHSAssetNo)}')" title="View in database">
-          <div class="loan-device-info">
-            <div class="loan-device-assetno" style="color:var(--accent)">${esc(e.CHSAssetNo)}</div>
-            <div class="loan-device-desc">${esc(e.Model)}${e.SerialNo?' · '+e.SerialNo:''}</div>
-          </div>
-          ${e.TileUUID ? tileBtn(e.TileUUID) : ''}
-          <button class="btn btn-sm" onclick="event.stopPropagation();removeDeviceFromLoan('${e.id}','${esc(e.CHSAssetNo)}')"
-            style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from loan">
-            Remove
-          </button>
-        </div>`).join('')}
+        ${g.items.map(e => buildLoanDeviceRow(e)).join('')}
       </div>
     </div>`;
   }).join('') + (upcomingLoans.length ? '<div style="margin:16px 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:#6d28d9;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Upcoming Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>' : '') + upcomingCards;
@@ -3440,7 +3455,7 @@ function getLoanGroupByKey(key) {
 
 function viewLoanDoc(gi) {
   const g = (window._loanGroups || [])[gi];
-  if (g) { const key = encodeURIComponent(g.loanTo + '|||' + g.endDate); viewLoanDocByKey(key); }
+  if (g) { const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27'); viewLoanDocByKey(key); }
 }
 
 async function viewLoanDocByKey(key) {
@@ -3937,23 +3952,38 @@ function proceedFromBasket() {
     return;
   }
 
-  // New loan — switch to scan/batch and pre-fill
+  // New loan -- switch to scan/batch and merge new items with any already in the form
   switchTab('scan');
   setScanMode('batch');
   setTimeout(() => {
-    batchDevices = newItems.map((b, i) => ({ id: 'bd_bsk_' + i, value: b.CHSAssetNo }));
     if (!window._batchStatus) window._batchStatus = {};
+    // Find asset numbers already queued in the batch form
+    const existingAssetNos = new Set(batchDevices.filter(d => d.value).map(d => d.value.toUpperCase()));
+    // Only add items not already queued
+    const toAdd = newItems.filter(b => !existingAssetNos.has(b.CHSAssetNo.toUpperCase()));
+    const basePop = batchDevices.filter(d => d.value); // keep existing non-empty rows
+    const merged = basePop.concat(toAdd.map((b, i) => ({ id: 'bd_bsk_' + Date.now() + '_' + i, value: b.CHSAssetNo })));
+    if (!merged.length) merged.push({ id: 'bd_0', value: '' });
+    merged.push({ id: 'bd_end_' + Date.now(), value: '' }); // trailing empty row
+    batchDevices = merged;
     batchDevices.forEach(d => {
+      if (!d.value) return;
       const item = equipment.find(e => e.CHSAssetNo === d.value);
       if (item) {
         const on = item.OnLoanTo && item.Returned !== 'Yes';
         window._batchStatus[d.id] = on
-          ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
-          : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
+          ? '<span style="color:var(--amber)">&#x26A0; ' + (item.Model||item.CHSAssetNo) + ' already on loan to ' + item.OnLoanTo + '</span>'
+          : '<span style="color:var(--green)">&#x2713; ' + (item.Model||'Found') + '</span>';
       }
     });
     renderBatchDevices();
-    clearBasket();
+    // Keep basket open so user can come back and add more items
+    // Refresh basket to show merged count
+    _basketItems = batchDevices.filter(d => d.value).map(d => {
+      const eq = equipment.find(e => e.CHSAssetNo === d.value);
+      return eq ? { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: false } : null;
+    }).filter(Boolean);
+    renderBasket();
   }, 150);
 }
 
