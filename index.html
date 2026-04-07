@@ -464,9 +464,14 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include (Asset Numbers)</div>
             <div id="batch-devices-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
-            <button class="btn btn-sm" onclick="addBatchDevice()" style="margin-bottom:12px">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add another device
-            </button>
+            <div style="display:flex;gap:8px;margin-bottom:12px">
+              <button class="btn btn-sm btn-primary" onclick="goToDatabaseForMoreDevices()">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Browse Database
+              </button>
+              <button class="btn btn-sm" onclick="addBatchDevice()" title="Manually type an asset number">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Type manually
+              </button>
+            </div>
             <div id="batch-feedback" style="display:none"></div>
             <div class="form-actions">
               <button class="btn btn-primary" id="btn-batch" onclick="submitBatchLoan()">
@@ -1965,6 +1970,22 @@ function updateBatchDevice(id, val) {
   renderBatchDevices();
 }
 
+// Switch to database so user can pick more items for the current batch loan form.
+// Existing batch devices are loaded into basket to stay visible; proceedFromBasket()
+// merges them back when the user clicks Proceed to Loan.
+function goToDatabaseForMoreDevices() {
+  const currentDevices = batchDevices.filter(d => d.value);
+  _basketLoanKey = null;
+  _basketItems = currentDevices.map(d => {
+    const eq = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+    return eq ? { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: false } : null;
+  }).filter(Boolean);
+  switchTab('database');
+  const sf = document.getElementById('db-status');
+  if (sf) sf.value = 'available';
+  setTimeout(function() { renderTable(); renderBasket(); showToast('info', 'Tick items to add, then click Proceed to Loan'); }, 150);
+}
+
 function addBatchDevice() {
   const newId = 'bd_' + Date.now();
   batchDevices.push({ id: newId, value: '' });
@@ -2301,7 +2322,7 @@ async function submitBatchLoan() {
       try {
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ loanTo, location, startDate, endDate, accountManager: batchAM,
+          body: JSON.stringify({ loanTo, location, startDate, endDate, accountManager: batchAM, notes: notes,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) })
         });
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
@@ -2505,7 +2526,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>
+          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>${(() => { const n = g.items.find(e => e.Notes)?.Notes; return n ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(n)}</div>` : ''; })()}
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
@@ -3477,7 +3498,9 @@ async function viewLoanDocByKey(key) {
       const d = await r.json();
       if (d && d.savedRows) {
         savedRows = d.savedRows;
-        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '' };
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: d.notes || '' };
+      } else if (d) {
+        savedExtra = { notesCell: '', authCell: '', batchNotes: d.notes || '' };
       }
     } catch(e) { /* no saved doc yet, generate fresh */ }
   }
