@@ -3467,10 +3467,19 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   if (ldc) {
     ldc.removeEventListener('input', _loanDocEditHandler);
     ldc.addEventListener('input', _loanDocEditHandler);
-    // focusout bubbles (unlike blur) so we can catch the notes cell losing focus
-    // from the parent container — more reliable than inline onblur on contenteditable
     ldc.removeEventListener('focusout', _loanDocNotesFocusOut);
     ldc.addEventListener('focusout', _loanDocNotesFocusOut);
+  }
+  // Debounced auto-save on the notes cell via oninput — fires 1.5s after typing stops.
+  // This is more reliable than focusout alone (which misses some blur paths).
+  const notesCell = document.getElementById('loan-doc-notes-cell');
+  if (notesCell) {
+    notesCell.oninput = function() {
+      clearTimeout(window._notesSaveTimer);
+      window._notesSaveTimer = setTimeout(() => {
+        saveLoanDocNotes(document.getElementById('loan-doc-notes-cell')?.innerText.trim() || '');
+      }, 1500);
+    };
   }
 
 }
@@ -3505,6 +3514,12 @@ function formatDisplayDate(d) {
 }
 
 function closeLoanDoc() {
+  // Save any pending notes before closing
+  clearTimeout(window._notesSaveTimer);
+  const notesCell = document.getElementById('loan-doc-notes-cell');
+  if (notesCell && window._currentLoanDocInfo) {
+    saveLoanDocNotes(notesCell.innerText.trim());
+  }
   document.getElementById('loan-doc-modal').classList.remove('open');
   window._currentLoanDocInfo = null;
 }
@@ -3706,6 +3721,11 @@ async function viewLoanDocByKey(key) {
         savedExtra = { notesCell: '', authCell: '', batchNotes: fallbackNotes };
       }
     } catch(e) { /* no saved doc yet, generate fresh */ }
+  }
+  // No BatchID on this loan (older loan) — fall back to equipment Notes field
+  if (!batchId) {
+    const fallbackNotes = items.find(e => e.Notes)?.Notes || '';
+    savedExtra = { notesCell: '', authCell: '', batchNotes: fallbackNotes };
   }
   window._pendingLoanDocPdfKey = batchId || null;
   generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am }, savedRows, savedExtra);
