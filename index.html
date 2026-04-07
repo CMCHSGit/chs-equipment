@@ -631,7 +631,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <option value="expiry">Expiry (soonest)</option>
           <option value="start">Loan date</option>
         </select>
-        <button class="btn btn-sm" id="orphan-scan-btn" onclick="scanForOrphanedLoans()" title="Scan for loans that may not have saved correctly" style="display:none;color:var(--amber);border-color:var(--amber-border);background:var(--amber-light)">
+        <button class="btn btn-sm" id="orphan-scan-btn" onclick="scanForOrphanedLoans()" title="Scan for loans that did not save correctly and recover them">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Recover Loan
         </button>
@@ -1998,38 +1998,49 @@ let _orphanCandidates = []; // [{batchId, items:[], doc:{}}]
 let _orphanRecoverIndex = 0;
 
 async function checkOrphanedLoans() {
-  // Find equipment items that have a batch_ BatchID but no OnLoanTo
+  _orphanCandidates = await _findOrphanCandidates();
+  if (_orphanCandidates.length) {
+    showToast('warn', _orphanCandidates.length + ' loan' + (_orphanCandidates.length > 1 ? 's' : '') + ' may not have saved correctly -- click "Recover Loan" in the Active Loans tab.');
+  }
+}
+
+async function _findOrphanCandidates() {
+  // Collect equipment items where BatchID exists but the loan data looks incomplete.
+  // Case A: BatchID set but OnLoanTo is blank (classic lost-save scenario).
+  // Case B: BatchID set but no matching history entry for that batch -- the
+  //         Object.assign ran but the save never committed.
   const orphanedByBatch = {};
+  const loggedBatches = new Set(historyLog.filter(h => h.batchId).map(h => h.batchId));
   equipment.forEach(e => {
-    if (e.BatchID && e.BatchID.startsWith('batch_') && (!e.OnLoanTo || e.OnLoanTo === '') ) {
+    if (!e.BatchID || !e.BatchID.startsWith('batch_')) return;
+    const missingLoanTo  = !e.OnLoanTo || e.OnLoanTo === '';
+    const missingHistory = !loggedBatches.has(e.BatchID);
+    if (missingLoanTo || missingHistory) {
       if (!orphanedByBatch[e.BatchID]) orphanedByBatch[e.BatchID] = [];
       orphanedByBatch[e.BatchID].push(e);
     }
   });
-  if (!Object.keys(orphanedByBatch).length) return;
+  if (!Object.keys(orphanedByBatch).length) return [];
 
-  // For each candidate, try to load the loanDoc from Firebase
-  _orphanCandidates = [];
+  // For each candidate batch, look for a loanDoc in Firebase
+  const candidates = [];
   for (const [batchId, items] of Object.entries(orphanedByBatch)) {
     try {
       const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       const doc = await r.json();
-      if (doc && doc.loanTo) {
-        _orphanCandidates.push({ batchId, items, doc });
-      }
-    } catch(e) { /* loanDoc missing - cannot recover */ }
+      if (doc && doc.loanTo) candidates.push({ batchId, items, doc });
+    } catch(e) { /* no loanDoc saved -- nothing to recover from */ }
   }
-  if (!_orphanCandidates.length) return;
-
-  // Show the recover button on the loans tab
-  const btn = document.getElementById('orphan-scan-btn');
-  if (btn) btn.style.display = 'inline-flex';
-  showToast('warn', _orphanCandidates.length + ' loan' + (_orphanCandidates.length > 1 ? 's' : '') + ' may not have saved -- click "Recover Loan" on the Active Loans tab.');
+  return candidates;
 }
 
-function scanForOrphanedLoans() {
+async function scanForOrphanedLoans() {
+  const btn = document.getElementById('orphan-scan-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Scanning...'; }
+  _orphanCandidates = await _findOrphanCandidates();
+  if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Recover Loan'; }
   if (!_orphanCandidates.length) {
-    showToast('info', 'No orphaned loans detected.');
+    showToast('info', 'No recoverable orphaned loans found.');
     return;
   }
   _orphanRecoverIndex = 0;
