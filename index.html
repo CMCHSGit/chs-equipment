@@ -2701,7 +2701,8 @@ function renderLoans() {
   });
   window._loanGroups = groups;
 
-  // Build scheduled loan cards (active loans with future start dates)
+  // Build scheduled loan cards, merging any upcomingLoans for the same customer
+  const _mergedUpcomingIds = new Set();
   const scheduledCards = scheduledGroups.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
@@ -2709,6 +2710,24 @@ function renderLoans() {
     window._loanGroupMap = window._loanGroupMap || {};
     window._loanGroupMap[key] = g;
     const _slcId = 'slc_' + sgi;
+    // Absorb any upcomingLoans for the same customer into this card
+    const matchingUpcoming = upcomingLoans.filter(u =>
+      u.loanTo.toLowerCase() === g.loanTo.toLowerCase()
+    );
+    matchingUpcoming.forEach(u => _mergedUpcomingIds.add(u.id));
+    const mergedItemsHtml = matchingUpcoming.flatMap(u => u.items.map(uItem => {
+      const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+      if (!eq) return '';
+      const currentLoan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
+      return '<div class="loan-device">' +
+        '<div class="loan-device-info">' +
+        '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
+        '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' &middot; ' + eq.SerialNo : '') + '</div>' +
+        (currentLoan ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer from <strong>' + esc(currentLoan) + '</strong></div>' : '') +
+        '</div></div>';
+    })).join('');
+    const totalDevices = g.items.length + matchingUpcoming.reduce((s, u) => s + u.items.length, 0);
+    const hasTransfer = mergedItemsHtml.includes('Upcoming transfer from');
     return '<div class="loan-card" style="border-color:#c4b5fd">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'slc_' + sgi + '\')">' +
       '<div>' +
@@ -2718,21 +2737,21 @@ function renderLoans() {
         esc(g.location) + ' · Starts: ' + formatDisplayDate(g.startDate) +
         ' <span style="color:var(--text3)">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
-        ' · ' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') +
+        ' · ' + totalDevices + ' device' + (totalDevices !== 1 ? 's' : '') +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
-        '<span class="status-badge badge-upcoming">\u{1F4C5} Scheduled</span>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(decodeURIComponent(\'slc_ext_' + sgi + '\'))" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
-        '<button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey(\'' + key + '\')">Return items</button>' +
+        '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
+        '<button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey(\'slc_ret_' + sgi + '\')">Return items</button>' +
       '</div>' +
       '</div>' +
-      '<div class="loan-card-body" id="' + _slcId + '" style="display:none">' + g.items.map(e => buildLoanDeviceRow(e)).join('') + '</div>' +
+      '<div class="loan-card-body" id="' + _slcId + '" style="' + (hasTransfer ? 'display:block' : 'display:none') + '">' +
+        g.items.map(e => buildLoanDeviceRow(e)).join('') + mergedItemsHtml +
+      '</div>' +
       '</div>';
   }).join('');
-
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
-  const upcomingCards = upcomingLoans.map(u => {
+  const upcomingCards = upcomingLoans.filter(u => !_mergedUpcomingIds.has(u.id)).map(u => {
     const daysUntilStart = daysBetween(today, u.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
     const itemsHtml = u.items.map(uItem => {
