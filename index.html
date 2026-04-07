@@ -3381,9 +3381,13 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
     ldc.removeEventListener('input', _loanDocEditHandler);
     ldc.addEventListener('input', _loanDocEditHandler);
   }
-  // Populate the notes textarea above the form
+  // Populate the notes textarea above the form, then sync immediately into the
+  // printable Notes cell so it appears when printing (setting .value doesn't fire input)
   const notesInput = document.getElementById('loan-doc-notes-input');
-  if (notesInput) notesInput.value = (savedExtra && (savedExtra.notesCell || savedExtra.batchNotes)) || (loanItems && loanItems[0] && loanItems[0].Notes) || '';
+  if (notesInput) {
+    notesInput.value = (savedExtra && (savedExtra.notesCell || savedExtra.batchNotes)) || (loanItems && loanItems[0] && loanItems[0].Notes) || '';
+    syncLoanDocNotes(notesInput.value);
+  }
 }
 
 function formatDisplayDate(d) {
