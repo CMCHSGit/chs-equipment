@@ -178,7 +178,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 /* TOAST */
 .toast{position:fixed;bottom:20px;right:20px;z-index:999;display:flex;flex-direction:column;gap:8px}
 .toast-item{padding:12px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;box-shadow:var(--shadow-md);min-width:240px;animation:slideIn .2s ease}
-.toast-success{background:var(--green);color:#fff}.toast-error{background:var(--red);color:#fff}.toast-info{background:var(--accent);color:#fff}
+.toast-success{background:var(--green);color:#fff}.toast-error{background:var(--red);color:#fff}.toast-info{background:var(--accent);color:#fff}.toast-warn{background:var(--amber);color:#fff}
 @keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
 
 /* SESSION */
@@ -631,6 +631,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <option value="expiry">Expiry (soonest)</option>
           <option value="start">Loan date</option>
         </select>
+        <button class="btn btn-sm" id="orphan-scan-btn" onclick="scanForOrphanedLoans()" title="Scan for loans that may not have saved correctly" style="display:none;color:var(--amber);border-color:var(--amber-border);background:var(--amber-light)">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Recover Loan
+        </button>
         <div class="search-wrap">
           <svg class="search-icon icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
           <input class="search-input" id="loans-search" type="text" placeholder="Search customer…" oninput="renderLoans()">
@@ -1097,6 +1101,24 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<div class="modal-overlay" id="orphan-modal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">&#9888; Recover Orphaned Loan</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="orphan-subtitle"></div>
+      </div>
+    </div>
+    <div id="orphan-body" style="margin-bottom:4px;max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn" onclick="closeOrphanModal()">Dismiss</button>
+      <button class="btn btn-primary" id="orphan-confirm-btn" onclick="confirmRecoverOrphan()">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Re-apply Loan Data
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
@@ -1202,6 +1224,7 @@ async function loadData() {
       await activateUpcomingLoans();
       checkOverdueNotifications();
       checkUpcomingLoanReminders();
+      checkOrphanedLoans(); // detect any loans whose data.json save was lost
     }, 500);
     return true;
   } catch(e) {
@@ -1834,7 +1857,7 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
@@ -1964,6 +1987,162 @@ function closeConflictModal() {
   document.getElementById('conflict-modal').classList.remove('open');
   _conflictProceedCallback = null;
 }
+
+// ── ORPHANED LOAN RECOVERY ────────────────────────────────────────────────
+// An "orphaned" loan = equipment has a BatchID set but OnLoanTo is blank,
+// meaning the main data.json save was lost (e.g. page refreshed during the
+// 800ms debounce window, or a concurrent session overwrote it). The loanDoc
+// at /loanDocs/{batchId} is saved via direct await fetch and usually survives.
+
+let _orphanCandidates = []; // [{batchId, items:[], doc:{}}]
+let _orphanRecoverIndex = 0;
+
+async function checkOrphanedLoans() {
+  // Find equipment items that have a batch_ BatchID but no OnLoanTo
+  const orphanedByBatch = {};
+  equipment.forEach(e => {
+    if (e.BatchID && e.BatchID.startsWith('batch_') && (!e.OnLoanTo || e.OnLoanTo === '') ) {
+      if (!orphanedByBatch[e.BatchID]) orphanedByBatch[e.BatchID] = [];
+      orphanedByBatch[e.BatchID].push(e);
+    }
+  });
+  if (!Object.keys(orphanedByBatch).length) return;
+
+  // For each candidate, try to load the loanDoc from Firebase
+  _orphanCandidates = [];
+  for (const [batchId, items] of Object.entries(orphanedByBatch)) {
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+      const doc = await r.json();
+      if (doc && doc.loanTo) {
+        _orphanCandidates.push({ batchId, items, doc });
+      }
+    } catch(e) { /* loanDoc missing — can't recover */ }
+  }
+  if (!_orphanCandidates.length) return;
+
+  // Show the recover button on the loans tab
+  const btn = document.getElementById('orphan-scan-btn');
+  if (btn) btn.style.display = 'inline-flex';
+  showToast('warn', _orphanCandidates.length + ' loan' + (_orphanCandidates.length > 1 ? 's' : '') + ' may not have saved — click "Recover Loan" on the Active Loans tab.');
+}
+
+function scanForOrphanedLoans() {
+  if (!_orphanCandidates.length) {
+    showToast('info', 'No orphaned loans detected.');
+    return;
+  }
+  _orphanRecoverIndex = 0;
+  showOrphanModal(_orphanCandidates[0]);
+}
+
+function showOrphanModal(candidate) {
+  const { batchId, items, doc } = candidate;
+  const total = _orphanCandidates.length;
+  const idx   = _orphanCandidates.indexOf(candidate) + 1;
+  document.getElementById('orphan-subtitle').textContent =
+    (total > 1 ? idx + ' of ' + total + ' — ' : '') + 'Batch ID: ' + batchId;
+
+  const itemRows = items.map(e =>
+    '<div style="font-family:'DM Mono',monospace;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)">' +
+    '<strong>' + esc(e.CHSAssetNo) + '</strong>' +
+    (e.Model ? ' <span style="color:var(--text2)">· ' + esc(e.Model) + '</span>' : '') +
+    (e.SerialNo ? ' <span style="color:var(--text3);font-size:11px">SN: ' + esc(e.SerialNo) + '</span>' : '') +
+    '</div>'
+  ).join('');
+
+  const docRows = [
+    ['Loan To',          esc(doc.loanTo)],
+    ['Location',         esc(doc.location)],
+    ['Start Date',       esc(doc.startDate)],
+    ['End Date',         esc(doc.endDate)],
+    ['Account Manager',  esc(doc.accountManager || '—')],
+  ].map(([k, v]) =>
+    '<div style="display:flex;gap:8px;font-size:13px;padding:3px 0">' +
+    '<span style="color:var(--text2);min-width:120px">' + k + ':</span>' +
+    '<strong>' + v + '</strong></div>'
+  ).join('');
+
+  document.getElementById('orphan-body').innerHTML =
+    '<div style="background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--amber)">' +
+    '<strong>These items have a BatchID but no loan data — the save likely did not complete.</strong><br>' +
+    'The loan document in Firebase has been found and the details below can be re-applied.' +
+    '</div>' +
+    '<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Loan Details (from saved document)</div>' +
+    docRows +
+    '<div style="font-size:12px;font-weight:600;color:var(--text2);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.04em">Affected Equipment (' + items.length + ' item' + (items.length !== 1 ? 's' : '') + ')</div>' +
+    itemRows;
+
+  document.getElementById('orphan-confirm-btn').textContent = '';
+  document.getElementById('orphan-confirm-btn').innerHTML =
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Re-apply Loan Data';
+  document.getElementById('orphan-modal').classList.add('open');
+}
+
+function closeOrphanModal() {
+  document.getElementById('orphan-modal').classList.remove('open');
+}
+
+async function confirmRecoverOrphan() {
+  const candidate = _orphanCandidates[_orphanRecoverIndex];
+  if (!candidate) { closeOrphanModal(); return; }
+  const { batchId, items, doc } = candidate;
+
+  const btn = document.getElementById('orphan-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  // Re-apply loan data to each equipment item
+  items.forEach(orphan => {
+    const idx = equipment.findIndex(e => e.id === orphan.id);
+    if (idx < 0) return;
+    Object.assign(equipment[idx], {
+      OnLoanTo:      doc.loanTo,
+      Location:      doc.location,
+      LoanStartDate: doc.startDate,
+      LoanEndDate:   doc.endDate,
+      Returned:      'No',
+      AccountManager: doc.accountManager || equipment[idx].AccountManager || '',
+      BatchID:       batchId
+    });
+    // Add a recovery history entry if not already logged
+    const alreadyLogged = historyLog.some(h => h.batchId === batchId && h.chsAssetNo === equipment[idx].CHSAssetNo && h.action === 'Loan');
+    if (!alreadyLogged) {
+      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo,
+        model: equipment[idx].Model, action: 'Loan', loanTo: doc.loanTo,
+        location: doc.location, loanStart: doc.startDate, loanEnd: doc.endDate,
+        notes: 'Recovered from orphaned loan', batchId, _pdfKey: batchId });
+    }
+  });
+
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+  } catch(e) {
+    setSync('err', 'Save failed');
+    showToast('error', 'Recovery save failed: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Re-apply Loan Data';
+    return;
+  }
+
+  renderTable(); updateStats(); renderLoans();
+  showToast('success', items.length + ' item' + (items.length > 1 ? 's' : '') + ' recovered for loan to ' + doc.loanTo);
+
+  // Remove from candidates list
+  _orphanCandidates.splice(_orphanRecoverIndex, 1);
+  closeOrphanModal();
+
+  if (_orphanCandidates.length === 0) {
+    const scanBtn = document.getElementById('orphan-scan-btn');
+    if (scanBtn) scanBtn.style.display = 'none';
+  } else {
+    // More orphans to review
+    _orphanRecoverIndex = Math.min(_orphanRecoverIndex, _orphanCandidates.length - 1);
+    setTimeout(() => showOrphanModal(_orphanCandidates[_orphanRecoverIndex]), 400);
+  }
+}
+
+
 function confirmConflictAndProceed() {
   document.getElementById('conflict-modal').classList.remove('open');
   if (_conflictProceedCallback) _conflictProceedCallback();
@@ -3180,10 +3359,11 @@ async function saveLoanDocChanges() {
     });
   }
 
-  // Capture notes and auth fields (bottom table, rows 0 and 1, cell index 1)
-  const lastTable = tables[tables.length - 1];
-  const notesCell = lastTable?.querySelectorAll('tr')[0]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
-  const authCell  = lastTable?.querySelectorAll('tr')[1]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
+  // Capture notes and auth fields from the notes/auth table (second-to-last).
+  // tables[last] is the footer (name/sig/date); notes/auth is tables[last-1].
+  const notesAuthTable = tables[tables.length - 2];
+  const notesCell = notesAuthTable?.querySelectorAll('tr')[0]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
+  const authCell  = notesAuthTable?.querySelectorAll('tr')[1]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
 
   const info = window._currentLoanDocInfo.loanInfo;
   const loanItems = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
