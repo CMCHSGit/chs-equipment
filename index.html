@@ -2314,7 +2314,7 @@ async function submitBatchLoan() {
 
     const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
     window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
-    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM });
+    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM }, null, { notesCell: '', authCell: '', batchNotes: notes });
 
     setTimeout(async () => {
       const docEl = document.getElementById('printable-loan-doc');
@@ -3236,10 +3236,10 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       </table>
       </div>
       <!-- NOTES + AUTH -->
-      <table style="width:100%;border-collapse:collapse;margin-top:0">
+      <table id="loan-doc-notes-table" style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to add notes">${savedExtra?.notesCell||''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to add notes">${savedExtra?.notesCell || savedExtra?.batchNotes || ''}</td>
         </tr>
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
@@ -3406,9 +3406,12 @@ async function saveLoanDocChanges() {
     });
   }
 
-  // Capture notes and auth fields from the notes/auth table (second-to-last).
-  // tables[last] is the footer (name/sig/date); notes/auth is tables[last-1].
-  const notesAuthTable = tables[tables.length - 2];
+  // Use the stable ID on the notes/auth table to avoid fragile table-counting.
+  // querySelectorAll('table') returns nested tables too (e.g. the footer
+  // signature table), so counting from the end is unreliable.
+  const notesAuthTable = doc.getElementById
+    ? doc.getElementById('loan-doc-notes-table')
+    : document.getElementById('loan-doc-notes-table');
   const notesCell = notesAuthTable?.querySelectorAll('tr')[0]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
   const authCell  = notesAuthTable?.querySelectorAll('tr')[1]?.querySelectorAll('td')[1]?.innerText?.trim() || '';
 
