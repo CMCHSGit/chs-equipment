@@ -1202,28 +1202,62 @@ async function fetchBin() {
   return d;
 }
 
-// Version token recorded at last load — used to detect stale-tab overwrites
+// Version token recorded at last load — used to detect concurrent saves
 let _dataVersion = null;
 
 async function saveBin(data) {
-  // Stale-tab guard: check the version stored in Firebase before saving.
-  // If another tab/device saved since we last loaded, warn instead of silently
-  // overwriting (which is how active loans can disappear).
+  // Concurrent-save guard: before writing, check whether another session has
+  // saved since we loaded. If so, auto-merge rather than silently overwriting.
   try {
     const vr = await fetch(FB_URL + '/data/_v.json');
     if (vr.ok) {
       const remoteV = await vr.json();
       if (remoteV && _dataVersion && remoteV !== _dataVersion) {
-        setSync('err', 'Out of sync');
-        const doReload = confirm(
-          'Another session has saved changes since you loaded this page.\n\n' +
-          'Click OK to reload and get the latest data (recommended).\n' +
-          'Click Cancel to keep your current session open, but your next save may overwrite their changes.'
-        );
-        if (doReload) { window.location.reload(); return; }
+        // Another session saved — fetch their latest state and merge
+        const freshResp = await fetch(FB_URL + '/data.json');
+        if (freshResp.ok) {
+          const fresh = await freshResp.json();
+          if (fresh) {
+            const freshEquip   = Array.isArray(fresh.equipment) ? fresh.equipment : [];
+            const freshHistory = Array.isArray(fresh.history)   ? fresh.history   : [];
+            const ourEquip     = Array.isArray(data.equipment)  ? data.equipment  : [];
+            const ourHistory   = Array.isArray(data.history)    ? data.history    : [];
+
+            // Merge equipment: reconcile by id, preserving active loan data
+            const ourMap = {};
+            ourEquip.forEach(e => { if (e.id) ourMap[e.id] = e; });
+            const merged = freshEquip.map(freshItem => {
+              const ours = ourMap[freshItem.id];
+              if (!ours) return freshItem;
+              delete ourMap[freshItem.id];
+              const freshOnLoan = freshItem.OnLoanTo && freshItem.Returned !== 'Yes';
+              const ourOnLoan   = ours.OnLoanTo      && ours.Returned      !== 'Yes';
+              if (freshOnLoan && !ourOnLoan) return freshItem;
+              if (!freshOnLoan && ourOnLoan) return ours;
+              if (freshOnLoan && ourOnLoan) {
+                return (ours.LoanStartDate || '') >= (freshItem.LoanStartDate || '') ? ours : freshItem;
+              }
+              return ours;
+            });
+            Object.values(ourMap).forEach(e => merged.push(e));
+
+            // Merge history: union by entry id, sorted newest-first
+            const seenIds = new Set(freshHistory.map(h => h.id));
+            const mergedHistory = [...freshHistory];
+            ourHistory.forEach(h => { if (h.id && !seenIds.has(h.id)) mergedHistory.push(h); });
+            mergedHistory.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+            data = { equipment: merged, history: mergedHistory };
+            equipment  = merged;
+            historyLog = mergedHistory;
+            _dataVersion = fresh._v || null;
+            renderTable(); updateStats(); renderLoans();
+            showToast('info', 'Auto-merged concurrent changes from another session.');
+          }
+        }
       }
     }
-  } catch(e) { /* version check failed — proceed rather than blocking the save */ }
+  } catch(e) { /* version check unavailable — proceed to avoid blocking the save */ }
 
   const newVersion = Date.now().toString();
   const payload = Object.assign({}, data, { _v: newVersion });
