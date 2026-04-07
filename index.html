@@ -1929,12 +1929,18 @@ function handleBatchDeviceKey(e, id, idx) {
       const item = equipment.find(i => i.CHSAssetNo && i.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
       if (item) {
         const on = item.OnLoanTo && item.Returned !== 'Yes';
-        window._batchStatus[id] = on
-          ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — already on loan to ${item.OnLoanTo}</span>`
-          : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
+        const newStart = document.getElementById('b-start-date')?.value || '';
+        const clearsBeforeStart = on && item.LoanEndDate && item.LoanEndDate <= newStart;
+        if (!on) {
+          window._batchStatus[id] = '<span style="color:var(--green)">&#x2713; ' + (item.Model||'Found') + '</span>';
+        } else if (clearsBeforeStart) {
+          window._batchStatus[id] = '<span style="color:var(--green)">&#x2713; ' + (item.Model||item.CHSAssetNo) + ' &mdash; returns ' + formatDisplayDate(item.LoanEndDate) + ', before your loan</span>';
+        } else {
+          window._batchStatus[id] = '<span style="color:var(--amber)">&#x26A0; ' + (item.Model||item.CHSAssetNo) + ' &mdash; on loan to ' + esc(item.OnLoanTo) + ' until ' + formatDisplayDate(item.LoanEndDate||'?') + '</span>';
+        }
         if (d) d.value = item.CHSAssetNo;
       } else {
-        window._batchStatus[id] = `<span style="color:var(--red)">✗ Not found</span>`;
+        window._batchStatus[id] = '<span style="color:var(--red)">&#x2717; Not found</span>';
       }
     }
     // Add new row and render everything once
@@ -1958,10 +1964,17 @@ function updateBatchDevice(id, val) {
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
     const upcomingForItem = getUpcomingLoanForItem(item.id);
-    let statusHtml = on
-      ? `<span style="color:var(--amber)">⚠ ${item.Model||item.CHSAssetNo} — on loan to ${item.OnLoanTo}</span>`
-      : `<span style="color:var(--green)">✓ ${item.Model || 'Found'}</span>`;
-    if (upcomingForItem) statusHtml += ` <span style="color:#6d28d9;font-size:11px">⏳ Due for ${esc(upcomingForItem.loanTo)} ${formatDisplayDate(upcomingForItem.startDate)}</span>`;
+    const newStart = document.getElementById('b-start-date')?.value || '';
+    const clearsBeforeStart = on && item.LoanEndDate && item.LoanEndDate <= newStart;
+    let statusHtml;
+    if (!on) {
+      statusHtml = '<span style="color:var(--green)">&#x2713; ' + (item.Model || 'Found') + '</span>';
+    } else if (clearsBeforeStart) {
+      statusHtml = '<span style="color:var(--green)">&#x2713; ' + (item.Model || item.CHSAssetNo) + ' &mdash; returns ' + formatDisplayDate(item.LoanEndDate) + ', before your loan</span>';
+    } else {
+      statusHtml = '<span style="color:var(--amber)">&#x26A0; ' + (item.Model || item.CHSAssetNo) + ' &mdash; on loan to ' + esc(item.OnLoanTo) + ' until ' + formatDisplayDate(item.LoanEndDate || '?') + '</span>';
+    }
+    if (upcomingForItem) statusHtml += ' <span style="color:#6d28d9;font-size:11px">&#x23F3; Upcoming: ' + esc(upcomingForItem.loanTo) + ' from ' + formatDisplayDate(upcomingForItem.startDate) + '</span>';
     window._batchStatus[id] = statusHtml;
     d.value = item.CHSAssetNo;
   } else {
@@ -2257,13 +2270,21 @@ async function submitBatchLoan() {
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
 
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
+  // A device is only a conflict if it is currently on loan AND its active loan
+  // ends AFTER the new loan starts. If the active loan ends on or before the new
+  // start date, the equipment will be back in time -- treat as clean.
+  function isDateConflict(item) {
+    if (!item.OnLoanTo || item.Returned === 'Yes') return false;
+    if (!item.LoanEndDate) return true; // no end date -- assume conflict
+    return item.LoanEndDate > startDate; // ends strictly after new loan starts
+  }
   const alreadyOnLoan = allFound.filter(d => {
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-    return item && item.OnLoanTo && item.Returned !== 'Yes';
+    return item && isDateConflict(item);
   });
   const cleanDevices = allFound.filter(d => {
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-    return item && !(item.OnLoanTo && item.Returned !== 'Yes');
+    return item && !isDateConflict(item);
   });
 
   if (!allFound.length) { showErr('No valid devices found. Check asset numbers above.'); return; }
@@ -2276,7 +2297,7 @@ async function submitBatchLoan() {
     return {
       assetNo: item.CHSAssetNo, model: item.Model || '',
       currentLoanTo: item.OnLoanTo, currentEnd,
-      type: (!currentEnd || currentEnd < startDate) ? 'available' : 'overlap',
+      type: (!currentEnd || currentEnd <= startDate) ? 'available' : 'overlap',
       overlapDays
     };
   });
