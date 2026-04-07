@@ -2075,8 +2075,6 @@ async function _findOrphanCandidates() {
       orphanedByBatch[e.BatchID].push(e);
     }
   });
-  if (!Object.keys(orphanedByBatch).length) return [];
-
   // For each candidate batch, look for a loanDoc in Firebase
   const candidates = [];
   for (const [batchId, items] of Object.entries(orphanedByBatch)) {
@@ -2086,6 +2084,38 @@ async function _findOrphanCandidates() {
       if (doc && doc.loanTo) candidates.push({ batchId, items, doc });
     } catch(e) { /* no loanDoc saved -- nothing to recover from */ }
   }
+
+  // Case C: loanDoc exists in Firebase but equipment items were never updated at all
+  // (no BatchID, no OnLoanTo) — the Object.assign + save never ran.
+  try {
+    const allDocsResp = await fetch(FB_URL + '/loanDocs.json');
+    const allDocs = await allDocsResp.json();
+    if (allDocs) {
+      const today = nzDate();
+      for (const [batchId, doc] of Object.entries(allDocs)) {
+        // Skip if already caught by Cases A/B above
+        if (candidates.some(c => c.batchId === batchId)) continue;
+        // Skip invalid or expired docs
+        if (!doc || !doc.loanTo || !doc.items) continue;
+        if (doc.endDate && doc.endDate < today) continue;
+        // doc.items may be a Firebase object (numeric keys) or a real array
+        const docItems = Array.isArray(doc.items) ? doc.items : Object.values(doc.items);
+        const assetNos = docItems.map(i => i.CHSAssetNo).filter(Boolean);
+        if (!assetNos.length) continue;
+        // Check whether any of those equipment items already reflect this loan
+        const anyOnLoan = equipment.some(e =>
+          assetNos.includes(e.CHSAssetNo) &&
+          (e.BatchID === batchId ||
+           (e.OnLoanTo === doc.loanTo && e.LoanEndDate === doc.endDate && e.Returned !== 'Yes'))
+        );
+        if (!anyOnLoan) {
+          const matchingItems = equipment.filter(e => assetNos.includes(e.CHSAssetNo));
+          if (matchingItems.length) candidates.push({ batchId, items: matchingItems, doc });
+        }
+      }
+    }
+  } catch(e) { /* couldn't fetch all loanDocs — skip Case C */ }
+
   return candidates;
 }
 
