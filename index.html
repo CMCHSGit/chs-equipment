@@ -2708,8 +2708,8 @@ function renderLoans() {
       return '<div class="loan-device">' +
         '<div class="loan-device-info">' +
         '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
-        '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') +
-        (currentLoan ? ' · <span style="color:var(--amber)">Currently with ' + esc(currentLoan) + '</span>' : '') +
+        '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') + '</div>' +
+        (currentLoan ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer from <strong>' + esc(currentLoan) + '</strong></div>' : '') +
         '</div></div></div>';
     }).join('');
     return '<div class="loan-card" style="border-color:#c4b5fd">' +
@@ -3568,6 +3568,21 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
     };
   }
 
+}
+
+function navigateToUpcomingLoan(upcomingId) {
+  switchTab('loans');
+  setTimeout(() => {
+    // Upcoming loan cards have body id="ulc_{id}" — expand it and scroll to it
+    const cardBody = document.getElementById('ulc_' + upcomingId);
+    const card = cardBody ? cardBody.closest('.loan-card') : null;
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.style.transition = 'box-shadow .3s';
+      card.style.boxShadow = '0 0 0 3px #6d28d9';
+      setTimeout(() => { card.style.boxShadow = ''; }, 2000);
+    }
+  }, 150);
 }
 
 function navigateToLoanByKey(key) {
@@ -5044,7 +5059,7 @@ function renderCalendar() {
     if (u.startDate && u.startDate > winEnd) return;
     rows.push({ loanTo: u.loanTo, location: u.location || '',
       startDate: u.startDate || '', endDate: u.endDate || '',
-      items: u.items, type: 'upcoming' });
+      items: u.items, type: 'upcoming', upcomingId: u.id });
   });
 
   // Sort rows according to selected sort option
@@ -5137,8 +5152,12 @@ function renderCalendar() {
     html += '<div style="display:flex;align-items:stretch;min-height:' + ROW_H + 'px;border-bottom:1px solid var(--border)">';
 
     // Label cell
-    const _navKey = encodeURIComponent(g.loanTo) + '|||' + (g.endDate || '');
-    html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer" onclick="navigateToLoanByKey(decodeURIComponent(\'' + _navKey + '\'))" title="Go to this loan in Active Loans">';
+    const _isUpcomingRow = g.type === 'upcoming';
+    const _navOnclick = _isUpcomingRow
+      ? 'navigateToUpcomingLoan(\'' + (g.upcomingId || '') + '\')'
+      : 'navigateToLoanByKey(decodeURIComponent(\'' + encodeURIComponent(g.loanTo) + '|||' + (g.endDate || '') + '\'))';
+    const _navTitle = _isUpcomingRow ? 'Go to this upcoming loan' : 'Go to this loan in Active Loans';
+    html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer" onclick="' + _navOnclick + '" title="' + _navTitle + '">';
     html += '<input type="color" value="' + color + '" title="Pick colour" style="width:20px;height:20px;border:none;border-radius:4px;cursor:pointer;flex-shrink:0;padding:0" onchange="saveLoanColor(\'' + key + '\',this.value);renderCalendar()">';
     html += '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (isUpcoming ? '#6d28d9' : 'var(--text)') + '">' + esc(g.loanTo) + (isUpcoming ? ' <span style="font-size:10px;opacity:.7">⏳</span>' : '') + '</div>';
     html += '<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') + (g.endDate ? ' · ' + formatDisplayDate(g.endDate) : '') + '</div></div>';
