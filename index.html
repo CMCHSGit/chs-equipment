@@ -3199,6 +3199,12 @@ function unlockImport() {
 // ── LOAN DOCUMENT ──────────────────────────────────────────────────────
 let _currentLoanDocItems = [];
 
+function _loanDocEditHandler() {
+  document.getElementById('doc-edited-note').style.display = 'block';
+  const sb = document.getElementById('doc-save-btn');
+  if (sb) sb.style.display = 'inline-flex';
+}
+
 function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   _currentLoanDocItems = loanItems;
   const today = nzDate();
