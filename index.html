@@ -1988,7 +1988,7 @@ function closeConflictModal() {
   _conflictProceedCallback = null;
 }
 
-// ── ORPHANED LOAN RECOVERY ────────────────────────────────────────────────
+// -- ORPHANED LOAN RECOVERY --------------------------------------------------
 // An "orphaned" loan = equipment has a BatchID set but OnLoanTo is blank,
 // meaning the main data.json save was lost (e.g. page refreshed during the
 // 800ms debounce window, or a concurrent session overwrote it). The loanDoc
@@ -2017,14 +2017,14 @@ async function checkOrphanedLoans() {
       if (doc && doc.loanTo) {
         _orphanCandidates.push({ batchId, items, doc });
       }
-    } catch(e) { /* loanDoc missing — can't recover */ }
+    } catch(e) { /* loanDoc missing - cannot recover */ }
   }
   if (!_orphanCandidates.length) return;
 
   // Show the recover button on the loans tab
   const btn = document.getElementById('orphan-scan-btn');
   if (btn) btn.style.display = 'inline-flex';
-  showToast('warn', _orphanCandidates.length + ' loan' + (_orphanCandidates.length > 1 ? 's' : '') + ' may not have saved — click "Recover Loan" on the Active Loans tab.');
+  showToast('warn', _orphanCandidates.length + ' loan' + (_orphanCandidates.length > 1 ? 's' : '') + ' may not have saved -- click "Recover Loan" on the Active Loans tab.');
 }
 
 function scanForOrphanedLoans() {
@@ -2041,12 +2041,12 @@ function showOrphanModal(candidate) {
   const total = _orphanCandidates.length;
   const idx   = _orphanCandidates.indexOf(candidate) + 1;
   document.getElementById('orphan-subtitle').textContent =
-    (total > 1 ? idx + ' of ' + total + ' — ' : '') + 'Batch ID: ' + batchId;
+    (total > 1 ? idx + ' of ' + total + ' - ' : '') + 'Batch ID: ' + batchId;
 
   const itemRows = items.map(e =>
-    '<div style="font-family:'DM Mono',monospace;font-size:13px;padding:4px 0;border-bottom:1px solid var(--border)">' +
+    '<div class="td-mono" style="padding:4px 0;border-bottom:1px solid var(--border)">' +
     '<strong>' + esc(e.CHSAssetNo) + '</strong>' +
-    (e.Model ? ' <span style="color:var(--text2)">· ' + esc(e.Model) + '</span>' : '') +
+    (e.Model ? ' <span style="color:var(--text2)">&middot; ' + esc(e.Model) + '</span>' : '') +
     (e.SerialNo ? ' <span style="color:var(--text3);font-size:11px">SN: ' + esc(e.SerialNo) + '</span>' : '') +
     '</div>'
   ).join('');
@@ -2056,7 +2056,7 @@ function showOrphanModal(candidate) {
     ['Location',         esc(doc.location)],
     ['Start Date',       esc(doc.startDate)],
     ['End Date',         esc(doc.endDate)],
-    ['Account Manager',  esc(doc.accountManager || '—')],
+    ['Account Manager',  esc(doc.accountManager || '&mdash;')],
   ].map(([k, v]) =>
     '<div style="display:flex;gap:8px;font-size:13px;padding:3px 0">' +
     '<span style="color:var(--text2);min-width:120px">' + k + ':</span>' +
@@ -2065,7 +2065,7 @@ function showOrphanModal(candidate) {
 
   document.getElementById('orphan-body').innerHTML =
     '<div style="background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius);padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--amber)">' +
-    '<strong>These items have a BatchID but no loan data — the save likely did not complete.</strong><br>' +
+    '<strong>These items have a BatchID but no loan data &mdash; the save likely did not complete.</strong><br>' +
     'The loan document in Firebase has been found and the details below can be re-applied.' +
     '</div>' +
     '<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em">Loan Details (from saved document)</div>' +
