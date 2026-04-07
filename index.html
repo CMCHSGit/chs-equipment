@@ -832,7 +832,11 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
-    <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:80vh"></div>
+    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border);background:var(--surface2)">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Notes <span style="font-weight:400;color:var(--text3)">(auto-saves)</span></label>
+      <textarea id="loan-doc-notes-input" rows="2" placeholder="Enter notes for this loan..." style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;outline:none;box-sizing:border-box;margin-bottom:10px" oninput="syncLoanDocNotes(this.value)" onblur="saveLoanDocNotes(this.value)"></textarea>
+    </div>
+    <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:calc(80vh - 90px)"></div>
   </div>
 </div>
 
@@ -3199,6 +3203,62 @@ function unlockImport() {
 // ── LOAN DOCUMENT ──────────────────────────────────────────────────────
 let _currentLoanDocItems = [];
 
+
+// Sync notes textarea value into the printable Notes cell (so it prints correctly)
+function syncLoanDocNotes(val) {
+  const notesAuthTable = document.getElementById('loan-doc-notes-table');
+  const notesCell = notesAuthTable && notesAuthTable.querySelectorAll('tr')[0] && notesAuthTable.querySelectorAll('tr')[0].querySelectorAll('td')[1];
+  if (notesCell) notesCell.innerText = val;
+}
+
+// Auto-save notes to equipment records + Firebase on blur
+async function saveLoanDocNotes(val) {
+  if (!window._currentLoanDocInfo) return;
+  const loanItems = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
+  if (!loanItems || !loanItems.length) return;
+
+  // Update equipment Notes field for all items in the loan
+  let changed = false;
+  loanItems.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
+    if (idx >= 0 && equipment[idx].Notes !== val) {
+      equipment[idx].Notes = val;
+      changed = true;
+    }
+  });
+
+  // Save equipment data
+  if (changed) {
+    setSync('saving', 'Saving...');
+    try {
+      await saveBin({ equipment, history: historyLog });
+      setSync('ok', 'Saved');
+    } catch(e) {
+      setSync('err', 'Save failed');
+      showToast('error', 'Notes save failed: ' + e.message);
+      return;
+    }
+  }
+
+  // Also update loanDoc in Firebase so notes survive page reload
+  const pdfKey = window._currentLoanDocInfo._pdfKey;
+  if (pdfKey) {
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+      const existing = r.ok ? await r.json() : {};
+      if (existing) {
+        existing.notes = val;
+        existing.notesCell = val;
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(existing)
+        });
+      }
+    } catch(e) { console.warn('Could not update loanDoc notes', e); }
+  }
+}
+
 function _loanDocEditHandler() {
   document.getElementById('doc-edited-note').style.display = 'block';
   const sb = document.getElementById('doc-save-btn');
@@ -3315,13 +3375,15 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   window._currentLoanDocInfo = { loanInfo, loanItems, _pdfKey: window._pendingLoanDocPdfKey || null };
   window._pendingLoanDocPdfKey = null;
   // Delegated input listener on the container — fires for any contenteditable
-  // inside the modal, including dynamically added rows. Defined at module level
-  // so it can be removed/re-added cleanly and referenced from saveLoanDocChanges.
+  // inside the modal, including dynamically added rows.
   const ldc = document.getElementById('loan-doc-content');
   if (ldc) {
     ldc.removeEventListener('input', _loanDocEditHandler);
     ldc.addEventListener('input', _loanDocEditHandler);
   }
+  // Populate the notes textarea above the form
+  const notesInput = document.getElementById('loan-doc-notes-input');
+  if (notesInput) notesInput.value = (savedExtra && (savedExtra.notesCell || savedExtra.batchNotes)) || (loanItems && loanItems[0] && loanItems[0].Notes) || '';
 }
 
 function formatDisplayDate(d) {
