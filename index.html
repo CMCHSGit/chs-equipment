@@ -1410,16 +1410,20 @@ function submitLoan() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager || '',
+          notes: document.getElementById('f-notes').value || '',
           items: [{ CHSAssetNo: currentItem.CHSAssetNo, Model: currentItem.Model, Description: currentItem.Description, SerialNo: currentItem.SerialNo }]
         })
       });
     } catch(e) { console.warn('Could not save loan doc', e); }
   }, 300);
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
-  scheduleSave(); updateStats(); renderTable();
+  updateStats(); renderTable();
+  setSync('saving', 'Saving...');
+  saveBin({ equipment, history: historyLog }).then(() => setSync('ok', 'Saved')).catch(e => { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); });
   // Generate loan document
+  const singleNotes = document.getElementById('f-notes').value || '';
   window._lastLoanDoc = { items: [equipment[idx]], info: { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' } };
-  generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' });
+  generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' }, null, { notesCell: '', authCell: '', batchNotes: singleNotes });
   clearScan();
   showToast('success', `${currentItem.CHSAssetNo} loaned to ${loanTo}`);
 }
@@ -3346,7 +3350,7 @@ async function viewHistoryPDF(pdfKey) {
     const d = await r.json();
     if (d && d.items) {
       window._pendingLoanDocPdfKey = pdfKey;
-      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'' });
+      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' });
     } else {
       showToast('error', 'Loan document not found');
     }
