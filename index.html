@@ -667,6 +667,16 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
             <option value="12">12 weeks</option>
             <option value="24">6 months</option>
           </select>
+          <select class="filter-select" id="cal-sort" onchange="renderCalendar()" style="font-size:13px">
+            <option value="start-asc">Start date (earliest first)</option>
+            <option value="start-desc">Start date (latest first)</option>
+            <option value="end-asc">Expiry (soonest first)</option>
+            <option value="end-desc">Expiry (latest first)</option>
+            <option value="dur-asc">Duration (shortest first)</option>
+            <option value="dur-desc">Duration (longest first)</option>
+            <option value="name-asc">Name (A → Z)</option>
+            <option value="name-desc">Name (Z → A)</option>
+          </select>
         </div>
       </div>
       <div id="calendar-container" style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 240px)"></div>
@@ -5017,8 +5027,25 @@ function renderCalendar() {
       items: u.items, type: 'upcoming' });
   });
 
-  // Sort by start date
-  rows.sort((a, b) => (a.startDate || '9999') < (b.startDate || '9999') ? -1 : 1);
+  // Sort rows according to selected sort option
+  const calSort = document.getElementById('cal-sort')?.value || 'start-asc';
+  function _durDays(g) {
+    if (!g.startDate || !g.endDate) return 0;
+    return Math.max(0, daysBetween(g.startDate, g.endDate));
+  }
+  rows.sort((a, b) => {
+    switch (calSort) {
+      case 'start-asc':  return (a.startDate || '9999') < (b.startDate || '9999') ? -1 : 1;
+      case 'start-desc': return (a.startDate || '0000') > (b.startDate || '0000') ? -1 : 1;
+      case 'end-asc':    return (a.endDate || '9999') < (b.endDate || '9999') ? -1 : 1;
+      case 'end-desc':   return (a.endDate || '0000') > (b.endDate || '0000') ? -1 : 1;
+      case 'dur-asc':    return _durDays(a) - _durDays(b);
+      case 'dur-desc':   return _durDays(b) - _durDays(a);
+      case 'name-asc':   return (a.loanTo || '').localeCompare(b.loanTo || '');
+      case 'name-desc':  return (b.loanTo || '').localeCompare(a.loanTo || '');
+      default:           return 0;
+    }
+  });
 
   if (!rows.length) {
     container.innerHTML = '<div style="text-align:center;padding:60px;color:var(--text3)">No loans in this date range</div>';
