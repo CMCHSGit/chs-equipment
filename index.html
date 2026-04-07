@@ -5243,17 +5243,53 @@ async function syncFromFirebase() {
 
 // Poll Firebase every 30 seconds for version changes while the tab is visible.
 function startAutoSync() {
-  setInterval(async () => {
-    if (document.hidden) return; // skip when tab is in background
-    try {
-      const vr = await fetch(FB_URL + '/data/_v.json');
-      if (!vr.ok) return;
-      const remoteV = await vr.json();
-      if (remoteV && _dataVersion && remoteV !== _dataVersion) {
+  // Use Firebase Server-Sent Events for instant real-time updates.
+  // Firebase RTDB streams change events over SSE — no polling delay.
+  let _es = null;
+
+  function connect() {
+    if (_es) { try { _es.close(); } catch(e) {} }
+    _es = new EventSource(FB_URL + '/data/_v.json?accept=text/event-stream');
+
+    _es.addEventListener('put', async (e) => {
+      try {
+        const payload = JSON.parse(e.data);
+        const remoteV = payload && payload.data;
+        // Ignore the initial "put" on connect (same version we already have)
+        if (!remoteV || !_dataVersion || remoteV === _dataVersion) return;
         await syncFromFirebase();
+      } catch(err) { /* parse error — ignore */ }
+    });
+
+    _es.onerror = () => {
+      // Connection dropped — close and reconnect after 5 seconds
+      try { _es.close(); } catch(e) {}
+      _es = null;
+      setTimeout(connect, 5000);
+    };
+  }
+
+  if (typeof EventSource !== 'undefined') {
+    connect();
+    // Reconnect whenever a hidden tab becomes visible again
+    // (SSE connections can go stale after long background periods)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && (!_es || _es.readyState === EventSource.CLOSED)) {
+        connect();
       }
-    } catch(e) { /* network blip */ }
-  }, 30 * 1000);
+    });
+  } else {
+    // Fallback: poll every 15s if SSE not supported
+    setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const vr = await fetch(FB_URL + '/data/_v.json');
+        if (!vr.ok) return;
+        const remoteV = await vr.json();
+        if (remoteV && _dataVersion && remoteV !== _dataVersion) await syncFromFirebase();
+      } catch(e) {}
+    }, 15 * 1000);
+  }
 }
 
 (function() {
