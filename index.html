@@ -1432,8 +1432,9 @@ function submitLoan() {
   updateStats(); renderTable();
   setSync('saving', 'Saving...');
   saveBin({ equipment, history: historyLog }).then(() => setSync('ok', 'Saved')).catch(e => { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); });
-  // Generate loan document
+  // Generate loan document — set _pendingLoanDocPdfKey first so saves go to the right Firebase path
   const singleNotes = document.getElementById('f-notes').value || '';
+  window._pendingLoanDocPdfKey = singleLoanKey;
   window._lastLoanDoc = { items: [equipment[idx]], info: { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' } };
   generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager||'' }, null, { notesCell: '', authCell: '', batchNotes: singleNotes });
   clearScan();
@@ -3307,16 +3308,14 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   // Store current loan info for saving
   window._currentLoanDocInfo = { loanInfo, loanItems, _pdfKey: window._pendingLoanDocPdfKey || null };
   window._pendingLoanDocPdfKey = null;
-  // Track edits
-  setTimeout(() => {
-    document.querySelectorAll('#loan-doc-content [contenteditable]').forEach(el => {
-      el.addEventListener('input', () => {
-        document.getElementById('doc-edited-note').style.display = 'block';
-        const sb = document.getElementById('doc-save-btn');
-        if (sb) sb.style.display = 'inline-flex';
-      }, { once: true });
-    });
-  }, 200);
+  // Delegated input listener on the container — fires for any contenteditable
+  // inside the modal, including dynamically added rows. Defined at module level
+  // so it can be removed/re-added cleanly and referenced from saveLoanDocChanges.
+  const ldc = document.getElementById('loan-doc-content');
+  if (ldc) {
+    ldc.removeEventListener('input', _loanDocEditHandler);
+    ldc.addEventListener('input', _loanDocEditHandler);
+  }
 }
 
 function formatDisplayDate(d) {
@@ -3400,14 +3399,7 @@ function addDocRow() {
   // Focus first cell of new row
   const firstCell = tr.querySelector('td');
   if (firstCell) { firstCell.focus(); }
-  // Register input listeners on new row cells
-  tr.querySelectorAll('td').forEach(td => {
-    td.addEventListener('input', () => {
-      document.getElementById('doc-edited-note').style.display = 'block';
-      const s = document.getElementById('doc-save-btn');
-      if (s) s.style.display = 'inline-flex';
-    });
-  });
+  // No per-cell listeners needed -- delegated listener on #loan-doc-content handles all inputs
   showToast('info', 'Row added — fill in details then click Save Changes');
 }
 
@@ -3466,7 +3458,7 @@ async function saveLoanDocChanges() {
 
   // Persist to Firebase — this is what makes it survive page reloads
   try {
-    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+    const saveResp = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -3481,6 +3473,7 @@ async function saveLoanDocChanges() {
         authCell
       })
     });
+    if (!saveResp.ok) throw new Error('HTTP ' + saveResp.status);
   } catch(e) {
     showToast('error', 'Could not save to database: ' + e.message);
     return;
@@ -3504,6 +3497,9 @@ async function saveLoanDocChanges() {
   document.getElementById('doc-edited-note').style.display = 'none';
   const sb = document.getElementById('doc-save-btn');
   if (sb) sb.style.display = 'none';
+  // Ensure the delegated listener is still attached after save
+  const ldcAfterSave = document.getElementById('loan-doc-content');
+  if (ldcAfterSave) { ldcAfterSave.removeEventListener('input', _loanDocEditHandler); ldcAfterSave.addEventListener('input', _loanDocEditHandler); }
   showToast('success', 'Loan form saved ✓' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
 }
 
