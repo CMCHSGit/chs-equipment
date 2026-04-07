@@ -812,7 +812,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <!-- LOAN DOCUMENT MODAL -->
 <div class="modal-overlay" id="loan-doc-modal">
-  <div class="modal" style="max-width:900px;padding:0">
+  <div class="modal" style="max-width:960px;padding:0;max-height:96vh;display:flex;flex-direction:column">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-size:16px;font-weight:600">Loan Form</div>
@@ -833,7 +833,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       </div>
     </div>
 
-    <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:calc(80vh - 90px)"></div>
+    <div id="loan-doc-content" style="padding:24px;overflow-y:auto;flex:1;min-height:0"></div>
   </div>
 </div>
 
@@ -4850,6 +4850,26 @@ function initDragScroll() {
   checkAuth();
   const lpw = document.getElementById('login-pw'); if (lpw) lpw.focus();
   setTimeout(initDragScroll, 1000);
+
+  // Auto-refresh after 1 hour of inactivity — ensures stale sessions get fresh data
+  // when someone returns to a tab they left open.
+  let _lastActivity = Date.now();
+  const _IDLE_MS = 60 * 60 * 1000; // 1 hour
+  ['mousemove','keydown','touchstart','click','scroll'].forEach(evt =>
+    document.addEventListener(evt, () => { _lastActivity = Date.now(); }, { passive: true })
+  );
+  // When the tab becomes visible again, check whether the user has been idle for ≥ 1 hour
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (Date.now() - _lastActivity) >= _IDLE_MS) {
+      window.location.reload();
+    }
+  });
+  // Also check periodically while the tab is visible (catches long idle without tab switch)
+  setInterval(() => {
+    if (!document.hidden && (Date.now() - _lastActivity) >= _IDLE_MS) {
+      window.location.reload();
+    }
+  }, 60 * 1000); // check every minute
 })();
 </script>
 </body>
