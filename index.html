@@ -832,10 +832,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
-    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border);background:var(--surface2)">
-      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Notes <span style="font-weight:400;color:var(--text3)">(auto-saves)</span></label>
-      <textarea id="loan-doc-notes-input" rows="2" placeholder="Enter notes for this loan..." style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;outline:none;box-sizing:border-box;margin-bottom:10px" oninput="syncLoanDocNotes(this.value)" onblur="saveLoanDocNotes(this.value)"></textarea>
-    </div>
+
     <div id="loan-doc-content" style="padding:24px;overflow-y:auto;max-height:calc(80vh - 90px)"></div>
   </div>
 </div>
@@ -3433,7 +3430,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <table id="loan-doc-notes-table" style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to add notes">${savedExtra?.notesCell || savedExtra?.batchNotes || ''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:40px;vertical-align:top;font-size:12px" colspan="6" title="Click to edit notes" onblur="saveLoanDocNotes(this.innerText.trim())">${savedExtra?.notesCell || savedExtra?.batchNotes || ''}</td>
         </tr>
         <tr>
           <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
@@ -3471,13 +3468,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
     ldc.removeEventListener('input', _loanDocEditHandler);
     ldc.addEventListener('input', _loanDocEditHandler);
   }
-  // Populate the notes textarea above the form, then sync immediately into the
-  // printable Notes cell so it appears when printing (setting .value doesn't fire input)
-  const notesInput = document.getElementById('loan-doc-notes-input');
-  if (notesInput) {
-    notesInput.value = (savedExtra && (savedExtra.notesCell || savedExtra.batchNotes)) || (loanItems && loanItems[0] && loanItems[0].Notes) || '';
-    syncLoanDocNotes(notesInput.value);
-  }
+
 }
 
 function formatDisplayDate(d) {
