@@ -4742,16 +4742,15 @@ async function confirmAddItemsToLoan() {
   renderTable(); updateStats();
   closeAddItemsModal();
 
-  // Collect ALL items currently on loan to this customer with matching end date
-  // Use a simple filter: same loanTo + endDate + not returned
-  const _allLoanItems = equipment.filter(e =>
-    e.OnLoanTo === g.loanTo &&
-    e.LoanEndDate === g.endDate &&
-    e.Returned !== 'Yes'
-  );
-  // Fallback if endDate matching is too strict: use BatchID OR loanTo
-  const _loanItems = _allLoanItems.length > 0 ? _allLoanItems :
-    equipment.filter(e => e.OnLoanTo === g.loanTo && e.Returned !== 'Yes');
+  // Collect ALL items for this loan — BatchID is the most reliable key since
+  // all original + newly added items share the same batchId
+  const _loanItems = batchId
+    ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
+    : equipment.filter(e =>
+        e.OnLoanTo === g.loanTo &&
+        (e.LoanEndDate || '') === (g.endDate || '') &&
+        e.Returned !== 'Yes'
+      );
 
   const _reviewInfo = {
     loanTo: g.loanTo, location: g.location,
