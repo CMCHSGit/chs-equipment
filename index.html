@@ -632,8 +632,8 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <option value="">All Account Managers</option>
         </select>
         <select class="filter-select" id="loans-sort" onchange="renderLoans()">
-          <option value="manager" selected>Account Manager</option>
-          <option value="recent">Most recent loan</option>
+          <option value="manager">Account Manager</option>
+          <option value="recent" selected>Most recent loan</option>
           <option value="alpha">Customer A–Z</option>
           <option value="expiry">Expiry (soonest)</option>
           <option value="start">Loan date</option>
@@ -5304,8 +5304,24 @@ async function syncFromFirebase() {
 
     // Also reload upcoming loans so real-time changes from other users appear
     await loadUpcomingLoans();
-    renderTable(); updateStats(); renderLoans(); renderHistory();
-    if (document.getElementById('panel-calendar')?.classList.contains('active')) renderCalendar();
+
+    // Only re-render the panel that is currently visible — avoids disrupting
+    // the user if they are filling out a loan form or have a modal open.
+    // The basket (batchDevices), all form inputs, and open modals are never touched.
+    const activePanel = document.querySelector('.panel.active')?.id || '';
+    const modalOpen   = !!document.querySelector('.modal-overlay.open');
+
+    updateStats(); // always safe — just updates stat numbers in the header
+
+    if (!modalOpen) {
+      if (activePanel === 'panel-database') renderTable();
+      if (activePanel === 'panel-loans')    renderLoans();
+      if (activePanel === 'panel-history')  renderHistory();
+      if (activePanel === 'panel-calendar') renderCalendar();
+      // Scan/Loan tab: only refresh device status badges, never touch the form
+      if (activePanel === 'panel-scan')     renderBatchDevices();
+    }
+
     setSync('ok', 'Synced ✓');
   } catch(e) { /* network blip — skip this cycle */ }
 }
