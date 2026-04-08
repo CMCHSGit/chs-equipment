@@ -4750,25 +4750,38 @@ async function confirmAddItemsToLoan() {
   renderLoans();
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
 
-  // Switch to Active Loans and open the loan form — give renderLoans() time to rebuild _loanGroupMap
+  // Switch to Active Loans — switchTab('loans') calls renderLoans() which builds _loanGroupMap
   switchTab('loans');
+
+  // Wait for renderLoans to finish, then open the loan form directly by finding the group
   setTimeout(async () => {
     window._autoSendOnClose = false;
-    // Build the key the same way renderLoans does
-    const reviewKey = encodeURIComponent(_reviewLoanTo + '|||' + _reviewEndDate).replace(/'/g, "%27");
-    if (window._loanGroupMap && window._loanGroupMap[reviewKey]) {
-      await viewLoanDocByKey(reviewKey);
-    } else {
-      // Fallback: find the group by loanTo + batchId
-      const fallbackGroup = (window._loanGroups || []).find(gr =>
-        gr.loanTo === _reviewLoanTo && gr.items.some(i => i.BatchID === _reviewBatchId)
-      );
-      if (fallbackGroup) {
-        const fbKey = encodeURIComponent(fallbackGroup.loanTo + '|||' + fallbackGroup.endDate).replace(/'/g, "%27");
-        await viewLoanDocByKey(fbKey);
+    // Find the group directly from the rebuilt _loanGroups array
+    const targetGroup = (window._loanGroups || []).find(gr =>
+      gr.loanTo === _reviewLoanTo &&
+      gr.items.some(i => i.BatchID === _reviewBatchId || i.CHSAssetNo === (validRows[0]?.value))
+    );
+    if (targetGroup) {
+      // Directly invoke the loan doc with the group — bypasses key lookup entirely
+      const items = targetGroup.items.map(i =>
+        equipment.find(e => e.id === i.id) || equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) || i
+      ).filter(Boolean);
+      const startDate = targetGroup.startDate || (items[0] && items[0].LoanStartDate) || '';
+      const am = items[0]?.AccountManager || '';
+      const bId = items[0]?.BatchID;
+      let savedRows = null, savedExtra = {};
+      if (bId) {
+        try {
+          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(bId) + '.json');
+          const d = await r.json();
+          if (d && d.savedRows) { savedRows = d.savedRows; }
+          if (d) savedExtra = { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' };
+        } catch(e) {}
       }
+      window._pendingLoanDocPdfKey = bId || null;
+      generateLoanDoc(items, { loanTo: targetGroup.loanTo, location: targetGroup.location, startDate, endDate: targetGroup.endDate, accountManager: am }, savedRows, savedExtra);
     }
-  }, 500);
+  }, 600);
 }
 
 // ── REMOVE DEVICE FROM LOAN ───────────────────────────────────────────
