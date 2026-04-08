@@ -861,6 +861,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="btn btn-sm" id="doc-send-email-btn" onclick="sendLoanDocEmail()" style="display:none;background:#0ea5e9;border-color:#0ea5e9;color:white" title="Send loan form to account manager">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Send Email
         </button>
+        <div id="doc-send-email-note" style="display:none;font-size:11px;color:#0ea5e9;font-weight:500">Will send on close</div>
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
         </button>
@@ -2564,6 +2565,8 @@ async function submitBatchLoan() {
     window._pendingLoanEmail = amEmailForConfirm
       ? { items: batchLoanItems, info: { loanTo, location, startDate, endDate }, email: amEmailForConfirm, amName: batchAM }
       : null;
+    // Only auto-send on close when this is a brand new loan just confirmed
+    window._autoSendOnClose = !!amEmailForConfirm;
 
     const badge = document.getElementById('loan-confirmed-badge');
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
@@ -3563,6 +3566,8 @@ async function sendLoanDocEmail() {
     );
     showToast('success', 'Loan form sent to ' + pending.email);
     window._pendingLoanEmail = null;
+    const noteEl = document.getElementById('doc-send-email-note');
+    if (noteEl) noteEl.style.display = 'none';
     if (btn) { btn.style.display = 'none'; btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Send Email'; }
   } catch(err) {
     showToast('error', 'Email failed: ' + (err.message || err));
@@ -3589,6 +3594,11 @@ async function viewUpcomingLoanDoc(upcomingId) {
       }
     }
   } catch(e) {}
+  const uAmEmail = u.borrowerEmail || getAMEmail(u.accountManager || '');
+  window._autoSendOnClose = false; // viewing existing upcoming loan — no auto-send
+  window._pendingLoanEmail = uAmEmail
+    ? { items, info: { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '' }, email: uAmEmail, amName: u.accountManager || '' }
+    : null;
   window._pendingLoanDocPdfKey = u.id;
   generateLoanDoc(items, { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '' }, savedRows, savedExtra);
 }
@@ -3705,9 +3715,11 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   document.getElementById('doc-edited-note').style.display = 'none';
   const saveBtn = document.getElementById('doc-save-btn');
   if (saveBtn) saveBtn.style.display = 'none';
-  // Show "Send Email" button only when there is a pending new-loan email to send
+  // Show "Send Email" button whenever there is an email address for this loan
   const sendBtn = document.getElementById('doc-send-email-btn');
+  const sendNote = document.getElementById('doc-send-email-note');
   if (sendBtn) sendBtn.style.display = window._pendingLoanEmail ? 'inline-flex' : 'none';
+  if (sendNote) sendNote.style.display = (window._pendingLoanEmail && window._autoSendOnClose) ? 'inline-flex' : 'none';
   // Store current loan info for saving
   window._currentLoanDocInfo = { loanInfo, loanItems, _pdfKey: window._pendingLoanDocPdfKey || null };
   window._pendingLoanDocPdfKey = null;
@@ -3798,13 +3810,23 @@ function formatDisplayDate(d) {
   return s;
 }
 
-function closeLoanDoc() {
-  // Save any pending notes before closing
+async function closeLoanDoc() {
+  // Auto-save the full form before closing (catches any unsaved edits)
   clearTimeout(window._notesSaveTimer);
-  const notesCell = document.getElementById('loan-doc-notes-cell');
-  if (notesCell && window._currentLoanDocInfo) {
-    saveLoanDocNotes(notesCell.innerText.trim());
+  if (window._currentLoanDocInfo) {
+    const notesCell = document.getElementById('loan-doc-notes-cell');
+    if (notesCell) saveLoanDocNotes(notesCell.innerText.trim());
+    // Auto-save the whole doc if it has edits (doc-edited-note is visible)
+    const editedNote = document.getElementById('doc-edited-note');
+    if (editedNote && editedNote.style.display !== 'none') {
+      try { await saveLoanDocChanges(); } catch(e) {}
+    }
   }
+  // Auto-send email only when this form was opened right after a new loan was confirmed
+  if (window._autoSendOnClose && window._pendingLoanEmail) {
+    try { await sendLoanDocEmail(); } catch(e) { console.warn('Auto-send email failed:', e); }
+  }
+  window._autoSendOnClose = false;
   document.getElementById('loan-doc-modal').classList.remove('open');
   window._currentLoanDocInfo = null;
 }
@@ -4016,6 +4038,14 @@ async function viewLoanDocByKey(key) {
   if (batchId) {
     window._loanDocCache = window._loanDocCache || {};
     window._loanDocCache[batchId] = { notes: savedExtra.batchNotes || '', notesCell: savedExtra.notesCell || '' };
+  }
+  // Populate email for the manual Send Email button, but do NOT auto-send on close
+  // (auto-send only happens right after a new loan is confirmed)
+  const amEmail = items[0]?.BorrowerEmail || getAMEmail(am);
+  if (!window._autoSendOnClose) {
+    window._pendingLoanEmail = amEmail
+      ? { items, info: { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate }, email: amEmail, amName: am }
+      : null;
   }
   window._pendingLoanDocPdfKey = batchId || null;
   generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am }, savedRows, savedExtra);
