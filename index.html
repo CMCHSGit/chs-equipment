@@ -858,6 +858,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="btn btn-sm" onclick="addDocRow()" title="Add accessory or manual item">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add row
         </button>
+        <button class="btn btn-sm" id="doc-send-email-btn" onclick="sendLoanDocEmail()" style="display:none;background:#0ea5e9;border-color:#0ea5e9;color:white" title="Send loan form to account manager">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Send Email
+        </button>
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
         </button>
@@ -2556,8 +2559,11 @@ async function submitBatchLoan() {
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
     }, 300);
 
+    // Store email details so user can send after editing the loan form
     const amEmailForConfirm = batchEmail || getAMEmail(batchAM);
-    if (amEmailForConfirm) sendLoanConfirmationEmail(batchLoanItems, { loanTo, location, startDate, endDate }, amEmailForConfirm, batchAM);
+    window._pendingLoanEmail = amEmailForConfirm
+      ? { items: batchLoanItems, info: { loanTo, location, startDate, endDate }, email: amEmailForConfirm, amName: batchAM }
+      : null;
 
     const badge = document.getElementById('loan-confirmed-badge');
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
@@ -2763,6 +2769,9 @@ function renderLoans() {
       '</div>' +
       '<div class="loan-card-badge">' +
         '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+        '</button>' +
         '<button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey(\'slc_ret_' + sgi + '\')">Return items</button>' +
       '</div>' +
       '</div>' +
@@ -2799,6 +2808,9 @@ function renderLoans() {
       '</div>' +
       '<div class="loan-card-badge">' +
         '<span class="status-badge badge-upcoming">⏳ Upcoming</span>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+        '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" style="color:var(--red);border-color:var(--red-border)" title="Cancel upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
         '</button>' +
@@ -3164,10 +3176,12 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
     console.log('Loan confirmation not sent - EmailJS not ready or no AM email');
     return;
   }
-  const allItems = [...loanItems, ...(window._currentLoanDocInfo?.manualRows || [])];
-  const itemsList = allItems.map(e =>
-    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')
-  ).join('\n');
+  // Use detailed items list from the form if available (includes manual rows + notes)
+  const itemsList = loanInfo.itemsDetail ||
+    [...loanItems, ...(window._currentLoanDocInfo?.manualRows || [])].map(e =>
+      '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')
+    ).join('\n');
+  const notesText = loanInfo.notesText || '';
 
   const manageLink  = APP_URL + '?tab=loans';
   const returnLink  = buildReturnLink(loanInfo.loanTo, loanInfo.endDate);
@@ -3182,6 +3196,7 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
       loan_start:        formatDisplayDate(loanInfo.startDate || nzDate()),
       loan_end:          formatDisplayDate(loanInfo.endDate   || ''),
       items:             itemsList,
+      notes:             notesText,
       manage_link:       manageLink,
       return_link:       returnLink,
       extend_link:       extendLink
@@ -3510,6 +3525,74 @@ async function saveLoanDocNotes(val) {
   }
 }
 
+// Send the loan form email when the user is happy with the form
+async function sendLoanDocEmail() {
+  const pending = window._pendingLoanEmail;
+  if (!pending) { showToast('error', 'No pending email found'); return; }
+  const btn = document.getElementById('doc-send-email-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    // Build a detailed items list from the current form (includes manual rows)
+    const rows = [];
+    const equipTable = [...document.querySelectorAll('#printable-loan-doc table')].find(t =>
+      t.querySelector('th')?.textContent.includes('CHS Asset'));
+    if (equipTable) {
+      equipTable.querySelectorAll('tbody tr').forEach(tr => {
+        const cells = tr.querySelectorAll('td');
+        if (cells.length >= 3) {
+          const asset = cells[0]?.innerText?.trim();
+          const desc  = cells[1]?.innerText?.trim();
+          const serial = cells[2]?.innerText?.trim();
+          if (asset || desc) rows.push((asset ? asset + ' — ' : '') + (desc || '') + (serial ? ' (SN: ' + serial + ')' : ''));
+        }
+      });
+    } else {
+      // Fallback to equipment items
+      rows.push(...pending.items.map(e =>
+        (e.CHSAssetNo ? e.CHSAssetNo + ' — ' : '') + (e.Model || '') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
+      ));
+    }
+    // Get notes from the form
+    const notesCell = document.getElementById('loan-doc-notes-cell');
+    const notesText = notesCell ? notesCell.innerText.trim() : '';
+    await sendLoanConfirmationEmail(
+      pending.items,
+      { ...pending.info, itemsDetail: rows.join('\n'), notesText },
+      pending.email,
+      pending.amName
+    );
+    showToast('success', 'Loan form sent to ' + pending.email);
+    window._pendingLoanEmail = null;
+    if (btn) { btn.style.display = 'none'; btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Send Email'; }
+  } catch(err) {
+    showToast('error', 'Email failed: ' + (err.message || err));
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Email'; }
+  }
+}
+
+// View loan form for an upcoming loan
+async function viewUpcomingLoanDoc(upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) { showToast('error', 'Upcoming loan not found'); return; }
+  const items = u.items.map(uItem =>
+    equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo) || uItem
+  ).filter(Boolean);
+  // Try to load saved loanDoc from Firebase
+  let savedRows = null, savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+  try {
+    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(u.id) + '.json');
+    if (r.ok) {
+      const d = await r.json();
+      if (d) {
+        if (d.savedRows) savedRows = d.savedRows;
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: d.notes || '' };
+      }
+    }
+  } catch(e) {}
+  window._pendingLoanDocPdfKey = u.id;
+  generateLoanDoc(items, { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '' }, savedRows, savedExtra);
+}
+
 function _loanDocEditHandler() {
   document.getElementById('doc-edited-note').style.display = 'block';
   const sb = document.getElementById('doc-save-btn');
@@ -3622,6 +3705,9 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   document.getElementById('doc-edited-note').style.display = 'none';
   const saveBtn = document.getElementById('doc-save-btn');
   if (saveBtn) saveBtn.style.display = 'none';
+  // Show "Send Email" button only when there is a pending new-loan email to send
+  const sendBtn = document.getElementById('doc-send-email-btn');
+  if (sendBtn) sendBtn.style.display = window._pendingLoanEmail ? 'inline-flex' : 'none';
   // Store current loan info for saving
   window._currentLoanDocInfo = { loanInfo, loanItems, _pdfKey: window._pendingLoanDocPdfKey || null };
   window._pendingLoanDocPdfKey = null;
