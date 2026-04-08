@@ -1502,7 +1502,7 @@ function submitLoan() {
     LoanStartDate: document.getElementById('f-start-date').value || '',
     LoanEndDate:   document.getElementById('f-end-date').value   || '',
     Returned: 'No',
-    Notes: document.getElementById('f-notes').value || equipment[idx].Notes || '',
+    Notes: equipment[idx].Notes || '',
     BorrowerEmail: borrowerEmail
   });
   const singleLoanKey = 'loan_' + uid();
@@ -2519,7 +2519,7 @@ async function submitBatchLoan() {
     for (const d of devicesToLoan) {
       const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
       if (idx < 0) continue;
-      Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', Notes: notes, BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
+      Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
       historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
     }
 
@@ -2545,11 +2545,14 @@ async function submitBatchLoan() {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, notes: notes,
+            items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ loanTo, location, startDate, endDate, accountManager: batchAM, notes: notes,
-            items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) })
+          body: JSON.stringify(loanDocPayload)
         });
+        window._loanDocCache = window._loanDocCache || {};
+        window._loanDocCache[batchId] = { notes: notes, notesCell: notes };
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
     }, 300);
 
@@ -2707,6 +2710,14 @@ function renderLoans() {
   window._loanGroupMap = {};
   groups.forEach((g, gi) => {
     const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
+    // Attach loan-specific notes from cached loanDocs (not from device Notes field)
+    const batchId = g.items[0]?.BatchID;
+    if (batchId && window._loanDocCache && window._loanDocCache[batchId]) {
+      const cached = window._loanDocCache[batchId];
+      g._loanNotes = cached.notesCell || cached.notes || '';
+    } else {
+      g._loanNotes = '';
+    }
     window._loanGroupMap[key] = g;
   });
   window._loanGroups = groups;
@@ -2804,7 +2815,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>${(() => { const n = g.items.find(e => e.Notes)?.Notes; return n ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(n)}</div>` : ''; })()}
+          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
@@ -3472,33 +3483,11 @@ function syncLoanDocNotes(val) {
 // Auto-save notes to equipment records + Firebase on blur
 async function saveLoanDocNotes(val) {
   if (!window._currentLoanDocInfo) return;
-  const loanItems = window._currentLoanDocInfo.loanItems || _currentLoanDocItems;
-  if (!loanItems || !loanItems.length) return;
 
-  // Update equipment Notes field for all items in the loan
-  let changed = false;
-  loanItems.forEach(item => {
-    const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
-    if (idx >= 0 && equipment[idx].Notes !== val) {
-      equipment[idx].Notes = val;
-      changed = true;
-    }
-  });
+  // Loan notes are stored only in the loanDoc — NOT written to equipment.Notes
+  // (equipment.Notes is reserved for device-specific notes that persist independently)
 
-  // Save equipment data
-  if (changed) {
-    setSync('saving', 'Saving...');
-    try {
-      await saveBin({ equipment, history: historyLog });
-      setSync('ok', 'Saved');
-    } catch(e) {
-      setSync('err', 'Save failed');
-      showToast('error', 'Notes save failed: ' + e.message);
-      return;
-    }
-  }
-
-  // Also update loanDoc in Firebase so notes survive page reload
+  // Update loanDoc in Firebase so notes survive page reload
   const pdfKey = window._currentLoanDocInfo._pdfKey;
   if (pdfKey) {
     try {
@@ -3512,6 +3501,10 @@ async function saveLoanDocNotes(val) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(existing)
         });
+        // Update local cache so loan card reflects the change without re-fetching
+        window._loanDocCache = window._loanDocCache || {};
+        window._loanDocCache[pdfKey] = existing;
+        renderLoans();
       }
     } catch(e) { console.warn('Could not update loanDoc notes', e); }
   }
@@ -3932,6 +3925,11 @@ async function viewLoanDocByKey(key) {
   if (!batchId) {
     const fallbackNotes = items.find(e => e.Notes)?.Notes || '';
     savedExtra = { notesCell: '', authCell: '', batchNotes: fallbackNotes };
+  }
+  // Cache the loanDoc so loan card can show loan-specific notes
+  if (batchId) {
+    window._loanDocCache = window._loanDocCache || {};
+    window._loanDocCache[batchId] = { notes: savedExtra.batchNotes || '', notesCell: savedExtra.notesCell || '' };
   }
   window._pendingLoanDocPdfKey = batchId || null;
   generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am }, savedRows, savedExtra);
