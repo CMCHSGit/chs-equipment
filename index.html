@@ -2614,6 +2614,31 @@ async function submitBatchLoan() {
       });
       await saveUpcomingLoans();
       scheduleSave();
+
+      // Open the loan form for the upcoming loan so the user can review/edit before email sends
+      const upcomingEquipItems = upcomingItems.map(ui => equipment.find(e => e.id === ui.id)).filter(Boolean);
+      const uAmEmail = batchEmail || getAMEmail(batchAM);
+      window._pendingLoanEmail = uAmEmail
+        ? { items: upcomingEquipItems, info: { loanTo, location, startDate, endDate }, email: uAmEmail, amName: batchAM }
+        : null;
+      window._autoSendOnClose = !!uAmEmail;
+      window._pendingLoanDocPdfKey = upcomingId;
+
+      // Save the loanDoc for this upcoming loan too
+      try {
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM,
+          notes: document.getElementById('b-notes').value,
+          items: upcomingEquipItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(upcomingId) + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loanDocPayload)
+        });
+        window._loanDocCache = window._loanDocCache || {};
+        window._loanDocCache[upcomingId] = { notes: loanDocPayload.notes, notesCell: loanDocPayload.notes };
+      } catch(e) {}
+
+      const bNotes = document.getElementById('b-notes').value;
+      generateLoanDoc(upcomingEquipItems, { loanTo, location, startDate, endDate, accountManager: batchAM },
+        null, { notesCell: '', authCell: '', batchNotes: bNotes });
     }
     // Clean devices (no current loan) proceed as normal
     if (cleanDevices.length > 0) await doLoan(cleanDevices);
@@ -3174,18 +3199,27 @@ async function sendOverdueEmail(group) {
 }
 
 // ── LOAN CONFIRMATION EMAIL ───────────────────────────────────────────
+function _getLoanFormHtml() {
+  // Capture the rendered loan form as self-contained HTML with inline styles
+  const docEl = document.getElementById('printable-loan-doc');
+  if (!docEl) return '';
+  // Wrap with basic email-safe CSS so it renders in email clients
+  return '<div style="font-family:Arial,sans-serif;max-width:860px;margin:0 auto;font-size:12px">' +
+    docEl.innerHTML
+      // Replace contenteditable with static spans so it looks clean in email
+      .replace(/contenteditable="true"/g, '')
+      // Make sure table borders show in email clients
+      .replace(/<table /g, '<table style="border-collapse:collapse;width:100%" ')
+    + '</div>';
+}
+
 async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
   if (!_ejsReady || !amEmail) {
     console.log('Loan confirmation not sent - EmailJS not ready or no AM email');
     return;
   }
-  // Use detailed items list from the form if available (includes manual rows + notes)
-  const itemsList = loanInfo.itemsDetail ||
-    [...loanItems, ...(window._currentLoanDocInfo?.manualRows || [])].map(e =>
-      '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.Description ? ' (' + e.Description + ')' : '') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')
-    ).join('\n');
-  const notesText = loanInfo.notesText || '';
 
+  const loanFormHtml = _getLoanFormHtml();
   const manageLink  = APP_URL + '?tab=loans';
   const returnLink  = buildReturnLink(loanInfo.loanTo, loanInfo.endDate);
   const extendLink  = APP_URL + '?extend=' + loanReturnToken(loanInfo.loanTo, loanInfo.endDate);
@@ -3198,8 +3232,7 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
       customer_location: loanInfo.location  || '',
       loan_start:        formatDisplayDate(loanInfo.startDate || nzDate()),
       loan_end:          formatDisplayDate(loanInfo.endDate   || ''),
-      items:             itemsList,
-      notes:             notesText,
+      loan_form_html:    loanFormHtml,
       manage_link:       manageLink,
       return_link:       returnLink,
       extend_link:       extendLink
