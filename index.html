@@ -4738,18 +4738,37 @@ async function confirmAddItemsToLoan() {
     });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
   });
-  scheduleSave(); renderTable(); updateStats();
+  await saveBin({ equipment, history: historyLog });
+  renderTable(); updateStats();
   closeAddItemsModal();
+
+  // Capture the group info before renderLoans rebuilds groups
+  const _reviewLoanTo  = g.loanTo;
+  const _reviewEndDate = g.endDate;
+  const _reviewBatchId = batchId;
+
   renderLoans();
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
 
-  // Switch to Active Loans and open the loan form for review (no auto-send)
-  const reviewKey = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
+  // Switch to Active Loans and open the loan form — give renderLoans() time to rebuild _loanGroupMap
   switchTab('loans');
   setTimeout(async () => {
     window._autoSendOnClose = false;
-    await viewLoanDocByKey(reviewKey);
-  }, 300);
+    // Build the key the same way renderLoans does
+    const reviewKey = encodeURIComponent(_reviewLoanTo + '|||' + _reviewEndDate).replace(/'/g, "%27");
+    if (window._loanGroupMap && window._loanGroupMap[reviewKey]) {
+      await viewLoanDocByKey(reviewKey);
+    } else {
+      // Fallback: find the group by loanTo + batchId
+      const fallbackGroup = (window._loanGroups || []).find(gr =>
+        gr.loanTo === _reviewLoanTo && gr.items.some(i => i.BatchID === _reviewBatchId)
+      );
+      if (fallbackGroup) {
+        const fbKey = encodeURIComponent(fallbackGroup.loanTo + '|||' + fallbackGroup.endDate).replace(/'/g, "%27");
+        await viewLoanDocByKey(fbKey);
+      }
+    }
+  }, 500);
 }
 
 // ── REMOVE DEVICE FROM LOAN ───────────────────────────────────────────
