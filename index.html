@@ -1173,9 +1173,9 @@ const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder temp
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template (unused - Brevo now handles loan emails)
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 // Brevo (free tier: 300 emails/day) — used for loan confirmation with HTML attachment
-const BREVO_API_KEY         = 'YOUR_BREVO_API_KEY';     // replace with key from app.brevo.com → SMTP & API → API Keys
-const BREVO_FROM_EMAIL      = 'noreply@chsnz.co.nz';   // must be a verified sender in Brevo
-const BREVO_FROM_NAME       = 'CMCHS Demo Equipment';
+let BREVO_API_KEY    = '';   // loaded from Firebase /config at startup — never stored in code
+let BREVO_FROM_EMAIL = 'noreply@chsnz.co.nz';
+const BREVO_FROM_NAME = 'CMCHS Demo Equipment';
 const APP_URL      = 'http://demo.chsnz.co.nz';
 
 // NZ timezone date helper
@@ -1221,6 +1221,8 @@ async function loadConfig() {
     const d = await r.json();
     if (d && d.appPassword)   APP_PASSWORD   = d.appPassword;
     if (d && d.adminPassword) ADMIN_PASSWORD = d.adminPassword;
+    if (d && d.brevoApiKey)   BREVO_API_KEY  = d.brevoApiKey;
+    if (d && d.brevoFromEmail) BREVO_FROM_EMAIL = d.brevoFromEmail;
     if (!APP_PASSWORD || !ADMIN_PASSWORD) throw new Error('Missing passwords in config');
   } catch(e) {
     console.error('Could not load config:', e);
