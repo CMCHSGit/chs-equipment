@@ -1170,12 +1170,8 @@ const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatab
 // EmailJS config
 const EJS_SERVICE           = 'service_ig1n6ut';
 const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder template
-const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template (unused - Brevo now handles loan emails)
+const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
-// Brevo (free tier: 300 emails/day) — used for loan confirmation with HTML attachment
-let BREVO_API_KEY    = '';   // loaded from Firebase /config at startup — never stored in code
-let BREVO_FROM_EMAIL = 'noreply@chsnz.co.nz';
-const BREVO_FROM_NAME = 'CMCHS Demo Equipment';
 const APP_URL      = 'http://demo.chsnz.co.nz';
 
 // NZ timezone date helper
@@ -1221,8 +1217,6 @@ async function loadConfig() {
     const d = await r.json();
     if (d && d.appPassword)   APP_PASSWORD   = d.appPassword;
     if (d && d.adminPassword) ADMIN_PASSWORD = d.adminPassword;
-    if (d && d.brevoApiKey)   BREVO_API_KEY  = d.brevoApiKey;
-    if (d && d.brevoFromEmail) BREVO_FROM_EMAIL = d.brevoFromEmail;
     if (!APP_PASSWORD || !ADMIN_PASSWORD) throw new Error('Missing passwords in config');
   } catch(e) {
     console.error('Could not load config:', e);
@@ -3204,79 +3198,46 @@ async function sendOverdueEmail(group) {
   }
 }
 
-// ── LOAN CONFIRMATION EMAIL via Brevo (supports HTML attachment) ──────
+// ── LOAN CONFIRMATION EMAIL via EmailJS ──────────────────────────────
+// Captures the rendered loan form at a readable scale and sends via EmailJS template
 function _getLoanFormHtml() {
   const docEl = document.getElementById('printable-loan-doc');
   if (!docEl) return '';
-  // Full self-contained HTML page for the attachment
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
-    'body{font-family:Arial,sans-serif;font-size:12px;margin:16px}' +
-    'table{border-collapse:collapse;width:100%}' +
-    'td,th{border:1px solid #ccc;padding:6px 8px}' +
-    'th{background:#f5f5f5;font-size:11px}' +
-    'img{max-height:60px}' +
-    '</style></head><body>' +
-    docEl.innerHTML
-      .replace(/contenteditable="true"/g, '')
-      .replace(/ oninput="[^"]*"/g, '')
-      .replace(/ onblur="[^"]*"/g, '') +
-    '</body></html>';
+  // Scaled-down self-contained version of the form suitable for email body
+  const inner = docEl.innerHTML
+    .replace(/contenteditable="true"/g, '')
+    .replace(/ oninput="[^"]*"/g, '')
+    .replace(/ onblur="[^"]*"/g, '');
+  return '<div style="font-family:Arial,sans-serif;font-size:11px;max-width:700px;margin:0 auto;transform-origin:top left">' +
+    '<style>table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 6px;font-size:11px}th{background:#f5f5f5}img{max-height:44px}</style>' +
+    inner + '</div>';
 }
 
 async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
-  if (!amEmail) {
-    console.log('Loan confirmation not sent - no AM email');
+  if (!_ejsReady || !amEmail) {
+    console.log('Loan confirmation not sent - EmailJS not ready or no AM email');
     return;
   }
-  if (!BREVO_API_KEY || BREVO_API_KEY === 'YOUR_BREVO_API_KEY') {
-    console.warn('Brevo API key not configured — loan email not sent');
-    showToast('warn', 'Email not sent: Brevo API key not set. See console.');
-    return;
-  }
-
   const loanFormHtml = _getLoanFormHtml();
-  // Base64-encode the HTML for the attachment
-  const attachmentBase64 = btoa(unescape(encodeURIComponent(loanFormHtml)));
-
-  const manageLink = APP_URL + '?tab=loans';
-  const returnLink = buildReturnLink(loanInfo.loanTo, loanInfo.endDate);
-
-  const emailBody = {
-    sender:  { name: BREVO_FROM_NAME, email: BREVO_FROM_EMAIL },
-    to:      [{ email: amEmail, name: amName || amEmail }],
-    subject: 'CMCHS Demo Equipment Loan — ' + (loanInfo.loanTo || '') + ' (' + formatDisplayDate(loanInfo.startDate) + ' – ' + formatDisplayDate(loanInfo.endDate) + ')',
-    htmlContent:
-      '<p>Hi ' + (amName || '') + ',</p>' +
-      '<p>A demo equipment loan has been confirmed. Please find the loan form attached.</p>' +
-      '<table style="border-collapse:collapse;margin:16px 0">' +
-      '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:13px">Customer</td><td style="padding:4px 0;font-size:13px"><strong>' + esc(loanInfo.loanTo || '') + '</strong></td></tr>' +
-      '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:13px">Location</td><td style="padding:4px 0;font-size:13px">' + esc(loanInfo.location || '') + '</td></tr>' +
-      '<tr><td style="padding:4px 12px 4px 0;color:#6b7280;font-size:13px">Loan Dates</td><td style="padding:4px 0;font-size:13px">' + formatDisplayDate(loanInfo.startDate) + ' – ' + formatDisplayDate(loanInfo.endDate) + '</td></tr>' +
-      '</table>' +
-      '<p><a href="' + manageLink + '" style="color:#1d4ed8">View or manage this loan →</a></p>' +
-      '<p style="color:#6b7280;font-size:12px">To process a return: <a href="' + returnLink + '">' + returnLink + '</a></p>' +
-      '<hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0">' +
-      '<p style="color:#9ca3af;font-size:11px">Connected Healthcare Systems NZ</p>',
-    attachment: [{
-      name: 'LoanForm_' + (loanInfo.loanTo || 'loan').replace(/[^a-zA-Z0-9]/g, '_') + '_' + (loanInfo.startDate || nzDate()) + '.html',
-      content: attachmentBase64
-    }]
-  };
-
+  const manageLink  = APP_URL + '?tab=loans';
+  const returnLink  = buildReturnLink(loanInfo.loanTo, loanInfo.endDate);
+  const extendLink  = APP_URL + '?extend=' + loanReturnToken(loanInfo.loanTo, loanInfo.endDate);
   try {
-    const resp = await fetch('https://api.brevo.com/v3/smtp/email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'api-key': BREVO_API_KEY },
-      body: JSON.stringify(emailBody)
+    await emailjs.send(EJS_SERVICE, EJS_LOAN_TEMPLATE, {
+      to_email:          amEmail,
+      to_name:           amName || amEmail,
+      customer_name:     loanInfo.loanTo    || '',
+      customer_location: loanInfo.location  || '',
+      loan_start:        formatDisplayDate(loanInfo.startDate || nzDate()),
+      loan_end:          formatDisplayDate(loanInfo.endDate   || ''),
+      loan_form_html:    loanFormHtml,
+      manage_link:       manageLink,
+      return_link:       returnLink,
+      extend_link:       extendLink
     });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.message || resp.status);
-    }
-    console.log('Loan confirmation sent via Brevo to', amEmail);
+    console.log('Loan confirmation sent to', amEmail);
   } catch(err) {
-    console.error('Brevo loan email failed:', err);
-    showToast('error', 'Email failed: ' + (err.message || err));
+    console.error('Loan confirmation email failed:', err);
   }
 }
 
