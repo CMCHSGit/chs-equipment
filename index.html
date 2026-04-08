@@ -4742,46 +4742,44 @@ async function confirmAddItemsToLoan() {
   renderTable(); updateStats();
   closeAddItemsModal();
 
-  // Capture the group info before renderLoans rebuilds groups
-  const _reviewLoanTo  = g.loanTo;
-  const _reviewEndDate = g.endDate;
-  const _reviewBatchId = batchId;
+  // Collect ALL items currently on loan to this customer with matching end date
+  // Use a simple filter: same loanTo + endDate + not returned
+  const _allLoanItems = equipment.filter(e =>
+    e.OnLoanTo === g.loanTo &&
+    e.LoanEndDate === g.endDate &&
+    e.Returned !== 'Yes'
+  );
+  // Fallback if endDate matching is too strict: use BatchID OR loanTo
+  const _loanItems = _allLoanItems.length > 0 ? _allLoanItems :
+    equipment.filter(e => e.OnLoanTo === g.loanTo && e.Returned !== 'Yes');
 
-  renderLoans();
+  const _reviewInfo = {
+    loanTo: g.loanTo, location: g.location,
+    startDate: g.startDate || nzDate(),
+    endDate: g.endDate || '',
+    accountManager: g.items[0]?.AccountManager || ''
+  };
+
+  // Load any existing saved extras (notes, auth) from Firebase so they aren't lost
+  let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+  if (batchId) {
+    try {
+      const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+      if (_r.ok) {
+        const _d = await _r.json();
+        if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '' };
+      }
+    } catch(e) {}
+  }
+
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
-
-  // Switch to Active Loans — switchTab('loans') calls renderLoans() which builds _loanGroupMap
   switchTab('loans');
 
-  // Wait for renderLoans to finish, then open the loan form directly by finding the group
-  setTimeout(async () => {
+  setTimeout(() => {
     window._autoSendOnClose = false;
-    // Find the group directly from the rebuilt _loanGroups array
-    const targetGroup = (window._loanGroups || []).find(gr =>
-      gr.loanTo === _reviewLoanTo &&
-      gr.items.some(i => i.BatchID === _reviewBatchId || i.CHSAssetNo === (validRows[0]?.value))
-    );
-    if (targetGroup) {
-      // Directly invoke the loan doc with the group — bypasses key lookup entirely
-      const items = targetGroup.items.map(i =>
-        equipment.find(e => e.id === i.id) || equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) || i
-      ).filter(Boolean);
-      const startDate = targetGroup.startDate || (items[0] && items[0].LoanStartDate) || '';
-      const am = items[0]?.AccountManager || '';
-      const bId = items[0]?.BatchID;
-      let savedRows = null, savedExtra = {};
-      if (bId) {
-        try {
-          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(bId) + '.json');
-          const d = await r.json();
-          if (d && d.savedRows) { savedRows = d.savedRows; }
-          if (d) savedExtra = { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' };
-        } catch(e) {}
-      }
-      window._pendingLoanDocPdfKey = bId || null;
-      generateLoanDoc(items, { loanTo: targetGroup.loanTo, location: targetGroup.location, startDate, endDate: targetGroup.endDate, accountManager: am }, savedRows, savedExtra);
-    }
-  }, 600);
+    window._pendingLoanDocPdfKey = batchId || null;
+    generateLoanDoc(_loanItems, _reviewInfo, null, _savedExtra);
+  }, 400);
 }
 
 // ── REMOVE DEVICE FROM LOAN ───────────────────────────────────────────
