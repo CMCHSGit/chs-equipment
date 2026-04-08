@@ -3660,21 +3660,21 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   let rows, blank;
   if (savedRows && savedRows.length > 0) {
     rows = savedRows.map(r => '<tr>' + r.map(cell =>
-      '<td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit">' + (cell || '') + '</td>'
+      '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">' + (cell || '') + '</td>'
     ).join('') + '</tr>').join('');
     blank = '';
   } else {
     rows = loanItems.map(e => `
     <tr>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit">${e.CHSAssetNo||''}</td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit">${e.Description||e.Model||''}</td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit"></td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit"></td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit"></td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;font-size:12px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.CHSAssetNo||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.Description||e.Model||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
     </tr>`).join('');
-    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:3px 8px;height:22px;font-size:12px" title="Click to edit"></td>'.repeat(7) + '</tr>').join('');
+    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(7) + '</tr>').join('');
   }
 
   document.getElementById('loan-doc-content').innerHTML = `
@@ -3694,19 +3694,19 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <!-- CUSTOMER INFO -->
       <table style="width:100%;border-collapse:collapse;border:1px solid #ccc;border-top:none">
         <tr style="background:#f5f5f5">
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:18%">Customer</td>
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:20%">Customer Address</td>
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:12%">Loan Date</td>
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date</td>
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700;width:18%">Account Manager</td>
-          <td style="border:1px solid #ccc;padding:4px 8px;font-size:11px;font-weight:700">Contact Number</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:18%">Customer</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:20%">Customer Address</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:12%">Loan Date</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:18%">Account Manager</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700">Contact Number</td>
         </tr>
         <tr>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px;min-width:60px" title="Click to edit">${loanInfo.loanTo||''}</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:4px 8px;font-size:12px" title="Click to edit">${loanInfo.location||''}</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:4px 8px;font-size:12px" title="Click to edit">${formatDisplayDate(loanInfo.startDate||today)}</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:4px 8px;font-size:12px" title="Click to edit">${formatDisplayDate(loanInfo.endDate||'')}</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:4px 8px;font-size:12px" title="Click to edit">${loanInfo.accountManager||''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px;min-width:60px" title="Click to edit">${loanInfo.loanTo||''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${loanInfo.location||''}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${formatDisplayDate(loanInfo.startDate||today)}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${formatDisplayDate(loanInfo.endDate||'')}</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${loanInfo.accountManager||''}</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
         </tr>
       </table>
@@ -3715,13 +3715,13 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <table id="loan-doc-equip-table" style="width:100%;border-collapse:collapse;margin-top:12px">
         <thead style="position:sticky;top:0;z-index:2">
           <tr style="background:#f5f5f5">
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;width:12%;background:#f5f5f5">CHS Asset #</th>
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;width:22%;background:#f5f5f5">Description</th>
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;width:15%;background:#f5f5f5">Serial/Part #</th>
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched CHS</th>
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Customer Received</th>
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched Customer</th>
-            <th style="border:1px solid #ccc;padding:3px 8px;font-size:11px;text-align:left;background:#f5f5f5">CHS Received</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:12%;background:#f5f5f5">CHS Asset #</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:22%;background:#f5f5f5">Description</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:15%;background:#f5f5f5">Serial/Part #</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched CHS</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Customer Received</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched Customer</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;background:#f5f5f5">CHS Received</th>
           </tr>
         </thead>
         <tbody>${rows}${blank}</tbody>
@@ -3730,11 +3730,11 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <!-- NOTES + AUTH -->
       <table id="loan-doc-notes-table" style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:12%;text-align:right">Notes:</td>
           <td id="loan-doc-notes-cell" contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;min-height:36px;height:auto;vertical-align:top;font-size:12px;white-space:pre-wrap" colspan="6" title="Click to edit notes">${savedExtra?.notesCell || savedExtra?.batchNotes || ''}</td>
         </tr>
         <tr>
-          <td style="border:1px solid #ccc;padding:6px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to add authorisation">${savedExtra?.authCell||''}</td>
         </tr>
       </table>
@@ -3923,7 +3923,7 @@ function addDocRow() {
   }
   const tr = document.createElement('tr');
   tr.innerHTML = Array(7).fill(0).map(() =>
-    '<td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px;min-width:40px;background:#fffef0" title="Click to edit"></td>'
+    '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px;min-width:40px;background:#fffef0" title="Click to edit"></td>'
   ).join('');
   if (insertBefore) tbody.insertBefore(tr, insertBefore);
   else tbody.appendChild(tr);
@@ -4515,7 +4515,7 @@ function renderBasket() {
       </div>
       ${b.locked
         ? '<span style="font-size:11px;color:var(--text3);padding:2px 8px;background:var(--surface2);border-radius:20px;border:1px solid var(--border)">Already on loan</span>'
-        : `<button class="btn btn-sm" onclick="removeFromBasket('${b.id}')" style="color:var(--red);border-color:var(--red-border);padding:3px 8px;font-size:11px">✕</button>`
+        : `<button class="btn btn-sm" onclick="removeFromBasket('${b.id}')" style="color:var(--red);border-color:var(--red-border);padding:2px 8px;font-size:11px">✕</button>`
       }
     </div>`).join('');
   // Scroll basket into view
@@ -5375,13 +5375,13 @@ function renderCalendar() {
   html += '<div style="display:flex;position:sticky;top:0;z-index:20;background:var(--surface)">';
   html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;border-right:2px solid var(--border2);border-bottom:1px solid var(--border);background:var(--surface2)"></div>';
   months.forEach(m => {
-    html += '<div style="width:' + (m.count * DAY_W) + 'px;min-width:' + (m.count * DAY_W) + 'px;padding:4px 8px;font-size:11px;font-weight:700;color:var(--text2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface2);overflow:hidden;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em">' + m.label + '</div>';
+    html += '<div style="width:' + (m.count * DAY_W) + 'px;min-width:' + (m.count * DAY_W) + 'px;padding:2px 8px;font-size:11px;font-weight:700;color:var(--text2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--surface2);overflow:hidden;white-space:nowrap;text-transform:uppercase;letter-spacing:.05em">' + m.label + '</div>';
   });
   html += '</div>';
 
   // Day header
   html += '<div style="display:flex;position:sticky;top:24px;z-index:20;background:var(--surface)">';
-  html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;border-right:2px solid var(--border2);border-bottom:2px solid var(--border2);background:var(--surface2);padding:4px 8px;font-size:11px;font-weight:600;color:var(--text2)">Loan</div>';
+  html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;border-right:2px solid var(--border2);border-bottom:2px solid var(--border2);background:var(--surface2);padding:2px 8px;font-size:11px;font-weight:600;color:var(--text2)">Loan</div>';
   dates.forEach((d, i) => {
     const dd = parseInt(d.slice(8));
     const isToday = d === today;
