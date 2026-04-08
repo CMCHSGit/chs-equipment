@@ -3204,7 +3204,7 @@ function _getLoanFormHtml() {
   const docEl = document.getElementById('printable-loan-doc');
   if (!docEl) return '';
   // Scaled-down self-contained version of the form suitable for email body
-  const inner = docEl.innerHTML
+  let inner = docEl.innerHTML
     .replace(/contenteditable="true"/g, '')
     .replace(/ oninput="[^"]*"/g, '')
     .replace(/ onblur="[^"]*"/g, '');
