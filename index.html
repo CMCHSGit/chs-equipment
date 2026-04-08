@@ -2873,7 +2873,12 @@ async function confirmBatchReturn() {
     Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   });
-  scheduleSave(); renderTable(); updateStats();
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+  } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
+  renderTable(); updateStats();
   closeBatchReturn();
   renderLoans();
   showToast('success', `${toReturn.length} item${toReturn.length>1?'s':''} returned`);
@@ -3316,7 +3321,11 @@ async function confirmExtendLoan() {
       body: JSON.stringify(_sentNotifications)
     });
   }
-  scheduleSave();
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+  } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
   closeExtendModal();
   renderLoans();
   renderTable();
@@ -4543,7 +4552,9 @@ function removeDeviceFromLoan(id, assetNo) {
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '',
     Returned: 'Yes', BatchID: '', BorrowerEmail: '', AccountManager: ''
   });
-  scheduleSave(); renderTable(); updateStats(); renderLoans();
+  setSync('saving', 'Saving...');
+  saveBin({ equipment, history: historyLog }).then(() => setSync('ok', 'Saved')).catch(e => setSync('err', 'Save failed'));
+  renderTable(); updateStats(); renderLoans();
   showToast('info', assetNo + ' removed from loan');
   // If loan doc is open, refresh it
   if (document.getElementById('loan-doc-modal').classList.contains('open') && window._currentLoanDocInfo) {
@@ -5268,6 +5279,8 @@ async function syncFromFirebase() {
       delete ourMap[freshItem.id];
       const freshOnLoan = freshItem.OnLoanTo && freshItem.Returned !== 'Yes';
       const ourOnLoan   = ours.OnLoanTo      && ours.Returned      !== 'Yes';
+      // A remote return (Returned:'Yes') is always authoritative — trust it
+      if (!freshOnLoan && ourOnLoan && freshItem.Returned === 'Yes') return freshItem;
       // If local has an unsaved pending loan (newer start date), keep it;
       // otherwise trust the remote (it came from a completed save).
       if (freshOnLoan && !ourOnLoan) return freshItem;
