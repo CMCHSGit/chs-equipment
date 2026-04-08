@@ -462,6 +462,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Loan End Date <span style="color:var(--red)">*</span></label><input type="date" id="b-end-date" required></div>
               <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
+              <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include (Asset Numbers)</div>
@@ -2516,8 +2517,9 @@ async function submitBatchLoan() {
 
     btn.textContent = 'Saving…';
     const batchId    = 'batch_' + Date.now();
-    const notes      = document.getElementById('b-notes').value;
-    const batchEmail = document.getElementById('b-email').value.trim();
+    const notes          = document.getElementById('b-notes').value;
+    const batchEmail     = document.getElementById('b-email').value.trim();
+    const contactNumber  = document.getElementById('b-contact-number')?.value.trim() || '';
     const batchAM    = document.getElementById('b-account-manager')?.value || '';
 
     for (const d of devicesToLoan) {
@@ -2543,7 +2545,7 @@ async function submitBatchLoan() {
 
     const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
     window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
-    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM }, null, { notesCell: '', authCell: '', batchNotes: notes });
+    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber }, null, { notesCell: '', authCell: '', batchNotes: notes });
 
     setTimeout(async () => {
       const docEl = document.getElementById('printable-loan-doc');
@@ -2574,7 +2576,7 @@ async function submitBatchLoan() {
     btn.disabled = false; btn.textContent = 'Confirm Loan';
     batchDevices = [{ id: 'bd_0', value: '' }];
     window._batchStatus = {};
-    ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
@@ -2648,7 +2650,7 @@ async function submitBatchLoan() {
       if (btn) { btn.disabled = false; btn.textContent = 'Confirm Loan'; }
       batchDevices = [{ id: 'bd_0', value: '' }];
       window._batchStatus = {};
-      ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+      ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
       const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
       document.getElementById('b-start-date').value = nzDate();
       document.getElementById('batch-feedback').style.display = 'none';
@@ -3724,7 +3726,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
           <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${formatDisplayDate(loanInfo.startDate||today)}</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${formatDisplayDate(loanInfo.endDate||'')}</td>
           <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${loanInfo.accountManager||''}</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;font-size:12px" title="Click to edit"></td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${loanInfo.contactNumber||''}</td>
         </tr>
       </table>
       <!-- EQUIPMENT TABLE -->
@@ -4740,6 +4742,14 @@ async function confirmAddItemsToLoan() {
   closeAddItemsModal();
   renderLoans();
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
+
+  // Switch to Active Loans and open the loan form for review (no auto-send)
+  const reviewKey = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
+  switchTab('loans');
+  setTimeout(async () => {
+    window._autoSendOnClose = false;
+    await viewLoanDocByKey(reviewKey);
+  }, 300);
 }
 
 // ── REMOVE DEVICE FROM LOAN ───────────────────────────────────────────
