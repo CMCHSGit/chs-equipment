@@ -2193,10 +2193,12 @@ async function _findOrphanCandidates() {
         const assetNos = docItems.map(i => i.CHSAssetNo).filter(Boolean);
         if (!assetNos.length) continue;
         // Check whether any of those equipment items already reflect this loan
+        // Only match on loanTo + not-returned — NOT end date, because the end date
+        // may have been changed since the loanDoc was created (extend, edit, etc.).
         const anyOnLoan = equipment.some(e =>
           assetNos.includes(e.CHSAssetNo) &&
           (e.BatchID === batchId ||
-           (e.OnLoanTo === doc.loanTo && e.LoanEndDate === doc.endDate && e.Returned !== 'Yes'))
+           (e.OnLoanTo === doc.loanTo && e.Returned !== 'Yes'))
         );
         if (!anyOnLoan) {
           const matchingItems = equipment.filter(e => assetNos.includes(e.CHSAssetNo));
