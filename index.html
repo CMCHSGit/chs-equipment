@@ -585,7 +585,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <th onclick="sortTable('OnLoanTo')">On Loan To ↕</th>
               <th>Location</th>
               <th onclick="sortTable('LoanEndDate')">End Date ↕</th>
-              <th>Tile No.</th><th>Part No.</th>
+              <th onclick="sortTable('TileNo')">Tile No. ↕</th><th>Part No.</th>
               <th onclick="sortTable('NZPrice')">NZ$ ↕</th>
               <th>Shelf Location</th><th>Device ID</th><th>LAN MAC</th><th>WLAN MAC</th>
               <th>Old CHS #</th><th>Tile Type</th>
@@ -1658,7 +1658,14 @@ function renderTable() {
     if (sf === 'overdue')   return match && od;
     return match;
   });
-  rows.sort((a,b) => { const av=(a[sortCol]||'').toString().toLowerCase(), bv=(b[sortCol]||'').toString().toLowerCase(); return av<bv?-sortDir:av>bv?sortDir:0; });
+  rows.sort((a,b) => {
+    if (sortCol === 'TileNo' || sortCol === 'NZPrice') {
+      const av = parseFloat(a[sortCol]) || 0, bv = parseFloat(b[sortCol]) || 0;
+      return (av - bv) * sortDir;
+    }
+    const av=(a[sortCol]||'').toString().toLowerCase(), bv=(b[sortCol]||'').toString().toLowerCase();
+    return av<bv?-sortDir:av>bv?sortDir:0;
+  });
   document.getElementById('db-row-count').textContent = rows.length + ' of ' + equipment.length + ' items';
   setTimeout(() => { initDragScroll(); updateSelectionBar(); }, 50);
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
@@ -1674,8 +1681,8 @@ function renderTable() {
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Description)}">${esc(e.Description)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.SerialNo)}</td>
       <td style="white-space:nowrap;padding:6px 8px">${buildStatusCell(e, on, od)}</td>
-      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;font-size:11px;color:var(--text2)" title="${esc(window._tileLocationCache?.[e.TileNo]?.location||'')}">${e.TileNo && window._tileLocationCache?.[e.TileNo] ? esc(window._tileLocationCache[e.TileNo].location) : (e.TileNo ? '<span style="color:var(--text3)">—</span>' : '—')}</td>
-      <td style="white-space:nowrap;padding:6px 8px;font-size:11px">${e.TileNo && window._tileLocationCache?.[e.TileNo]?.alert ? '<span style="color:var(--amber);font-weight:500">⚠ ' + esc(window._tileLocationCache[e.TileNo].alert) + '</span>' : '—'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;font-size:11px;color:var(--text2)" title="${esc(window._tileLocationCache?.[String(e.TileNo)]?.location||'')}">${e.TileNo && window._tileLocationCache?.[String(e.TileNo)] ? esc(window._tileLocationCache[String(e.TileNo)].location) : (e.TileNo ? '<span style="color:var(--text3)">—</span>' : '—')}</td>
+      <td style="white-space:nowrap;padding:6px 8px;font-size:11px">${e.TileNo && window._tileLocationCache?.[String(e.TileNo)]?.alert ? '<span style="color:var(--amber);font-weight:500">⚠ ' + esc(window._tileLocationCache[String(e.TileNo)].alert) + '</span>' : '—'}</td>
       <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.OnLoanTo)}">${esc(e.OnLoanTo)}</td>
       <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Location)}">${esc(e.Location)}</td>
       <td style="font-size:12px;white-space:nowrap;padding:6px 8px;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
