@@ -3038,9 +3038,15 @@ function openDetail(id) {
       <div class="detail-section-title">Notes</div>
       <div class="detail-field full"><label>Notes</label><span>${esc2(item.Notes)}</span></div>
     </div>` : ''}
+    ${item.TileNo ? `<div class="detail-section" id="tile-location-section-${esc2(item.CHSAssetNo)}">
+      <div class="detail-section-title">📍 Tile Last Known Location</div>
+      <div class="detail-grid" id="tile-location-content-${esc2(item.CHSAssetNo)}">
+        <div class="detail-field full"><label>Loading...</label><span style="color:var(--text3)">Fetching tile location...</span></div>
+      </div>
+    </div>` : ''}
   `;
   document.getElementById('detail-overlay').classList.add('open');
-  // Reset footer to normal state
+  if (item.TileNo) loadTileLocation(item.CHSAssetNo, item.TileNo);
   document.querySelector('.detail-footer').innerHTML = `
     <button class="btn btn-primary btn-sm" onclick="detailAction('loan')">Add Item</button>
     <button class="btn btn-green btn-sm" onclick="detailAction('return')">Return</button>
@@ -3049,6 +3055,29 @@ function openDetail(id) {
     <button class="btn btn-sm" onclick="detailAction('history')">History</button>
     <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
   `;
+}
+
+async function loadTileLocation(assetNo, tileNo) {
+  const contentEl = document.getElementById('tile-location-content-' + assetNo);
+  if (!contentEl) return;
+  try {
+    const r = await fetch(FB_URL + '/tileLocations/' + encodeURIComponent(String(tileNo)) + '.json');
+    const d = await r.json();
+    if (d && d.location) {
+      const mapsUrl = d.latitude && d.longitude
+        ? 'https://www.google.com/maps?q=' + d.latitude + ',' + d.longitude
+        : 'https://www.google.com/maps/search/' + encodeURIComponent(d.location);
+      contentEl.innerHTML =
+        '<div class="detail-field full"><label>Address</label><span>' + esc2(d.location) + '</span></div>' +
+        '<div class="detail-field"><label>Last Updated</label><span>' + esc2(d.lastUpdated || '—') + '</span></div>' +
+        (d.latitude && d.longitude ? '<div class="detail-field"><label>Coordinates</label><span style="font-family:\'DM Mono\',monospace;font-size:11px">' + d.latitude.toFixed(5) + ', ' + d.longitude.toFixed(5) + '</span></div>' : '') +
+        '<div class="detail-field full" style="margin-top:4px"><a href="' + mapsUrl + '" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">📍 Open in Google Maps →</a></div>';
+    } else {
+      contentEl.innerHTML = '<div class="detail-field full"><label>No data</label><span style="color:var(--text3)">No tile location data yet. Run the sync script to populate.</span></div>';
+    }
+  } catch(e) {
+    contentEl.innerHTML = '<div class="detail-field full"><label>Error</label><span style="color:var(--red)">Could not load tile location.</span></div>';
+  }
 }
 
 function closeDetail() {
