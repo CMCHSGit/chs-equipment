@@ -4085,6 +4085,18 @@ async function viewLoanDocByKey(key) {
       const d = await r.json();
       if (d && d.savedRows) {
         savedRows = d.savedRows;
+        // Append any items added to the loan AFTER the form was originally saved
+        const savedAssetNos = new Set(savedRows.map(row => (row[0] || '').trim().toLowerCase()));
+        const newItems = items.filter(e => e.CHSAssetNo && !savedAssetNos.has(e.CHSAssetNo.trim().toLowerCase()));
+        if (newItems.length > 0) {
+          const newRows = newItems.map(e => [
+            e.CHSAssetNo || '',
+            e.Description || e.Model || '',
+            e.SerialNo || e.PartNo || '',
+            '', '', '', ''
+          ]);
+          savedRows = [...savedRows, ...newRows];
+        }
         const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
         savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes };
       } else if (d) {
