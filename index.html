@@ -3219,10 +3219,10 @@ function _getLoanFormHtml() {
     .replace(/font-size:[^;"]*;?/g, '')
     .replace(/margin-bottom:[^;"]*;?/g, '')
     .replace(/margin-top:[^;"]*;?/g, '')
-    // Force all img elements to 20px tall via HTML attribute (beats CSS in email clients)
-    .replace(/<img /g, '<img height="20" style="height:20px;width:auto;display:inline-block" ')
+    // Force all img elements to 80px tall via HTML attribute (beats CSS in email clients)
+    .replace(/<img /g, '<img height="80" style="height:80px;width:auto;display:inline-block" ')
     // Restore title font after stripping
-    .replace('>CMCHS Demo Equipment Loan Form<', ' style="font-size:13px;font-weight:700;color:#1a1917;line-height:1.2">CMCHS Demo Equipment Loan Form<');
+    .replace('>CMCHS Demo Equipment Loan Form<', ' style="font-size:32px;font-weight:700;color:#1a1917;line-height:1.1">CMCHS Demo Equipment Loan Form<');
   return '<div style="font-family:Arial,sans-serif;font-size:10px;max-width:700px;margin:0 auto">' +
     '<style>' +
     'table{border-collapse:collapse;width:100%}' +
