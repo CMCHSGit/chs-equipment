@@ -2665,12 +2665,15 @@ async function submitBatchLoan() {
 
 // Build a single device row for an active loan card body.
 // Uses string concatenation (no nested backticks) per code rules.
-function buildLoanDeviceRow(e) {
+function buildLoanDeviceRow(e, loanNotes) {
   const upcoming = getUpcomingLoanForItem(e.id);
   const upcomingBadge = upcoming
     ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer to <strong>' + esc(upcoming.loanTo) + '</strong> &mdash; starts ' + formatDisplayDate(upcoming.startDate) + '</div>'
     : '';
-  const notesBadge = e.Notes
+  // Only show device-specific notes if they differ from the loan-level notes
+  const deviceNote = (e.Notes || '').trim();
+  const loanNote   = (loanNotes || '').trim();
+  const notesBadge = deviceNote && deviceNote !== loanNote
     ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ' + esc(e.Notes) + '</div>'
     : '';
   return '<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
@@ -2805,7 +2808,7 @@ function renderLoans() {
       '</div>' +
       '</div>' +
       '<div class="loan-card-body" id="' + _slcId + '" style="' + (hasTransfer ? 'display:block' : 'display:none') + '">' +
-        g.items.map(e => buildLoanDeviceRow(e)).join('') + mergedItemsHtml +
+        g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('') + mergedItemsHtml +
       '</div>' +
       '</div>';
   }).join('');
@@ -2882,7 +2885,7 @@ function renderLoans() {
         </div>
       </div>
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
-        ${g.items.map(e => buildLoanDeviceRow(e)).join('')}
+        ${g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('')}
       </div>
     </div>`;
   }).join('');
