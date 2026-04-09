@@ -2551,7 +2551,7 @@ async function submitBatchLoan() {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, notes: notes,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, notes: notes,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -2850,7 +2850,12 @@ function renderLoans() {
       '</div>';
   }).join('');
 
-  document.getElementById('loans-list').innerHTML = groups.map((g, gi) => {
+  const upcomingSection = (upcomingLoans.length || scheduledGroups.length)
+    ? '<div style="margin:0 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:#6d28d9;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Upcoming Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
+      + scheduledCards + upcomingCards
+      + '<div style="margin:8px 0 16px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Active Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
+    : '';
+  document.getElementById('loans-list').innerHTML = upcomingSection + groups.map((g, gi) => {
     const overdue = g.endDate && g.endDate < today;
     const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
     return `<div class="loan-card">
@@ -2881,7 +2886,7 @@ function renderLoans() {
         ${g.items.map(e => buildLoanDeviceRow(e)).join('')}
       </div>
     </div>`;
-  }).join('') + ((upcomingLoans.length || scheduledGroups.length) ? '<div style="margin:16px 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:#6d28d9;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Upcoming Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>' : '') + scheduledCards + upcomingCards;
+  }).join('');
 }
 
 function toggleLoanCard(id) {
@@ -4098,10 +4103,10 @@ async function viewLoanDocByKey(key) {
           savedRows = [...savedRows, ...newRows];
         }
         const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
-        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes };
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes, contactNumber: d.contactNumber || '' };
       } else if (d) {
         const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
-        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes };
+        savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes, contactNumber: d.contactNumber || '' };
       } else {
         // No Firebase doc at all -- try equipment Notes field
         const fallbackNotes = items.find(e => e.Notes)?.Notes || '';
@@ -4128,7 +4133,7 @@ async function viewLoanDocByKey(key) {
       : null;
   }
   window._pendingLoanDocPdfKey = batchId || null;
-  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am }, savedRows, savedExtra);
+  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am, contactNumber: savedExtra.contactNumber || '' }, savedRows, savedExtra);
 }
 
 function openExtendLoanByKey(key) {
@@ -4624,13 +4629,13 @@ function proceedFromBasket() {
         const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
         if (_r.ok) {
           const _d = await _r.json();
-          if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '' };
+          if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
         }
       } catch(e) {}
       setTimeout(() => {
         window._autoSendOnClose = false;
         window._pendingLoanDocPdfKey = batchId || null;
-        generateLoanDoc(_loanItems, _reviewInfo, null, _savedExtra);
+        generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
       }, 400);
     })();
     return;
@@ -4822,7 +4827,7 @@ async function confirmAddItemsToLoan() {
       const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       if (_r.ok) {
         const _d = await _r.json();
-        if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '' };
+        if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
       }
     } catch(e) {}
   }
@@ -4833,7 +4838,7 @@ async function confirmAddItemsToLoan() {
   setTimeout(() => {
     window._autoSendOnClose = false;
     window._pendingLoanDocPdfKey = batchId || null;
-    generateLoanDoc(_loanItems, _reviewInfo, null, _savedExtra);
+    generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
   }, 400);
 }
 
@@ -5525,7 +5530,7 @@ function renderCalendar() {
       : 'navigateToLoanByKey(decodeURIComponent(\'' + encodeURIComponent(g.loanTo) + '|||' + (g.endDate || '') + '\'))';
     const _navTitle = _isUpcomingRow ? 'Go to this upcoming loan' : 'Go to this loan in Active Loans';
     html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer" onclick="' + _navOnclick + '" title="' + _navTitle + '">';
-    html += '<input type="color" value="' + color + '" title="Pick colour" style="width:20px;height:20px;border:none;border-radius:4px;cursor:pointer;flex-shrink:0;padding:0" onchange="saveLoanColor(\'' + key + '\',this.value);renderCalendar()">';
+    html += '<input type="color" value="' + color + '" title="Pick colour" style="width:20px;height:20px;border:none;border-radius:4px;cursor:pointer;flex-shrink:0;padding:0" onclick="event.stopPropagation()" onchange="saveLoanColor(\'' + key + '\',this.value);renderCalendar()">';
     html += '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (isUpcoming ? '#6d28d9' : 'var(--text)') + '">' + esc(g.loanTo) + (isUpcoming ? ' <span style="font-size:10px;opacity:.7">⏳</span>' : '') + '</div>';
     html += '<div style="font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + g.items.length + ' device' + (g.items.length !== 1 ? 's' : '') + (g.endDate ? ' · ' + formatDisplayDate(g.endDate) : '') + '</div></div>';
     html += '</div>';
