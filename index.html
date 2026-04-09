@@ -1324,6 +1324,7 @@ async function loadData() {
     await loadSentNotifications();
     await loadUpcomingLoans();
     await loadLoanDocNotes();
+    cleanLoanNotesFromDevices();
     setTimeout(async () => {
       await activateUpcomingLoans();
       checkOverdueNotifications();
@@ -5031,6 +5032,28 @@ async function loadLoanDocNotes() {
       };
     }
   } catch(e) { console.warn('Could not load loan doc notes', e); }
+}
+
+// One-time cleanup: remove loan-level notes that got written into individual
+// device Notes fields by a previous code version. If a device's Notes exactly
+// matches the loan's notesCell/notes in Firebase, it's a loan note — clear it.
+function cleanLoanNotesFromDevices() {
+  if (!window._loanDocCache) return;
+  let changed = 0;
+  equipment.forEach(e => {
+    if (!e.Notes || !e.BatchID) return;
+    const cached = window._loanDocCache[e.BatchID];
+    if (!cached) return;
+    const loanNote = (cached.notesCell || cached.notes || '').trim();
+    if (loanNote && e.Notes.trim() === loanNote) {
+      e.Notes = '';
+      changed++;
+    }
+  });
+  if (changed > 0) {
+    scheduleSave();
+    console.log('Cleaned loan notes from ' + changed + ' device(s)');
+  }
 }
 
 async function loadUpcomingLoans() {
