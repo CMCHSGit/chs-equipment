@@ -580,6 +580,8 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <th onclick="sortTable('Model')">Model ↕</th>
               <th>Description</th><th>Serial No.</th>
               <th onclick="sortTable('_status')">Status ↕</th>
+              <th>Last Location</th>
+              <th>Tile Alert</th>
               <th onclick="sortTable('OnLoanTo')">On Loan To ↕</th>
               <th>Location</th>
               <th onclick="sortTable('LoanEndDate')">End Date ↕</th>
@@ -1325,6 +1327,7 @@ async function loadData() {
     await loadUpcomingLoans();
     await loadLoanDocNotes();
     cleanLoanNotesFromDevices();
+    loadTileLocationCache();
     setTimeout(async () => {
       await activateUpcomingLoans();
       checkOverdueNotifications();
@@ -1666,24 +1669,26 @@ function renderTable() {
         <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
       </td>
 
-      <td class="td-mono" style="font-weight:500;white-space:nowrap">${esc(e.CHSAssetNo)}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Model)}">${esc(e.Model)}</td>
-      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.SerialNo)}</td>
-      <td style="white-space:nowrap">${buildStatusCell(e, on, od)}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.OnLoanTo)}">${esc(e.OnLoanTo)}</td>
-      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Location)}">${esc(e.Location)}</td>
-      <td style="font-size:12px;white-space:nowrap;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.TileNo)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.PartNo)}</td>
-      <td style="white-space:nowrap">${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.ShelfLocation)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.DeviceID)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.LanMAC)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.WlanMAC)}</td>
-      <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.OldCHS)}</td>
-      <td style="white-space:nowrap">${esc(e.TileType)}</td>
-      <td style="max-width:150px" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:145px">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
+      <td class="td-mono" style="font-weight:500;white-space:nowrap;padding:6px 8px">${esc(e.CHSAssetNo)}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Model)}">${esc(e.Model)}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Description)}">${esc(e.Description)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.SerialNo)}</td>
+      <td style="white-space:nowrap;padding:6px 8px">${buildStatusCell(e, on, od)}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;font-size:11px;color:var(--text2)" title="${esc(window._tileLocationCache?.[e.TileNo]?.location||'')}">${e.TileNo && window._tileLocationCache?.[e.TileNo] ? esc(window._tileLocationCache[e.TileNo].location) : (e.TileNo ? '<span style="color:var(--text3)">—</span>' : '—')}</td>
+      <td style="white-space:nowrap;padding:6px 8px;font-size:11px">${e.TileNo && window._tileLocationCache?.[e.TileNo]?.alert ? '<span style="color:var(--amber);font-weight:500">⚠ ' + esc(window._tileLocationCache[e.TileNo].alert) + '</span>' : '—'}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.OnLoanTo)}">${esc(e.OnLoanTo)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Location)}">${esc(e.Location)}</td>
+      <td style="font-size:12px;white-space:nowrap;padding:6px 8px;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.TileNo)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.PartNo)}</td>
+      <td style="white-space:nowrap;padding:6px 8px">${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.ShelfLocation)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.DeviceID)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.LanMAC)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.WlanMAC)}</td>
+      <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.OldCHS)}</td>
+      <td style="white-space:nowrap;padding:6px 8px">${esc(e.TileType)}</td>
+      <td style="max-width:130px;padding:6px 8px" title="${e.Counted||''}">${e.Counted && e.Counted!=='No' && e.Counted!=='' ? '<span class="chip chip-yes" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:125px">✓ ' + (e.Counted==='Yes'?'Yes':e.Counted) + '</span>' : '<span class="chip chip-no">No</span>'}</td>
       </tr>`;
   }).join('') : `<tr><td colspan="18" class="table-empty">No matching items</td></tr>`;
 }
@@ -5047,6 +5052,19 @@ async function loadRetiredAssets() {
 }
 
 // ── UPCOMING LOANS ─────────────────────────────────────────────────────
+async function loadTileLocationCache() {
+  try {
+    const r = await fetch(FB_URL + '/tileLocations.json');
+    const d = await r.json();
+    if (!d) return;
+    window._tileLocationCache = {};
+    for (const [tileNo, data] of Object.entries(d)) {
+      window._tileLocationCache[tileNo] = data;
+    }
+    renderTable(); // refresh table with location data
+  } catch(e) { console.warn('Could not load tile locations', e); }
+}
+
 async function loadLoanDocNotes() {
   try {
     const r = await fetch(FB_URL + '/loanDocs.json');
