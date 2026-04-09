@@ -3802,7 +3802,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
     // Restore stored newlines as visible line breaks in the contenteditable cell
     const storedVal = notesCell.innerText;
     if (storedVal.includes('\n')) {
-      notesCell.innerHTML = storedVal.split('\n').map(line => line || '<br>').join('<br>');
+      notesCell.innerHTML = storedVal.replace(/\n/g, '<br>');
     }
     notesCell.oninput = function() {
       clearTimeout(window._notesSaveTimer);
@@ -4596,14 +4596,19 @@ function proceedFromBasket() {
     clearBasket();
     showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
 
-    // Collect all items now on this loan
-    const _loanItems = batchId
+    // Collect all items now on this loan, new items at the bottom
+    const _newBasketAssetNos = new Set(newItems.map(b => (b.CHSAssetNo || '').toLowerCase()));
+    const _allBasketItems = batchId
       ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
       : equipment.filter(e =>
           e.OnLoanTo === g.loanTo &&
           (e.LoanEndDate || '') === (g.endDate || '') &&
           e.Returned !== 'Yes'
         );
+    const _loanItems = [
+      ..._allBasketItems.filter(e => !_newBasketAssetNos.has((e.CHSAssetNo || '').toLowerCase())),
+      ..._allBasketItems.filter(e => _newBasketAssetNos.has((e.CHSAssetNo || '').toLowerCase()))
+    ];
     const _reviewInfo = {
       loanTo: g.loanTo, location: g.location,
       startDate: g.startDate || nzDate(),
@@ -4789,13 +4794,19 @@ async function confirmAddItemsToLoan() {
 
   // Collect ALL items for this loan — BatchID is the most reliable key since
   // all original + newly added items share the same batchId
-  const _loanItems = batchId
+  const _allLoanItems = batchId
     ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
     : equipment.filter(e =>
         e.OnLoanTo === g.loanTo &&
         (e.LoanEndDate || '') === (g.endDate || '') &&
         e.Returned !== 'Yes'
       );
+  // Put newly added items at the bottom
+  const _newAssetNos = new Set(validRows.map(r => r.value.toLowerCase()));
+  const _loanItems = [
+    ..._allLoanItems.filter(e => !_newAssetNos.has((e.CHSAssetNo || '').toLowerCase())),
+    ..._allLoanItems.filter(e => _newAssetNos.has((e.CHSAssetNo || '').toLowerCase()))
+  ];
 
   const _reviewInfo = {
     loanTo: g.loanTo, location: g.location,
