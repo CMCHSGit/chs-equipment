@@ -3976,11 +3976,12 @@ async function saveLoanDocChanges() {
   }
 
   const cells = doc.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
-  const newLoanTo    = cells?.[0]?.innerText?.trim() || '';
-  const newLocation  = cells?.[1]?.innerText?.trim() || '';
-  const newStartDate = cells?.[2]?.innerText?.trim() || '';
-  const newEndDate   = cells?.[3]?.innerText?.trim() || '';
-  const newAM        = cells?.[4]?.innerText?.trim() || '';
+  const newLoanTo       = cells?.[0]?.innerText?.trim() || '';
+  const newLocation     = cells?.[1]?.innerText?.trim() || '';
+  const newStartDate    = cells?.[2]?.innerText?.trim() || '';
+  const newEndDate      = cells?.[3]?.innerText?.trim() || '';
+  const newAM           = cells?.[4]?.innerText?.trim() || '';
+  const newContactNumber = cells?.[5]?.innerText?.trim() || '';
 
   // Capture EVERY row from the equipment table — items + accessories + blank placeholders with content
   const tables = doc.querySelectorAll('table');
@@ -4025,6 +4026,7 @@ async function saveLoanDocChanges() {
         startDate: toISO(newStartDate) || info.startDate || '',
         endDate: toISO(newEndDate) || info.endDate || '',
         accountManager: newAM || info.accountManager || '',
+        contactNumber: newContactNumber || info.contactNumber || '',
         items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
         savedRows,
         notesCell,
@@ -4042,15 +4044,16 @@ async function saveLoanDocChanges() {
   loanItems.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
     if (idx >= 0) {
-      if (newLoanTo)    equipment[idx].OnLoanTo       = newLoanTo;
-      if (newLocation)  equipment[idx].Location       = newLocation;
-      if (newEndDate)   equipment[idx].LoanEndDate    = toISO(newEndDate);
-      if (newStartDate) equipment[idx].LoanStartDate  = toISO(newStartDate);
-      if (newAM)        equipment[idx].AccountManager = newAM;
+      if (newLoanTo)         equipment[idx].OnLoanTo       = newLoanTo;
+      if (newLocation)       equipment[idx].Location       = newLocation;
+      if (newEndDate)        equipment[idx].LoanEndDate    = toISO(newEndDate);
+      if (newStartDate)      equipment[idx].LoanStartDate  = toISO(newStartDate);
+      if (newAM)             equipment[idx].AccountManager = newAM;
       updated++;
     }
   });
   if (updated > 0) { scheduleSave(); renderTable(); renderLoans(); }
+  if (newContactNumber) window._currentLoanDocInfo.loanInfo.contactNumber = newContactNumber;
 
   document.getElementById('doc-edited-note').style.display = 'none';
   const sb = document.getElementById('doc-save-btn');
