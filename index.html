@@ -4595,6 +4595,39 @@ function proceedFromBasket() {
     scheduleSave(); renderTable(); updateStats(); renderLoans();
     clearBasket();
     showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
+
+    // Collect all items now on this loan
+    const _loanItems = batchId
+      ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
+      : equipment.filter(e =>
+          e.OnLoanTo === g.loanTo &&
+          (e.LoanEndDate || '') === (g.endDate || '') &&
+          e.Returned !== 'Yes'
+        );
+    const _reviewInfo = {
+      loanTo: g.loanTo, location: g.location,
+      startDate: g.startDate || nzDate(),
+      endDate: g.endDate || '',
+      accountManager: g.items[0]?.AccountManager || ''
+    };
+
+    // Switch to Active Loans tab then open the updated loan form
+    switchTab('loans');
+    (async () => {
+      let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+      try {
+        const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+        if (_r.ok) {
+          const _d = await _r.json();
+          if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '' };
+        }
+      } catch(e) {}
+      setTimeout(() => {
+        window._autoSendOnClose = false;
+        window._pendingLoanDocPdfKey = batchId || null;
+        generateLoanDoc(_loanItems, _reviewInfo, null, _savedExtra);
+      }, 400);
+    })();
     return;
   }
 
