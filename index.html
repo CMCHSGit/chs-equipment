@@ -1323,6 +1323,7 @@ async function loadData() {
     hideLoading();
     await loadSentNotifications();
     await loadUpcomingLoans();
+    await loadLoanDocNotes();
     setTimeout(async () => {
       await activateUpcomingLoans();
       checkOverdueNotifications();
@@ -1521,6 +1522,7 @@ function submitLoan() {
         body: JSON.stringify({
           loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: equipment[idx].AccountManager || '',
           notes: document.getElementById('f-notes').value || '',
+          notesCell: document.getElementById('f-notes').value || '',
           items: [{ CHSAssetNo: currentItem.CHSAssetNo, Model: currentItem.Model, Description: currentItem.Description, SerialNo: currentItem.SerialNo }]
         })
       });
@@ -2550,7 +2552,7 @@ async function submitBatchLoan() {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, notes: notes,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, notes: notes, notesCell: notes,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -2663,24 +2665,16 @@ async function submitBatchLoan() {
 
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
 
-// Build a single device row for an active loan card body.
-// Uses string concatenation (no nested backticks) per code rules.
 function buildLoanDeviceRow(e, loanNotes) {
   const upcoming = getUpcomingLoanForItem(e.id);
   const upcomingBadge = upcoming
     ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer to <strong>' + esc(upcoming.loanTo) + '</strong> &mdash; starts ' + formatDisplayDate(upcoming.startDate) + '</div>'
     : '';
-  // Only show device-specific notes if they differ from the loan-level notes
-  const deviceNote = (e.Notes || '').trim();
-  const loanNote   = (loanNotes || '').trim();
-  const notesBadge = deviceNote && deviceNote !== loanNote
-    ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ' + esc(e.Notes) + '</div>'
-    : '';
   return '<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
     '<div class="loan-device-info">' +
     '<div class="loan-device-assetno" style="color:var(--accent)">' + esc(e.CHSAssetNo) + '</div>' +
     '<div class="loan-device-desc">' + esc(e.Model) + (e.SerialNo ? ' &middot; ' + e.SerialNo : '') + '</div>' +
-    upcomingBadge + notesBadge +
+    upcomingBadge +
     '</div>' +
     (e.TileUUID ? tileBtn(e.TileUUID) : '') +
     '<button class="btn btn-sm" onclick="event.stopPropagation();removeDeviceFromLoan(\'' + e.id + '\',\'' + esc(e.CHSAssetNo) + '\')" ' +
@@ -5000,7 +4994,7 @@ async function deleteScheduledLoanByKey(key) {
   showToast('info', 'Scheduled loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' cleared');
 }
 
-
+function viewOverdueLoans() {
   switchTab('loans');
   // Enable overdue filter
   const cb = document.getElementById('loans-overdue-only');
@@ -5023,6 +5017,22 @@ async function loadRetiredAssets() {
 }
 
 // ── UPCOMING LOANS ─────────────────────────────────────────────────────
+async function loadLoanDocNotes() {
+  try {
+    const r = await fetch(FB_URL + '/loanDocs.json');
+    const allDocs = await r.json();
+    if (!allDocs) return;
+    window._loanDocCache = window._loanDocCache || {};
+    for (const [batchId, doc] of Object.entries(allDocs)) {
+      if (!doc) continue;
+      window._loanDocCache[batchId] = {
+        notes:     doc.notes     || '',
+        notesCell: doc.notesCell || doc.notes || ''
+      };
+    }
+  } catch(e) { console.warn('Could not load loan doc notes', e); }
+}
+
 async function loadUpcomingLoans() {
   try {
     const r = await fetch(FB_URL + '/upcomingLoans.json');
