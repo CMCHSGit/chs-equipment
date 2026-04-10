@@ -110,7 +110,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 table{width:100%;border-collapse:collapse}
 thead{background:var(--surface2)}
 thead tr{position:sticky;top:0;z-index:4}
-th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;background:var(--surface2)}
+th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;background:var(--surface2);position:relative}
+th .col-resize-handle{position:absolute;right:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:10;background:transparent}
+th .col-resize-handle:hover,th .col-resize-handle.dragging{background:var(--accent);opacity:.5}
 th:hover{color:var(--text)}
 td{padding:10px 12px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
 tr:last-child td{border-bottom:none}
@@ -866,6 +868,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <div id="doc-send-email-note" style="display:none;font-size:11px;color:#0ea5e9;font-weight:500">Will send on close</div>
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
+        </button>
+        <button class="btn btn-sm" onclick="exportLoanRTF()" title="Export as RTF for Simpro">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Create RTF
         </button>
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
@@ -1667,7 +1672,7 @@ function renderTable() {
     return av<bv?-sortDir:av>bv?sortDir:0;
   });
   document.getElementById('db-row-count').textContent = rows.length + ' of ' + equipment.length + ' items';
-  setTimeout(() => { initDragScroll(); updateSelectionBar(); }, 50);
+  setTimeout(() => { initDragScroll(); initColResize(); updateSelectionBar(); }, 50);
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
     const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
     const checked = _selectedIds.has(e.id);
@@ -4206,6 +4211,97 @@ function openBatchReturnByGroup(g) {
   document.getElementById('batch-return-modal').classList.add('open');
 }
 
+function exportLoanRTF() {
+  const info = window._currentLoanDocInfo?.loanInfo;
+  const items = window._currentLoanDocInfo?.loanItems || _currentLoanDocItems || [];
+  if (!info) { showToast('error', 'No loan data available'); return; }
+
+  // Read live editable cells from the form
+  const doc = document.getElementById('printable-loan-doc');
+  const headerCells = doc?.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
+  const customer    = headerCells?.[0]?.innerText?.trim() || info.loanTo || '';
+  const address     = headerCells?.[1]?.innerText?.trim() || info.location || '';
+  const loanDate    = headerCells?.[2]?.innerText?.trim() || formatDisplayDate(info.startDate) || '';
+  const endDate     = headerCells?.[3]?.innerText?.trim() || formatDisplayDate(info.endDate) || '';
+  const am          = headerCells?.[4]?.innerText?.trim() || info.accountManager || '';
+  const contactNum  = headerCells?.[5]?.innerText?.trim() || info.contactNumber || '';
+  const notes       = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
+
+  // Read item rows from the equipment table
+  const equipTable = document.getElementById('loan-doc-equip-table') ||
+                     doc?.querySelectorAll('table')?.[2];
+  const rowLines = [];
+  if (equipTable) {
+    equipTable.querySelectorAll('tbody tr').forEach(row => {
+      const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText?.trim() || '');
+      if (cells.some(c => c)) {
+        rowLines.push(
+          (cells[0] || '').padEnd(12) + '  ' +
+          (cells[1] || '').padEnd(35) + '  ' +
+          (cells[2] || '')
+        );
+      }
+    });
+  }
+
+  // Build RTF content
+  const rtfEsc = s => s.replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}')
+    .replace(/[^\x00-\x7F]/g, c => '\\u' + c.charCodeAt(0) + '?');
+
+  const line  = s => '{\\pard ' + rtfEsc(s) + '\\par}\n';
+  const bold  = s => '{\\b ' + rtfEsc(s) + '}';
+  const rule  = () => '{\\pard \\brdrb\\brdrs\\brdrw10\\brdr0 \\par}\n';
+
+  let rtf = '{\\rtf1\\ansi\\deff0\n';
+  rtf += '{\\fonttbl{\\f0 Arial;}}\n';
+  rtf += '{\\f0\\fs20\n';
+
+  // Title
+  rtf += '{\\pard\\fs28\\b CMCHS Demo Equipment Loan Form\\par}\n';
+  rtf += '{\\pard\\par}\n';
+
+  // Header info
+  rtf += line(bold('Customer:') + '  ' + customer);
+  rtf += line(bold('Address:') + '  ' + address);
+  rtf += line(bold('Loan Date:') + '  ' + loanDate + '     ' + bold('Loan Ends:') + '  ' + endDate);
+  rtf += line(bold('Account Manager:') + '  ' + am + (contactNum ? '     ' + bold('Contact:') + '  ' + contactNum : ''));
+  rtf += '{\\pard\\par}\n';
+  rtf += rule();
+
+  // Equipment header
+  rtf += '{\\pard ' + bold('CHS ASSET #'.padEnd(12) + '  ' + 'DESCRIPTION'.padEnd(35) + '  SERIAL/PART #') + '\\par}\n';
+  rtf += rule();
+
+  // Equipment rows
+  rowLines.forEach(r => { rtf += line(r); });
+  rtf += rule();
+
+  // Notes
+  if (notes) {
+    rtf += '{\\pard\\par}\n';
+    rtf += '{\\pard ' + bold('Notes:') + '\\par}\n';
+    notes.split('\n').forEach(n => { rtf += line(n); });
+  }
+
+  // Footer
+  rtf += '{\\pard\\par}\n';
+  rtf += rule();
+  rtf += '{\\pard\\i Please ensure this form accompanies demo stock throughout trial and is returned to Connected Healthcare. Check all units have current ESC.\\par}\n';
+
+  rtf += '}}';
+
+  // Download
+  const blob = new Blob([rtf], { type: 'application/rtf' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const safeCustomer = (customer || 'loan').replace(/[^a-zA-Z0-9_\- ]/g, '').trim().replace(/\s+/g, '_');
+  a.href     = url;
+  a.download = 'CHS_Loan_' + safeCustomer + '_' + (info.startDate || nzDate()) + '.rtf';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('success', 'RTF exported');
+}
+
 function printLoanDoc() {
   const content = document.getElementById('printable-loan-doc').innerHTML;
   const w = window.open('', '_blank');
@@ -5427,6 +5523,48 @@ async function promptRestoreRetired(id) {
 }
 
 // ── DRAG TO SCROLL ─────────────────────────────────────────────────────
+function initColResize() {
+  const table = document.querySelector('#main-tbody')?.closest('table');
+  if (!table) return;
+  const ths = table.querySelectorAll('thead th');
+  ths.forEach((th, i) => {
+    // Skip checkbox column and last column
+    if (i === 0) return;
+    // Remove any existing handle
+    const existing = th.querySelector('.col-resize-handle');
+    if (existing) existing.remove();
+    // Add handle
+    const handle = document.createElement('div');
+    handle.className = 'col-resize-handle';
+    handle.addEventListener('mousedown', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      handle.classList.add('dragging');
+      const startX = e.pageX;
+      const startW = th.offsetWidth;
+      function onMove(e) {
+        const newW = Math.max(40, startW + e.pageX - startX);
+        th.style.width = newW + 'px';
+        th.style.minWidth = newW + 'px';
+        // Also set width on corresponding tds for fixed layout
+        const idx = Array.from(ths).indexOf(th);
+        table.querySelectorAll('tbody tr').forEach(row => {
+          const td = row.cells[idx];
+          if (td) { td.style.width = newW + 'px'; td.style.maxWidth = newW + 'px'; }
+        });
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    th.appendChild(handle);
+  });
+}
+
 function initDragScroll() {
   document.querySelectorAll('.table-scroll').forEach(el => {
     if (el._dragInit) return; // don't double-init
