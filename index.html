@@ -2816,6 +2816,12 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(\'' + key + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Reassign account manager" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Reassign' +
+        '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey(\'' + key + '\')" title="Add more devices to this loan">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items</button>' +
         '<button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey(\'' + key + '\')">Return items</button>' +
         '<button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteScheduledLoanByKey(\'' + key + '\')" title="Delete this scheduled loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
@@ -2858,6 +2864,8 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToUpcomingLoan(\'' + u.id + '\')" title="Add more devices to this upcoming loan">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" style="color:var(--red);border-color:var(--red-border)" title="Cancel upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
         '</button>' +
@@ -4663,6 +4671,7 @@ function clearSelection(alsoBasket) {
 // locked = true means already in an existing loan (from "Add items" on Active Loans)
 let _basketItems = [];
 let _basketLoanKey = null; // null = new loan, otherwise existing loan key
+let _basketUpcomingId = null; // set when adding to an upcoming loan
 
 function issueLoanFromSelection() {
   if (_selectedIds.size === 0) return;
@@ -4688,9 +4697,14 @@ function renderBasket() {
   const newItems = _basketItems.filter(b => !b.locked);
   const lockedItems = _basketItems.filter(b => b.locked);
   // Update header
-  const isAddMode = _basketLoanKey !== null;
+  const isAddMode = _basketLoanKey !== null || _basketUpcomingId !== null;
+  const addModeLabel = _basketLoanKey !== null
+    ? (getLoanGroupByKey(_basketLoanKey)?.loanTo || '')
+    : _basketUpcomingId !== null
+      ? (upcomingLoans.find(u => u.id === _basketUpcomingId)?.loanTo || '')
+      : '';
   document.getElementById('basket-title').textContent = isAddMode
-    ? 'Adding to Loan — ' + (getLoanGroupByKey(_basketLoanKey)?.loanTo || '')
+    ? 'Adding to Loan — ' + addModeLabel
     : 'Loan Basket';
   document.getElementById('basket-count').textContent = newItems.length + ' item' + (newItems.length !== 1 ? 's' : '') + ' to add';
   document.getElementById('basket-proceed-label').textContent = isAddMode ? 'Add to Loan' : 'Proceed to Loan';
@@ -4718,6 +4732,7 @@ function removeFromBasket(id) {
 function clearBasket() {
   _basketItems = [];
   _basketLoanKey = null;
+  _basketUpcomingId = null;
   document.getElementById('loan-basket').style.display = 'none';
 }
 
@@ -4793,7 +4808,31 @@ function proceedFromBasket() {
     return;
   }
 
-  // New loan -- switch to scan/batch and merge new items with any already in the form
+  if (_basketUpcomingId !== null) {
+    // Adding to an upcoming loan
+    const u = upcomingLoans.find(x => x.id === _basketUpcomingId);
+    if (!u) { showToast('error', 'Could not find upcoming loan'); return; }
+    let added = 0;
+    newItems.forEach(b => {
+      const eq = equipment.find(e => e.id === b.id);
+      if (!eq) return;
+      // Avoid duplicates
+      if (u.items.find(x => x.id === b.id || x.CHSAssetNo === b.CHSAssetNo)) {
+        showToast('error', b.CHSAssetNo + ' is already in this upcoming loan — skipped');
+        return;
+      }
+      u.items.push({ id: eq.id, CHSAssetNo: eq.CHSAssetNo });
+      // Tag the equipment item with this upcoming loan reference
+      const idx = equipment.findIndex(e => e.id === eq.id);
+      if (idx >= 0) equipment[idx]._upcomingLoanId = u.id;
+      added++;
+    });
+    scheduleSave(); renderTable(); updateStats(); renderLoans();
+    clearBasket();
+    showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to upcoming loan for ' + u.loanTo);
+    switchTab('loans');
+    return;
+  }
   switchTab('scan');
   setScanMode('batch');
   setTimeout(() => {
@@ -4852,6 +4891,28 @@ function openAddItemsToLoanByKey(key) {
     renderTable();
     renderBasket();
     showToast('info', 'Tick items in the database to add to this loan, then click "Add to Loan"');
+  }, 150);
+}
+
+function openAddItemsToUpcomingLoan(upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) return;
+  // Use the database tab basket flow, storing the upcoming loan id
+  _basketLoanKey = null;
+  _basketUpcomingId = upcomingId;
+  _basketItems = u.items.map(uItem => {
+    const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo) || uItem;
+    return { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: true };
+  });
+  switchTab('database');
+  const search = document.getElementById('db-search');
+  if (search) { search.value = ''; }
+  const statusFilter = document.getElementById('db-status');
+  if (statusFilter) statusFilter.value = '';
+  setTimeout(() => {
+    renderTable();
+    renderBasket();
+    showToast('info', 'Tick items in the database to add to this upcoming loan, then click "Add to Loan"');
   }, 150);
 }
 
