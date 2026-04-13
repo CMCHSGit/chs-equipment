@@ -2747,7 +2747,25 @@ function renderLoans() {
   if (sortBy === 'expiry') groups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
   if (sortBy === 'start')  groups.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
   const upcomingDeviceCount = upcomingLoans.reduce((sum, u) => sum + u.items.length, 0);
-  const scheduledGroups = Object.values(scheduledGrouped);
+  let scheduledGroups = Object.values(scheduledGrouped).filter(g => {
+    const matchQ = !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q);
+    const matchAM = !amFilter || (g.items[0]?.AccountManager || '') === amFilter;
+    return matchQ && matchAM;
+  });
+  if (sortBy === 'manager') scheduledGroups.sort((a,b) => {
+    const ma = (a.items[0]?.AccountManager||'zzz').toLowerCase();
+    const mb = (b.items[0]?.AccountManager||'zzz').toLowerCase();
+    if (ma !== mb) return ma < mb ? -1 : 1;
+    const sa = a.startDate || '0000', sb = b.startDate || '0000';
+    return sa < sb ? 1 : sa > sb ? -1 : 0;
+  });
+  if (sortBy === 'recent') scheduledGroups.sort((a,b) => {
+    const sa = a.startDate || '0000', sb = b.startDate || '0000';
+    return sa < sb ? 1 : sa > sb ? -1 : 0;
+  });
+  if (sortBy === 'alpha')  scheduledGroups.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
+  if (sortBy === 'expiry') scheduledGroups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
+  if (sortBy === 'start')  scheduledGroups.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
   const totalUpcoming = upcomingLoans.length + scheduledGroups.length;
   document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.filter(e => !(e.LoanStartDate && e.LoanStartDate > today)).length + ' devices' + (totalUpcoming ? ' · ' + totalUpcoming + ' upcoming' : '');
   if (!groups.length) {
