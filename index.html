@@ -2702,6 +2702,7 @@ async function submitBatchLoan() {
 
     const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
     window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
+    window._pendingLoanDocPdfKey = batchId; // must be set before generateLoanDoc so _currentLoanDocInfo._pdfKey is correct
     generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber }, null, { notesCell: '', authCell: '', batchNotes: notes });
 
     setTimeout(async () => {
@@ -4473,6 +4474,8 @@ async function createSimproJob(existingJobId) {
 
   // Check local cache first — load from localStorage so cache survives page refresh
   window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
+  // Clean up any stale null-key entries left by previous runs where pdfKey was missing
+  if ('null' in window._simproJobCache) { delete window._simproJobCache['null']; localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache)); }
   let jobId = existingJobId || window._simproJobCache[pdfKey] || null;
 
   // If not in cache, check Firebase
@@ -4542,31 +4545,36 @@ async function createSimproJob(existingJobId) {
     console.warn('Simpro proxy request failed:', err);
   }
 
-  if (isNew && pdfKey) {
-    // Poll Firebase for the real job ID written back by Apps Script (up to 15s)
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      try {
-        const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
-        const d = await r.json();
-        const storedId = d?.simproJobId;
-        // Accept any value that isn't a pending placeholder
-        const isPending = storedId === 'pending' || (storedId && typeof storedId === 'object' && storedId.status === 'pending');
-        if (storedId && !isPending) {
-          window._simproJobCache[pdfKey] = storedId;
-          localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+  if (isNew) {
+    if (pdfKey) {
+      // Poll Firebase for the real job ID written back by Apps Script (up to 15s)
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+          const d = await r.json();
+          const storedId = d?.simproJobId;
+          // Accept any value that isn't a pending placeholder
+          const isPending = storedId === 'pending' || (storedId && typeof storedId === 'object' && storedId.status === 'pending');
+          if (storedId && !isPending) {
+            window._simproJobCache[pdfKey] = storedId;
+            localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+            window._simproCreating = null;
+            clearInterval(poll);
+            showToast('success', 'Simpro job created — ID: ' + storedId);
+          }
+        } catch(e) {}
+        if (attempts >= 5) {
           window._simproCreating = null;
           clearInterval(poll);
-          showToast('success', 'Simpro job created — ID: ' + storedId);
+          showToast('success', 'Simpro job created');
         }
-      } catch(e) {}
-      if (attempts >= 5) {
-        window._simproCreating = null;
-        clearInterval(poll);
-        showToast('success', 'Simpro job created');
-      }
-    }, 3000);
+      }, 3000);
+    } else {
+      // No pdfKey — can't poll Firebase, but job was still sent for creation
+      showToast('success', 'Simpro job created');
+    }
   } else {
     showToast('success', 'Simpro job updated');
   }
