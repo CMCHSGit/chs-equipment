@@ -1187,7 +1187,8 @@ const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder temp
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'http://demo.chsnz.co.nz';
-const DUE_REMINDER_EMAIL    = 'demo@chsnz.co.nz';         // recipient for 2-day due reminders
+const DUE_REMINDER_EMAIL    = 'demo@chsnz.co.nz';         // recipient for 2-day due-back reminders
+const UPCOMING_REMINDER_EMAILS = ['peter.lin@cass.co.nz', 'jonathan@cass.co.nz']; // recipients for upcoming loan start reminders
 const SIMPRO_PROXY_URL      = 'https://script.google.com/macros/s/AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw/exec'; // paste Google Apps Script web app URL here
 
 // NZ timezone date helper
@@ -5884,7 +5885,7 @@ async function checkUpcomingLoanReminders() {
     const notifKey = 'upcoming_reminder_' + upcoming.id;
     if (_sentNotifications[notifKey]) continue;
 
-    if (DUE_REMINDER_EMAIL) await sendUpcomingLoanStartNotification(upcoming);
+    if (UPCOMING_REMINDER_EMAILS.length) await sendUpcomingLoanStartNotification(upcoming);
 
     // Also notify current AM if items are actively on another loan (transfer scenario)
     const affectedAMs = {};
@@ -5923,7 +5924,7 @@ async function checkUpcomingLoanReminders() {
     if (daysUntilStart !== 2) continue;
     const notifKey = 'upcoming_reminder_scheduled_' + g.loanTo + '|||' + g.startDate;
     if (_sentNotifications[notifKey]) continue;
-    if (DUE_REMINDER_EMAIL) {
+    if (UPCOMING_REMINDER_EMAILS.length) {
       await sendUpcomingLoanStartNotification({
         loanTo: g.loanTo, location: g.location,
         startDate: g.startDate, endDate: g.endDate,
@@ -5935,24 +5936,28 @@ async function checkUpcomingLoanReminders() {
 }
 
 async function sendUpcomingLoanStartNotification(upcoming) {
-  if (!_ejsReady || !DUE_REMINDER_EMAIL) return;
+  if (!_ejsReady) return;
   const itemsList = (upcoming.items || []).map(e =>
     '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
   ).join('\n');
-  try {
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email:       DUE_REMINDER_EMAIL,
-      to_name:        'CHS Team',
-      items:          itemsList,
-      due_date:       formatDisplayDate(upcoming.startDate),
-      return_link:    APP_URL + '?tab=loans',
-      extend_link:    APP_URL + '?tab=loans',
-      custom_subject: 'Upcoming Loan Starting in 2 Days — ' + upcoming.loanTo,
-      custom_message: 'This is a reminder that the following demo equipment is due to be loaned out in 2 days.\n\nCustomer: ' + upcoming.loanTo + '\nLoan Start: ' + formatDisplayDate(upcoming.startDate) + '\nLoan End: ' + formatDisplayDate(upcoming.endDate) + '\nLocation: ' + (upcoming.location || '—') + '\nAccount Manager: ' + (upcoming.accountManager || '—') + '\n\nEquipment:\n' + itemsList
-    });
-    console.log('Upcoming loan start notification sent to', DUE_REMINDER_EMAIL, 'for', upcoming.loanTo);
-  } catch(err) {
-    console.error('Upcoming loan start notification failed:', err);
+  const subject = 'Upcoming Loan Starting in 2 Days — ' + upcoming.loanTo;
+  const message = 'This is a reminder that the following demo equipment is due to be loaned out in 2 days.\n\nCustomer: ' + upcoming.loanTo + '\nLoan Start: ' + formatDisplayDate(upcoming.startDate) + '\nLoan End: ' + formatDisplayDate(upcoming.endDate) + '\nLocation: ' + (upcoming.location || '—') + '\nAccount Manager: ' + (upcoming.accountManager || '—') + '\n\nEquipment:\n' + itemsList;
+  for (const email of UPCOMING_REMINDER_EMAILS) {
+    try {
+      await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+        to_email:       email,
+        to_name:        'CHS Team',
+        items:          itemsList,
+        due_date:       formatDisplayDate(upcoming.startDate),
+        return_link:    APP_URL + '?tab=loans',
+        extend_link:    APP_URL + '?tab=loans',
+        custom_subject: subject,
+        custom_message: message
+      });
+      console.log('Upcoming loan start notification sent to', email, 'for', upcoming.loanTo);
+    } catch(err) {
+      console.error('Upcoming loan start notification failed for', email, ':', err);
+    }
   }
 }
 
