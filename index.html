@@ -5142,14 +5142,30 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       const _reviewInfo = { loanTo: g.loanTo, location: g.location, startDate: g.startDate || nzDate(), endDate: g.endDate || '', accountManager: g.items[0]?.AccountManager || '' };
       (async () => {
         let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+        let _savedRows = null;
         try {
           const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
-          if (_r.ok) { const _d = await _r.json(); if (_d) _savedExtra = { notesCell: _d.notesCell||'', authCell: _d.authCell||'', batchNotes: _d.notes||'', contactNumber: _d.contactNumber||'' }; }
+          if (_r.ok) {
+            const _d = await _r.json();
+            if (_d) {
+              _savedExtra = { notesCell: _d.notesCell||'', authCell: _d.authCell||'', batchNotes: _d.notes||'', contactNumber: _d.contactNumber||'' };
+              _savedRows = _d.savedRows || null;
+            }
+          }
         } catch(e) {}
+        // Append new item rows at bottom of any manually-edited rows
+        let _mergedSavedRows = null;
+        if (_savedRows && _savedRows.length > 0) {
+          const _newItemRows = itemsToAdd.map(b => {
+            const eq = equipment.find(e => e.id === b.id);
+            return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', '', '', '', ''];
+          });
+          _mergedSavedRows = [..._savedRows, ..._newItemRows];
+        }
         setTimeout(() => {
           window._autoSendOnClose = false;
           window._pendingLoanDocPdfKey = batchId || null;
-          generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber||'' }, null, _savedExtra);
+          generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber||'' }, _mergedSavedRows, _savedExtra);
           setTimeout(async () => { try { await saveLoanDocChanges(); } catch(e) {} }, 600);
         }, 400);
       })();
@@ -5447,16 +5463,30 @@ async function _doAddItemsToLoan(g, validRows) {
     accountManager: g.items[0]?.AccountManager || ''
   };
 
-  // Load any existing saved extras (notes, auth) from Firebase so they aren't lost
+  // Load any existing saved extras AND rows from Firebase so manually-added rows aren't lost
   let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+  let _savedRows = null;
   if (batchId) {
     try {
       const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       if (_r.ok) {
         const _d = await _r.json();
-        if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
+        if (_d) {
+          _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
+          _savedRows = _d.savedRows || null;
+        }
       }
     } catch(e) {}
+  }
+
+  // If the form had manually-edited rows, append new item rows at the bottom
+  // rather than regenerating from scratch (which would wipe them)
+  let _mergedSavedRows = null;
+  if (_savedRows && _savedRows.length > 0) {
+    const _newItemRows = added.map(e => [
+      e.CHSAssetNo || '', e.Description || e.Model || '', e.SerialNo || e.PartNo || '', '', '', '', ''
+    ]);
+    _mergedSavedRows = [..._savedRows, ..._newItemRows];
   }
 
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
@@ -5465,7 +5495,7 @@ async function _doAddItemsToLoan(g, validRows) {
   setTimeout(() => {
     window._autoSendOnClose = false;
     window._pendingLoanDocPdfKey = batchId || null;
-    generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
+    generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, _mergedSavedRows, _savedExtra);
     // Auto-save the updated loan doc (persists new items to Firebase) then update Simpro
     setTimeout(async () => {
       try { await saveLoanDocChanges(); } catch(e) {}
