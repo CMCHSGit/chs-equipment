@@ -4234,8 +4234,8 @@ async function saveLoanDocChanges() {
   const ldcAfterSave = document.getElementById('loan-doc-content');
   if (ldcAfterSave) { ldcAfterSave.removeEventListener('input', _loanDocEditHandler); ldcAfterSave.addEventListener('input', _loanDocEditHandler); }
   showToast('success', 'Loan form saved ✓' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
-  // Auto-update Simpro job if one exists for this loan
-  if (SIMPRO_PROXY_URL) { try { await createSimproJob(); } catch(e) {} }
+  // Auto-update Simpro job if one exists for this loan (skip if creation still in flight)
+  if (SIMPRO_PROXY_URL && !window._simproCreating) { try { await createSimproJob(); } catch(e) {} }
 }
 
 function getLoanGroupByKey(key) {
@@ -4391,6 +4391,7 @@ async function createSimproJob(existingJobId) {
   }
 
   const isNew = !jobId;
+  if (isNew) window._simproCreating = pdfKey; // block updates until job ID confirmed
 
   const params = new URLSearchParams({
     data: JSON.stringify({
@@ -4422,11 +4423,16 @@ async function createSimproJob(existingJobId) {
         const d = await r.json();
         if (d?.simproJobId) {
           window._simproJobCache[pdfKey] = d.simproJobId;
+          window._simproCreating = null; // unblock updates
           clearInterval(poll);
           showToast('success', 'Simpro job created — ID: ' + d.simproJobId);
         }
       } catch(e) {}
-      if (attempts >= 5) { clearInterval(poll); showToast('success', 'Simpro job created'); }
+      if (attempts >= 5) {
+        window._simproCreating = null; // unblock even if polling timed out
+        clearInterval(poll);
+        showToast('success', 'Simpro job created');
+      }
     }, 3000);
   } else {
     showToast('success', 'Simpro job updated');
@@ -5010,6 +5016,9 @@ function proceedFromBasket() {
         window._autoSendOnClose = false;
         window._pendingLoanDocPdfKey = batchId || null;
         generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
+        if (SIMPRO_PROXY_URL && !window._simproCreating) {
+          setTimeout(() => { try { createSimproJob(); } catch(e) {} }, 600);
+        }
       }, 400);
     })();
     return;
@@ -5246,6 +5255,10 @@ async function _doAddItemsToLoan(g, validRows) {
     window._autoSendOnClose = false;
     window._pendingLoanDocPdfKey = batchId || null;
     generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
+    // Auto-update Simpro after form has rendered (skip if creation still in flight)
+    if (SIMPRO_PROXY_URL && !window._simproCreating) {
+      setTimeout(() => { try { createSimproJob(); } catch(e) {} }, 600);
+    }
   }, 400);
 }
 
