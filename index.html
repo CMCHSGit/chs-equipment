@@ -3531,7 +3531,9 @@ function checkOverdueNotifications() {
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: e.BorrowerEmail || '', items: [] };
+    // Resolve AM email — overdue alerts go to the account manager only
+    const amEmail = getAMEmail(e.AccountManager) || '';
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: amEmail, accountManager: e.AccountManager || '', items: [] };
     grouped[key].items.push(e);
   });
   Object.values(grouped).forEach(g => {
@@ -5700,7 +5702,8 @@ async function activateUpcomingLoans() {
 async function checkLoanDueReminders() {
   if (!_ejsReady) return;
   const today = nzDate();
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
+  // Exclude upcoming loans (LoanStartDate in the future) — those are handled by checkUpcomingLoanReminders
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && !(e.LoanStartDate && e.LoanStartDate > today));
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
@@ -5710,12 +5713,11 @@ async function checkLoanDueReminders() {
   for (const g of Object.values(grouped)) {
     const daysUntilEnd = daysBetween(today, g.endDate);
     if (daysUntilEnd !== 2) continue; // only fire exactly 2 days out
-    if (!g.email) { console.log('Due reminder: no email for', g.loanTo); continue; }
     const notifKey = 'due_reminder_' + g.loanTo + '|||' + g.endDate;
     if (_sentNotifications[notifKey]) continue; // already sent
     await sendLoanDueReminderEmail(g);
     await markNotificationSent(notifKey);
-    console.log('Due reminder sent to', g.email, 'for', g.loanTo);
+    console.log('Due reminder sent to', DUE_REMINDER_EMAIL, 'for', g.loanTo);
   }
 }
 
@@ -5742,7 +5744,7 @@ async function sendLoanDueReminderEmail(group) {
   }
 }
 
-// Check for upcoming loans starting in 2 days → send reminder to current AM
+// Check for upcoming loans starting in 2 days → send reminder to current AM + notify demo@chsnz.co.nz
 async function checkUpcomingLoanReminders() {
   const today = nzDate();
   for (const upcoming of upcomingLoans) {
@@ -5763,6 +5765,10 @@ async function checkUpcomingLoanReminders() {
     }
     for (const [email, info] of Object.entries(affectedAMs)) {
       await sendUpcomingTransferReminder(email, info.am, info.loanTo, info.items, upcoming);
+    }
+    // Also notify demo@chsnz.co.nz that an upcoming loan is starting in 2 days
+    if (DUE_REMINDER_EMAIL) {
+      await sendUpcomingLoanStartNotification(upcoming);
     }
     await markNotificationSent(notifKey);
   }
@@ -5786,6 +5792,28 @@ async function sendUpcomingTransferReminder(toEmail, toName, currentLoanTo, item
     });
     console.log('Transfer reminder sent to', toEmail);
   } catch(e) { console.error('Transfer reminder failed', e); }
+}
+
+async function sendUpcomingLoanStartNotification(upcoming) {
+  if (!_ejsReady || !DUE_REMINDER_EMAIL) return;
+  const itemsList = (upcoming.items || []).map(e =>
+    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
+  ).join('\n');
+  try {
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email:       DUE_REMINDER_EMAIL,
+      to_name:        'CHS Team',
+      items:          itemsList,
+      due_date:       formatDisplayDate(upcoming.startDate),
+      return_link:    APP_URL + '?tab=loans',
+      extend_link:    APP_URL + '?tab=loans',
+      custom_subject: 'Upcoming Loan Starting in 2 Days — ' + upcoming.loanTo,
+      custom_message: 'This is a reminder that the following demo equipment is due to be loaned out in 2 days.\n\nCustomer: ' + upcoming.loanTo + '\nLoan Start: ' + formatDisplayDate(upcoming.startDate) + '\nLoan End: ' + formatDisplayDate(upcoming.endDate) + '\nLocation: ' + (upcoming.location || '—') + '\nAccount Manager: ' + (upcoming.accountManager || '—') + '\n\nEquipment:\n' + itemsList
+    });
+    console.log('Upcoming loan start notification sent to', DUE_REMINDER_EMAIL, 'for', upcoming.loanTo);
+  } catch(err) {
+    console.error('Upcoming loan start notification failed:', err);
+  }
 }
 
 async function saveRetiredAssets() {
