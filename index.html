@@ -1656,7 +1656,9 @@ function renderTable() {
   const sf  = document.getElementById('db-status').value;
   const today = nzDate();
   let rows = equipment.filter(e => {
-    const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
+    const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+    const on = e.OnLoanTo && e.Returned !== 'Yes' && !isScheduled;
+    const od = on && e.LoanEndDate && e.LoanEndDate < today;
     const match = !q || Object.values(e).join(' ').toLowerCase().includes(q);
     if (sf === 'available') return match && !on;
     if (sf === 'on-loan')   return match && on;
@@ -4755,6 +4757,7 @@ function clearBasket() {
 }
 
 function proceedFromBasket() {
+  const today = nzDate();
   const newItems = _basketItems.filter(b => !b.locked);
   if (!newItems.length) { showToast('error', 'No new items in basket'); return; }
 
@@ -4767,8 +4770,17 @@ function proceedFromBasket() {
     newItems.forEach(b => {
       const idx = equipment.findIndex(e => e.id === b.id);
       if (idx < 0) return;
-      if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
+      const eq = equipment[idx];
+      const isScheduled = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.LoanStartDate && eq.LoanStartDate > today;
+      const isActivelyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && !isScheduled;
+      // Block if actively out in the field
+      if (isActivelyOut) {
         showToast('error', b.CHSAssetNo + ' is already on loan — skipped');
+        return;
+      }
+      // Block if scheduled loan dates overlap with this loan
+      if (isScheduled && g.startDate && eq.LoanEndDate && eq.LoanEndDate > g.startDate) {
+        showToast('error', b.CHSAssetNo + ' has a conflicting scheduled loan until ' + formatDisplayDate(eq.LoanEndDate) + ' — skipped');
         return;
       }
       Object.assign(equipment[idx], {
@@ -4904,7 +4916,7 @@ function openAddItemsToLoanByKey(key) {
   const search = document.getElementById('db-search');
   if (search) { search.value = ''; }
   const statusFilter = document.getElementById('db-status');
-  if (statusFilter) statusFilter.value = 'available'; // default to available
+  if (statusFilter) statusFilter.value = ''; // show all — includes scheduled items not yet out
   setTimeout(() => {
     renderTable();
     renderBasket();
