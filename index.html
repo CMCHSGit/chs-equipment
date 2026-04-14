@@ -3414,6 +3414,12 @@ function initEmailJS() {
       emailjs.init({ publicKey: EJS_KEY });
       _ejsReady = true;
       console.log('EmailJS ready');
+      // Re-run notification checks now that EmailJS is ready —
+      // the startup checks fire at 500ms but EmailJS loads at ~1000ms,
+      // so they returned early and nothing was marked as sent.
+      checkOverdueNotifications();
+      checkUpcomingLoanReminders();
+      checkLoanDueReminders();
     } else if (attempts < 5) {
       attempts++;
       setTimeout(tryInit, 1000);
@@ -3562,12 +3568,14 @@ function lastMondayNZ() {
 }
 
 function checkOverdueNotifications() {
+  if (!_ejsReady) return; // don't mark as sent if EmailJS isn't ready yet
   const today = nzDate();
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: e.BorrowerEmail || '', items: [] };
+    const amEmail = getAMEmail(e.AccountManager) || '';
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: amEmail, accountManager: e.AccountManager || '', items: [] };
     grouped[key].items.push(e);
   });
   Object.values(grouped).forEach(g => {
@@ -3582,9 +3590,12 @@ function checkOverdueNotifications() {
     // Send if: never sent, OR last sent before this Monday AND today is Monday after 9am
     const shouldSend = !lastSent || (isMondayMorningNZ() && lastSent < thisMonday);
     if (shouldSend) {
-      markNotificationSent(notifKey);
-      sendOverdueEmail(g);
-      console.log('Weekly overdue reminder sent to', g.email, 'for', g.loanTo);
+      sendOverdueEmail(g).then(() => {
+        markNotificationSent(notifKey);
+        console.log('Weekly overdue reminder sent to', g.email, 'for', g.loanTo);
+      }).catch(err => {
+        console.error('Overdue email failed, will retry next check:', err);
+      });
     }
   });
 }
@@ -5862,6 +5873,7 @@ async function sendLoanDueReminderEmail(group) {
 
 // Check for upcoming loans starting in 2 days → send reminder to current AM
 async function checkUpcomingLoanReminders() {
+  if (!_ejsReady) return; // don't mark as sent if EmailJS isn't ready yet — will retry after init
   const today = nzDate();
   for (const upcoming of upcomingLoans) {
     if (!upcoming.startDate) continue;
