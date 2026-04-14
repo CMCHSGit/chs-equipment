@@ -6131,13 +6131,15 @@ function renderCalendar() {
   // Collect all loans (active + upcoming) that intersect the window
   const rows = [];
 
-  // Active loans from equipment
+  // Active loans from equipment (exclude scheduled — future start date)
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + (e.Location || '') + '|||' + (e.LoanEndDate || '');
+    const isScheduled = e.LoanStartDate && e.LoanStartDate > today;
     if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location || '',
-      startDate: e.LoanStartDate || '', endDate: e.LoanEndDate || '', items: [], type: 'active' };
+      startDate: e.LoanStartDate || '', endDate: e.LoanEndDate || '', items: [],
+      type: isScheduled ? 'scheduled' : 'active' };
     grouped[key].items.push(e);
   });
   Object.values(grouped).forEach(g => {
@@ -6146,10 +6148,15 @@ function renderCalendar() {
     rows.push(g);
   });
 
-  // Upcoming loans
+  // Upcoming loans (conflict-queued, not already in equipment records)
   upcomingLoans.forEach(u => {
     if (u.endDate && u.endDate < winStart) return;
     if (u.startDate && u.startDate > winEnd) return;
+    // Skip if already represented by a scheduled equipment group for the same customer
+    const alreadyShown = Object.values(grouped).some(g =>
+      g.loanTo.toLowerCase() === u.loanTo.toLowerCase() && g.type === 'scheduled'
+    );
+    if (alreadyShown) return;
     rows.push({ loanTo: u.loanTo, location: u.location || '',
       startDate: u.startDate || '', endDate: u.endDate || '',
       items: u.items, type: 'upcoming', upcomingId: u.id });
@@ -6234,7 +6241,7 @@ function renderCalendar() {
     const key   = _colorKeyForGroup(g);
     const color = _loanColors[key] || '#3b82f6';
     const alpha = color + '22';
-    const isUpcoming = g.type === 'upcoming';
+    const isUpcoming = g.type === 'upcoming' || g.type === 'scheduled';
 
     // Bar start/end clamped to window
     const barStart = g.startDate && g.startDate > winStart ? g.startDate : winStart;
@@ -6246,10 +6253,11 @@ function renderCalendar() {
 
     // Label cell
     const _isUpcomingRow = g.type === 'upcoming';
+    const _isScheduledRow = g.type === 'scheduled';
     const _navOnclick = _isUpcomingRow
       ? 'navigateToUpcomingLoan(\'' + (g.upcomingId || '') + '\')'
       : 'navigateToLoanByKey(decodeURIComponent(\'' + encodeURIComponent(g.loanTo) + '|||' + (g.endDate || '') + '\'))';
-    const _navTitle = _isUpcomingRow ? 'Go to this upcoming loan' : 'Go to this loan in Active Loans';
+    const _navTitle = _isUpcomingRow ? 'Go to this upcoming loan' : _isScheduledRow ? 'Go to this scheduled loan' : 'Go to this loan in Active Loans';
     html += '<div style="width:' + LABEL_W + 'px;min-width:' + LABEL_W + 'px;padding:6px 10px;border-right:2px solid var(--border2);background:var(--surface);display:flex;align-items:center;gap:8px;overflow:hidden;cursor:pointer" onclick="' + _navOnclick + '" title="' + _navTitle + '">';
     html += '<input type="color" value="' + color + '" title="Pick colour" style="width:20px;height:20px;border:none;border-radius:4px;cursor:pointer;flex-shrink:0;padding:0" onclick="event.stopPropagation()" onchange="saveLoanColor(\'' + key + '\',this.value);renderCalendar()">';
     html += '<div style="min-width:0"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (isUpcoming ? '#6d28d9' : 'var(--text)') + '">' + esc(g.loanTo) + (isUpcoming ? ' <span style="font-size:10px;opacity:.7">⏳</span>' : '') + '</div>';
