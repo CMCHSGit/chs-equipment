@@ -4474,24 +4474,33 @@ async function createSimproJob(existingJobId) {
     } catch(e) {}
   }
 
-  // If jobId is 'pending', creation is in flight — skip entirely to avoid duplicates
-  if (jobId === 'pending') {
-    console.log('Simpro: creation in flight, skipping update');
-    return;
+  // If jobId is 'pending', check whether it's stale (> 2 min old) before blocking
+  // A stale 'pending' means a previous creation attempt failed mid-flight — allow retry
+  if (jobId === 'pending' || (jobId && typeof jobId === 'object' && jobId.status === 'pending')) {
+    const pendingTs = (typeof jobId === 'object' && jobId.ts) ? jobId.ts : (window._simproCreatedAt || 0);
+    const staleCutoff = 2 * 60 * 1000; // 2 minutes
+    if (Date.now() - pendingTs < staleCutoff) {
+      console.log('Simpro: creation in flight, skipping update');
+      return;
+    }
+    // Stale — clear it and allow re-creation
+    console.log('Simpro: stale pending detected, clearing and retrying');
+    jobId = null;
+    if (window._simproJobCache) { delete window._simproJobCache[pdfKey]; localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache)); }
   }
 
   const isNew = !jobId;
   if (isNew && pdfKey) {
-    // Write a placeholder immediately so subsequent reads don't create a duplicate
+    // Write a placeholder with timestamp immediately so subsequent reads don't create a duplicate
     window._simproCreating = pdfKey;
     window._simproCreatedAt = Date.now();
     try {
       await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify('pending')
+        body: JSON.stringify({ status: 'pending', ts: Date.now() })
       });
-      // Also cache it so the guard works across form open/close
+      // Also cache locally — store as string 'pending' to keep local guard simple
       window._simproJobCache[pdfKey] = 'pending';
       localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
     } catch(e) {}
@@ -4525,12 +4534,15 @@ async function createSimproJob(existingJobId) {
       try {
         const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
         const d = await r.json();
-        if (d?.simproJobId && d.simproJobId !== 'pending') {
-          window._simproJobCache[pdfKey] = d.simproJobId;
+        const storedId = d?.simproJobId;
+        // Accept any value that isn't a pending placeholder
+        const isPending = storedId === 'pending' || (storedId && typeof storedId === 'object' && storedId.status === 'pending');
+        if (storedId && !isPending) {
+          window._simproJobCache[pdfKey] = storedId;
           localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
           window._simproCreating = null;
           clearInterval(poll);
-          showToast('success', 'Simpro job created — ID: ' + d.simproJobId);
+          showToast('success', 'Simpro job created — ID: ' + storedId);
         }
       } catch(e) {}
       if (attempts >= 5) {
