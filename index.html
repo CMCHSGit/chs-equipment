@@ -5086,7 +5086,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   );
 }
 
-
+function proceedFromBasket() {
   const today = nzDate();
   const newItems = _basketItems.filter(b => !b.locked);
   if (!newItems.length) { showToast('error', 'No new items in basket'); return; }
@@ -5162,14 +5162,12 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   setScanMode('batch');
   setTimeout(() => {
     if (!window._batchStatus) window._batchStatus = {};
-    // Find asset numbers already queued in the batch form
     const existingAssetNos = new Set(batchDevices.filter(d => d.value).map(d => d.value.toUpperCase()));
-    // Only add items not already queued
     const toAdd = newItems.filter(b => !existingAssetNos.has(b.CHSAssetNo.toUpperCase()));
-    const basePop = batchDevices.filter(d => d.value); // keep existing non-empty rows
+    const basePop = batchDevices.filter(d => d.value);
     const merged = basePop.concat(toAdd.map((b, i) => ({ id: 'bd_bsk_' + Date.now() + '_' + i, value: b.CHSAssetNo })));
     if (!merged.length) merged.push({ id: 'bd_0', value: '' });
-    merged.push({ id: 'bd_end_' + Date.now(), value: '' }); // trailing empty row
+    merged.push({ id: 'bd_end_' + Date.now(), value: '' });
     batchDevices = merged;
     batchDevices.forEach(d => {
       if (!d.value) return;
@@ -5182,8 +5180,6 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       }
     });
     renderBatchDevices();
-    // Keep basket open so user can come back and add more items
-    // Refresh basket to show merged count
     _basketItems = batchDevices.filter(d => d.value).map(d => {
       const eq = equipment.find(e => e.CHSAssetNo === d.value);
       return eq ? { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: false } : null;
