@@ -1148,6 +1148,16 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<div class="modal-overlay" id="generic-modal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title" id="generic-modal-title"></div>
+    </div>
+    <div id="generic-modal-body" style="max-height:60vh;overflow-y:auto;margin-bottom:4px"></div>
+    <div class="modal-footer" id="generic-modal-footer"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="orphan-modal">
   <div class="modal" style="max-width:620px">
     <div class="modal-header">
@@ -1656,7 +1666,8 @@ function renderTable() {
   const sf  = document.getElementById('db-status').value;
   const today = nzDate();
   let rows = equipment.filter(e => {
-    const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
+    const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+    const on = e.OnLoanTo && e.Returned !== 'Yes' && !isScheduled, od = on && e.LoanEndDate && e.LoanEndDate < today;
     const match = !q || Object.values(e).join(' ').toLowerCase().includes(q);
     if (sf === 'available') return match && !on;
     if (sf === 'on-loan')   return match && on;
@@ -2005,7 +2016,7 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','generic-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
@@ -2165,7 +2176,22 @@ function closeConflictModal() {
   _conflictProceedCallback = null;
 }
 
-// -- ORPHANED LOAN RECOVERY --------------------------------------------------
+function showGenericModal(title, bodyHtml, buttons) {
+  document.getElementById('generic-modal-title').textContent = title;
+  document.getElementById('generic-modal-body').innerHTML = bodyHtml;
+  document.getElementById('generic-modal-footer').innerHTML = buttons.map((b, i) =>
+    `<button class="btn ${b.style||''}" id="gmbtn_${i}">${b.label}</button>`
+  ).join('');
+  buttons.forEach((b, i) => {
+    document.getElementById('gmbtn_' + i).addEventListener('click', () => {
+      document.getElementById('generic-modal').classList.remove('open');
+      b.action();
+    });
+  });
+  document.getElementById('generic-modal').classList.add('open');
+}
+
+
 // An "orphaned" loan = equipment has a BatchID set but OnLoanTo is blank,
 // meaning the main data.json save was lost (e.g. page refreshed during the
 // 800ms debounce window, or a concurrent session overwrote it). The loanDoc
@@ -4996,78 +5022,138 @@ function clearBasket() {
   document.getElementById('loan-basket').style.display = 'none';
 }
 
-function proceedFromBasket() {
+async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
+  if (!itemsToAdd.length) return;
+  const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
+  let added = 0;
+  itemsToAdd.forEach(b => {
+    const idx = equipment.findIndex(e => e.id === b.id);
+    if (idx < 0) return;
+    Object.assign(equipment[idx], {
+      OnLoanTo: g.loanTo, Location: g.location,
+      LoanStartDate: g.startDate || nzDate(),
+      LoanEndDate: g.endDate || '',
+      Returned: 'No', BatchID: batchId,
+      AccountManager: g.items[0]?.AccountManager || '',
+      BorrowerEmail: g.items[0]?.BorrowerEmail || ''
+    });
+    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+    added++;
+  });
+  scheduleSave(); renderTable(); updateStats(); renderLoans();
+  clearBasket();
+
+  const skippedNote = skipped && skipped.length
+    ? `<div style="margin-top:10px;padding:10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);font-size:12px;color:var(--red)"><strong>Skipped (already out in field):</strong> ${skipped.map(b => esc(b.CHSAssetNo)).join(', ')}</div>`
+    : '';
+  const addedRows = itemsToAdd.map(b => {
+    const eq = equipment.find(e => e.id === b.id);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <div><span style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)}</span> <span style="color:var(--text2);font-size:12px">${esc(eq?.Model||'')}</span></div>
+    </div>`;
+  }).join('');
+
+  showGenericModal(
+    '✅ Items Added to Loan',
+    `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">${added} item${added!==1?'s':''} added to <strong>${esc(g.loanTo)}</strong>${g.startDate ? ' (starts ' + formatDisplayDate(g.startDate) + ')' : ''}:</div>
+    ${addedRows}${skippedNote}`,
+    [{ label: 'Done', style: 'btn-primary', action: () => {
+      switchTab('loans');
+      const _newBasketAssetNos = new Set(itemsToAdd.map(b => (b.CHSAssetNo||'').toLowerCase()));
+      const _allLoanItems = batchId
+        ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
+        : equipment.filter(e => e.OnLoanTo === g.loanTo && (e.LoanEndDate||'') === (g.endDate||'') && e.Returned !== 'Yes');
+      const _loanItems = [
+        ..._allLoanItems.filter(e => !_newBasketAssetNos.has((e.CHSAssetNo||'').toLowerCase())),
+        ..._allLoanItems.filter(e => _newBasketAssetNos.has((e.CHSAssetNo||'').toLowerCase()))
+      ];
+      const _reviewInfo = { loanTo: g.loanTo, location: g.location, startDate: g.startDate || nzDate(), endDate: g.endDate || '', accountManager: g.items[0]?.AccountManager || '' };
+      (async () => {
+        let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+        try {
+          const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+          if (_r.ok) { const _d = await _r.json(); if (_d) _savedExtra = { notesCell: _d.notesCell||'', authCell: _d.authCell||'', batchNotes: _d.notes||'', contactNumber: _d.contactNumber||'' }; }
+        } catch(e) {}
+        setTimeout(() => {
+          window._autoSendOnClose = false;
+          window._pendingLoanDocPdfKey = batchId || null;
+          generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber||'' }, null, _savedExtra);
+          setTimeout(async () => { try { await saveLoanDocChanges(); } catch(e) {} }, 600);
+        }, 400);
+      })();
+    }}]
+  );
+}
+
+
+  const today = nzDate();
   const newItems = _basketItems.filter(b => !b.locked);
   if (!newItems.length) { showToast('error', 'No new items in basket'); return; }
 
   if (_basketLoanKey !== null) {
-    // Adding to existing loan
     const g = getLoanGroupByKey(_basketLoanKey);
     if (!g) { showToast('error', 'Could not find loan'); return; }
-    const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
-    let added = 0;
+
+    // Categorise items before doing anything
+    const clean = [], activeConflicts = [], dateConflicts = [];
     newItems.forEach(b => {
-      const idx = equipment.findIndex(e => e.id === b.id);
-      if (idx < 0) return;
-      if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
-        showToast('error', b.CHSAssetNo + ' is already on loan — skipped');
-        return;
+      const eq = equipment.find(e => e.id === b.id);
+      if (!eq) return;
+      const isScheduled = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.LoanStartDate && eq.LoanStartDate > today;
+      const isActivelyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && !isScheduled;
+      if (isActivelyOut) {
+        activeConflicts.push(b);
+      } else if (isScheduled && g.startDate && eq.LoanEndDate && eq.LoanEndDate > g.startDate) {
+        dateConflicts.push({ ...b, scheduledUntil: eq.LoanEndDate, scheduledFor: eq.OnLoanTo });
+      } else {
+        clean.push(b);
       }
-      Object.assign(equipment[idx], {
-        OnLoanTo: g.loanTo, Location: g.location,
-        LoanStartDate: g.startDate || nzDate(),
-        LoanEndDate: g.endDate || '',
-        Returned: 'No', BatchID: batchId,
-        AccountManager: g.items[0]?.AccountManager || '',
-        BorrowerEmail: g.items[0]?.BorrowerEmail || ''
-      });
-      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
-      added++;
     });
-    scheduleSave(); renderTable(); updateStats(); renderLoans();
-    clearBasket();
-    showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
 
-    // Collect all items now on this loan, new items at the bottom
-    const _newBasketAssetNos = new Set(newItems.map(b => (b.CHSAssetNo || '').toLowerCase()));
-    const _allBasketItems = batchId
-      ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
-      : equipment.filter(e =>
-          e.OnLoanTo === g.loanTo &&
-          (e.LoanEndDate || '') === (g.endDate || '') &&
-          e.Returned !== 'Yes'
-        );
-    const _loanItems = [
-      ..._allBasketItems.filter(e => !_newBasketAssetNos.has((e.CHSAssetNo || '').toLowerCase())),
-      ..._allBasketItems.filter(e => _newBasketAssetNos.has((e.CHSAssetNo || '').toLowerCase()))
-    ];
-    const _reviewInfo = {
-      loanTo: g.loanTo, location: g.location,
-      startDate: g.startDate || nzDate(),
-      endDate: g.endDate || '',
-      accountManager: g.items[0]?.AccountManager || ''
-    };
+    // Date conflicts — show prompt with checkboxes
+    if (dateConflicts.length) {
+      const conflictRows = dateConflicts.map(b =>
+        `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+          <div>
+            <div style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)}</div>
+            <div style="font-size:12px;color:var(--text2)">${esc(b.Model||'')} — scheduled for <strong>${esc(b.scheduledFor)}</strong> until ${formatDisplayDate(b.scheduledUntil)}</div>
+          </div>
+          <input type="checkbox" id="force_${b.id}" style="width:16px;height:16px;cursor:pointer" checked>
+        </div>`
+      ).join('');
+      const activeRows = activeConflicts.length
+        ? `<div style="margin-top:10px;padding:10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);font-size:12px;color:var(--red)">
+            <strong>Cannot add (already out in field):</strong> ${activeConflicts.map(b => esc(b.CHSAssetNo)).join(', ')}
+           </div>` : '';
+      const cleanNote = clean.length
+        ? `<div style="margin-top:10px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:12px;color:#166534">
+            <strong>${clean.length} item${clean.length>1?'s':''} will be added without issue:</strong> ${clean.map(b => esc(b.CHSAssetNo)).join(', ')}
+           </div>` : '';
+      showGenericModal(
+        '⚠️ Date Conflicts Detected',
+        `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">The following items have scheduled loans that overlap with <strong>${esc(g.loanTo)}</strong> (starts ${formatDisplayDate(g.startDate)}). Tick to add anyway:</div>
+        ${conflictRows}${activeRows}${cleanNote}`,
+        [
+          { label: 'Add Selected', style: 'btn-primary', action: () => {
+            const forced = dateConflicts.filter(b => document.getElementById('force_' + b.id)?.checked);
+            _doBasketAddToLoan(g, [...clean, ...forced]);
+          }},
+          { label: 'Cancel', style: '', action: () => {} }
+        ]
+      );
+      return;
+    }
 
-    // Switch to Active Loans tab then open the updated loan form
-    switchTab('loans');
-    (async () => {
-      let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
-      try {
-        const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
-        if (_r.ok) {
-          const _d = await _r.json();
-          if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
-        }
-      } catch(e) {}
-      setTimeout(() => {
-        window._autoSendOnClose = false;
-        window._pendingLoanDocPdfKey = batchId || null;
-        generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
-        setTimeout(async () => {
-          try { await saveLoanDocChanges(); } catch(e) {}
-        }, 600);
-      }, 400);
-    })();
+    // All actively out — block entirely
+    if (activeConflicts.length && !clean.length) {
+      showGenericModal('Cannot Add Items',
+        `<div style="font-size:13px">The following items are already actively out on loan and cannot be added:<br><br><strong>${activeConflicts.map(b => esc(b.CHSAssetNo)).join(', ')}</strong></div>`,
+        [{ label: 'OK', style: '', action: () => {} }]);
+      return;
+    }
+
+    _doBasketAddToLoan(g, clean, activeConflicts);
     return;
   }
 
@@ -5125,7 +5211,7 @@ function openAddItemsToLoanByKey(key) {
   const search = document.getElementById('db-search');
   if (search) { search.value = ''; }
   const statusFilter = document.getElementById('db-status');
-  if (statusFilter) statusFilter.value = 'available'; // default to available
+  if (statusFilter) statusFilter.value = ''; // show all — includes scheduled items not yet out
   setTimeout(() => {
     renderTable();
     renderBasket();
