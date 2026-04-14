@@ -869,12 +869,6 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="btn btn-primary btn-sm" onclick="printLoanDoc()">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Print / Save PDF
         </button>
-        <button class="btn btn-sm" onclick="exportLoanRTF()" title="Export as RTF for Simpro">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Create RTF
-        </button>
-        <button class="btn btn-sm" id="simpro-job-btn" onclick="createSimproJob()" title="Create job in Simpro" style="background:#f97316;border-color:#f97316;color:white">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Create Simpro Job
-        </button>
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
@@ -2594,6 +2588,7 @@ async function submitBatchLoan() {
       : null;
     // Only auto-send on close when this is a brand new loan just confirmed
     window._autoSendOnClose = !!amEmailForConfirm;
+    window._autoCreateSimproOnClose = true;
 
     const badge = document.getElementById('loan-confirmed-badge');
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
@@ -3952,6 +3947,11 @@ async function closeLoanDoc() {
     try { await sendLoanDocEmail(); } catch(e) { console.warn('Auto-send email failed:', e); }
   }
   window._autoSendOnClose = false;
+  // Auto-create Simpro job only on first close after a new loan is confirmed
+  if (window._autoCreateSimproOnClose) {
+    window._autoCreateSimproOnClose = false;
+    try { await createSimproJob(); } catch(e) { console.warn('Auto Simpro job failed:', e); }
+  }
   document.getElementById('loan-doc-modal').classList.remove('open');
   window._currentLoanDocInfo = null;
 }
@@ -4115,6 +4115,8 @@ async function saveLoanDocChanges() {
   const ldcAfterSave = document.getElementById('loan-doc-content');
   if (ldcAfterSave) { ldcAfterSave.removeEventListener('input', _loanDocEditHandler); ldcAfterSave.addEventListener('input', _loanDocEditHandler); }
   showToast('success', 'Loan form saved ✓' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
+  // Auto-update Simpro job if one exists for this loan
+  if (SIMPRO_PROXY_URL) { try { await createSimproJob(); } catch(e) {} }
 }
 
 function getLoanGroupByKey(key) {
@@ -4217,27 +4219,21 @@ function openBatchReturnByGroup(g) {
   document.getElementById('batch-return-modal').classList.add('open');
 }
 
-async function createSimproJob() {
-  if (!SIMPRO_PROXY_URL) {
-    showToast('error', 'Simpro proxy URL not configured — see SIMPRO_PROXY_URL in code');
-    return;
-  }
-  const info  = window._currentLoanDocInfo?.loanInfo;
-  const items = window._currentLoanDocInfo?.loanItems || _currentLoanDocItems || [];
-  if (!info) { showToast('error', 'No loan data available'); return; }
+async function createSimproJob(existingJobId) {
+  if (!SIMPRO_PROXY_URL) return;
+  const info = window._currentLoanDocInfo?.loanInfo;
+  if (!info) return;
 
-  // Read live editable cells
   const doc = document.getElementById('printable-loan-doc');
   const headerCells = doc?.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
-  const loanTo      = headerCells?.[0]?.innerText?.trim() || info.loanTo || '';
-  const location    = headerCells?.[1]?.innerText?.trim() || info.location || '';
-  const startDate   = headerCells?.[2]?.innerText?.trim() || info.startDate || '';
-  const endDate     = headerCells?.[3]?.innerText?.trim() || info.endDate || '';
-  const am          = headerCells?.[4]?.innerText?.trim() || info.accountManager || '';
-  const contactNum  = headerCells?.[5]?.innerText?.trim() || info.contactNumber || '';
-  const notes       = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
+  const loanTo     = headerCells?.[0]?.innerText?.trim() || info.loanTo || '';
+  const location   = headerCells?.[1]?.innerText?.trim() || info.location || '';
+  const startDate  = headerCells?.[2]?.innerText?.trim() || info.startDate || '';
+  const endDate    = headerCells?.[3]?.innerText?.trim() || info.endDate || '';
+  const am         = headerCells?.[4]?.innerText?.trim() || info.accountManager || '';
+  const contactNum = headerCells?.[5]?.innerText?.trim() || info.contactNumber || '';
+  const notes      = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
 
-  // Read item rows from equipment table
   const equipTable = document.getElementById('loan-doc-equip-table') || doc?.querySelectorAll('table')?.[2];
   const loanItems = [];
   if (equipTable) {
@@ -4247,7 +4243,6 @@ async function createSimproJob() {
     });
   }
 
-  // Convert display dates back to YYYY-MM-DD for Simpro
   function toISO(d) {
     if (!d) return '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
@@ -4258,32 +4253,42 @@ async function createSimproJob() {
     return d;
   }
 
-  const btn = document.getElementById('simpro-job-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+  const pdfKey = window._currentLoanDocInfo?._pdfKey;
 
-  try {
-    const params = new URLSearchParams({
-      data: JSON.stringify({
-        loanTo, location, notes,
-        startDate:      toISO(startDate),
-        endDate:        toISO(endDate),
-        accountManager: am,
-        contactNumber:  contactNum,
-        items:          loanItems
-      })
-    });
-    // Use an Image request — guaranteed to fire cross-origin without CORS issues
-    await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = img.onerror = () => resolve();
-      img.src = SIMPRO_PROXY_URL + '?' + params.toString();
-      setTimeout(resolve, 8000); // 8s timeout fallback
-    });
-    showToast('success', 'Simpro job creation sent — check Simpro to confirm');
-  } catch(e) {
-    showToast('error', 'Could not reach Simpro proxy: ' + e.message);
-  } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Create Simpro Job'; }
+  // If no jobId passed, check Firebase for a stored one
+  let jobId = existingJobId || null;
+  if (!jobId && pdfKey) {
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+      const d = await r.json();
+      if (d?.simproJobId) jobId = d.simproJobId;
+    } catch(e) {}
+  }
+
+  const params = new URLSearchParams({
+    data: JSON.stringify({
+      loanTo, location, notes,
+      startDate:      toISO(startDate),
+      endDate:        toISO(endDate),
+      accountManager: am,
+      contactNumber:  contactNum,
+      items:          loanItems,
+      jobId:          jobId || null,
+      pdfKey:         pdfKey || null  // proxy writes jobId back to Firebase
+    })
+  });
+
+  await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = img.onerror = () => resolve();
+    img.src = SIMPRO_PROXY_URL + '?' + params.toString();
+    setTimeout(resolve, 8000);
+  });
+
+  if (!jobId) {
+    showToast('success', 'Simpro job created');
+  } else {
+    showToast('success', 'Simpro job updated');
   }
 }
 
