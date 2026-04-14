@@ -1565,7 +1565,7 @@ async function submitReturn() {
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
   const batchId = equipment[idx].BatchID || null;
-  Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '' });
+  Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Returned', loanTo: prev.loanTo, location: prev.loc });
   scheduleSave(); updateStats(); renderTable(); clearScan();
@@ -1587,7 +1587,7 @@ function submitCount() {
   // Mark as counted + return if on loan
   Object.assign(equipment[idx], {
     Counted: countedValue,
-    OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes'
+    OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', _transferNote: null
   });
   historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
@@ -2840,6 +2840,18 @@ function buildLoanDeviceRow(e, loanNotes) {
     '</div>';
 }
 
+function buildGhostDeviceRow(e) {
+  const tn = e._transferNote;
+  return '<div class="loan-device" style="cursor:pointer;opacity:0.6;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(109,40,217,0.04) 6px,rgba(109,40,217,0.04) 12px)" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
+    '<div class="loan-device-info">' +
+    '<div class="loan-device-assetno" style="color:var(--accent)">' + esc(e.CHSAssetNo) + '</div>' +
+    '<div class="loan-device-desc">' + esc(e.Model) + (e.SerialNo ? ' &middot; ' + e.SerialNo : '') + '</div>' +
+    '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x21AA; Transferred to <strong>' + esc(tn.toLoanTo) + '</strong> on ' + formatDisplayDate(tn.transferredOn) + '</div>' +
+    '</div>' +
+    '<span style="font-size:11px;color:#6d28d9;padding:2px 8px;background:rgba(109,40,217,0.08);border:1px solid rgba(109,40,217,0.2);border-radius:20px;white-space:nowrap;flex-shrink:0">Transferred out</span>' +
+    '</div>';
+}
+
 function renderLoans() {
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
   const sortBy = document.getElementById('loans-sort')?.value || 'added';
@@ -2895,6 +2907,25 @@ function renderLoans() {
       return;
     }
   }
+  // Inject ghost items — equipment that was transferred out still shows on the old loan card
+  // with a "Transferred out" indicator so reviewers aren't confused by missing items
+  const transferredItems = equipment.filter(e => e._transferNote && e.OnLoanTo && e.Returned !== 'Yes');
+  transferredItems.forEach(e => {
+    const tn = e._transferNote;
+    // Match old loan group by batchId first, then by loanTo+endDate
+    const matchGroup = groups.find(g =>
+      (tn.fromBatchId && g.items[0]?.BatchID === tn.fromBatchId) ||
+      (g.loanTo === tn.fromLoanTo && (g.endDate || '') === (tn.fromEndDate || ''))
+    );
+    if (matchGroup) {
+      if (!matchGroup._ghostItems) matchGroup._ghostItems = [];
+      // Avoid duplicates if renderLoans is called multiple times
+      if (!matchGroup._ghostItems.some(g => g.id === e.id)) {
+        matchGroup._ghostItems.push(e);
+      }
+    }
+  });
+
   // Store groups by key for reliable lookup
   window._loanGroupMap = {};
   groups.forEach((g, gi) => {
@@ -3050,7 +3081,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
+          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
@@ -3072,6 +3103,7 @@ function renderLoans() {
       </div>
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
         ${g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('')}
+        ${g._ghostItems?.length ? g._ghostItems.map(e => buildGhostDeviceRow(e)).join('') : ''}
       </div>
     </div>`;
   }).join('');
@@ -3129,7 +3161,7 @@ async function confirmBatchReturn() {
     if (idx < 0) return;
     if (equipment[idx].BatchID) batchIdsInvolved.add(equipment[idx].BatchID);
     const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
-    Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
+    Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   });
   setSync('saving', 'Saving...');
@@ -3531,9 +3563,7 @@ function checkOverdueNotifications() {
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    // Resolve AM email — overdue alerts go to the account manager only
-    const amEmail = getAMEmail(e.AccountManager) || '';
-    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: amEmail, accountManager: e.AccountManager || '', items: [] };
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: e.BorrowerEmail || '', items: [] };
     grouped[key].items.push(e);
   });
   Object.values(grouped).forEach(g => {
@@ -4928,7 +4958,7 @@ function countFromSelection() {
     const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
     equipment[idx].Counted = countedValue;
     if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
-      Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'' });
+      Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
     }
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
   });
@@ -4945,7 +4975,7 @@ function returnFromSelection() {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx < 0) return;
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Return', loanTo: item.OnLoanTo, location: item.Location, notes: 'Returned ' + formatDisplayDate(nzDate()) });
-    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes' });
+    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', _transferNote: null });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   clearSelection();
@@ -5415,7 +5445,8 @@ function removeDeviceFromLoan(id, assetNo) {
   // Clear loan fields without creating history
   Object.assign(equipment[idx], {
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '',
-    Returned: 'Yes', BatchID: '', BorrowerEmail: '', AccountManager: ''
+    Returned: 'Yes', BatchID: '', BorrowerEmail: '', AccountManager: '',
+    _transferNote: null
   });
   setSync('saving', 'Saving...');
   saveBin({ equipment, history: historyLog }).then(() => setSync('ok', 'Saved')).catch(e => setSync('err', 'Save failed'));
@@ -5510,7 +5541,7 @@ async function deleteLoanByKey(key) {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Loan deleted by admin' });
-    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '' });
+    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   // Delete loanDocs so orphan detector doesn't flag them
@@ -5533,7 +5564,7 @@ async function deleteScheduledLoanByKey(key) {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Scheduled loan deleted by admin' });
-    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '' });
+    Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   for (const batchId of batchIds) {
@@ -5661,8 +5692,10 @@ async function activateUpcomingLoans() {
       const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (idx < 0) continue;
       const prev = equipment[idx];
-      const prevLoanTo = prev.OnLoanTo || '';
-      const prevLoc    = prev.Location  || '';
+      const prevLoanTo  = prev.OnLoanTo    || '';
+      const prevLoc     = prev.Location    || '';
+      const prevBatchId = prev.BatchID     || '';
+      const prevEndDate = prev.LoanEndDate || '';
       // Log transfer history
       if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
         historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
@@ -5671,14 +5704,24 @@ async function activateUpcomingLoans() {
           notes: 'Transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ')'
         });
       }
-      // Activate: update equipment
+      // Activate: update equipment — but keep a _transferNote so the item still appears
+      // as a ghost on the old loan card with a "transferred" indicator
       Object.assign(equipment[idx], {
         OnLoanTo: upcoming.loanTo, Location: upcoming.location,
         LoanStartDate: upcoming.startDate, LoanEndDate: upcoming.endDate,
         Returned: 'No', BatchID: upcoming.id,
         AccountManager: upcoming.accountManager || '',
         BorrowerEmail: upcoming.borrowerEmail || '',
-        _upcomingLoanId: null
+        _upcomingLoanId: null,
+        _transferNote: prevLoanTo && prevLoanTo !== upcoming.loanTo ? {
+          fromLoanTo:  prevLoanTo,
+          fromLocation: prevLoc,
+          fromBatchId:  prevBatchId,
+          fromEndDate:  prevEndDate,
+          toLoanTo:     upcoming.loanTo,
+          toStartDate:  upcoming.startDate,
+          transferredOn: nzDate()
+        } : (prev._transferNote || null)
       });
       changed = true;
     }
@@ -5702,8 +5745,7 @@ async function activateUpcomingLoans() {
 async function checkLoanDueReminders() {
   if (!_ejsReady) return;
   const today = nzDate();
-  // Exclude upcoming loans (LoanStartDate in the future) — those are handled by checkUpcomingLoanReminders
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && !(e.LoanStartDate && e.LoanStartDate > today));
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
@@ -5713,11 +5755,12 @@ async function checkLoanDueReminders() {
   for (const g of Object.values(grouped)) {
     const daysUntilEnd = daysBetween(today, g.endDate);
     if (daysUntilEnd !== 2) continue; // only fire exactly 2 days out
+    if (!g.email) { console.log('Due reminder: no email for', g.loanTo); continue; }
     const notifKey = 'due_reminder_' + g.loanTo + '|||' + g.endDate;
     if (_sentNotifications[notifKey]) continue; // already sent
     await sendLoanDueReminderEmail(g);
     await markNotificationSent(notifKey);
-    console.log('Due reminder sent to', DUE_REMINDER_EMAIL, 'for', g.loanTo);
+    console.log('Due reminder sent to', g.email, 'for', g.loanTo);
   }
 }
 
@@ -5744,7 +5787,7 @@ async function sendLoanDueReminderEmail(group) {
   }
 }
 
-// Check for upcoming loans starting in 2 days → send reminder to current AM + notify demo@chsnz.co.nz
+// Check for upcoming loans starting in 2 days → send reminder to current AM
 async function checkUpcomingLoanReminders() {
   const today = nzDate();
   for (const upcoming of upcomingLoans) {
@@ -5765,10 +5808,6 @@ async function checkUpcomingLoanReminders() {
     }
     for (const [email, info] of Object.entries(affectedAMs)) {
       await sendUpcomingTransferReminder(email, info.am, info.loanTo, info.items, upcoming);
-    }
-    // Also notify demo@chsnz.co.nz that an upcoming loan is starting in 2 days
-    if (DUE_REMINDER_EMAIL) {
-      await sendUpcomingLoanStartNotification(upcoming);
     }
     await markNotificationSent(notifKey);
   }
@@ -5792,28 +5831,6 @@ async function sendUpcomingTransferReminder(toEmail, toName, currentLoanTo, item
     });
     console.log('Transfer reminder sent to', toEmail);
   } catch(e) { console.error('Transfer reminder failed', e); }
-}
-
-async function sendUpcomingLoanStartNotification(upcoming) {
-  if (!_ejsReady || !DUE_REMINDER_EMAIL) return;
-  const itemsList = (upcoming.items || []).map(e =>
-    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
-  ).join('\n');
-  try {
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email:       DUE_REMINDER_EMAIL,
-      to_name:        'CHS Team',
-      items:          itemsList,
-      due_date:       formatDisplayDate(upcoming.startDate),
-      return_link:    APP_URL + '?tab=loans',
-      extend_link:    APP_URL + '?tab=loans',
-      custom_subject: 'Upcoming Loan Starting in 2 Days — ' + upcoming.loanTo,
-      custom_message: 'This is a reminder that the following demo equipment is due to be loaned out in 2 days.\n\nCustomer: ' + upcoming.loanTo + '\nLoan Start: ' + formatDisplayDate(upcoming.startDate) + '\nLoan End: ' + formatDisplayDate(upcoming.endDate) + '\nLocation: ' + (upcoming.location || '—') + '\nAccount Manager: ' + (upcoming.accountManager || '—') + '\n\nEquipment:\n' + itemsList
-    });
-    console.log('Upcoming loan start notification sent to', DUE_REMINDER_EMAIL, 'for', upcoming.loanTo);
-  } catch(err) {
-    console.error('Upcoming loan start notification failed:', err);
-  }
 }
 
 async function saveRetiredAssets() {
