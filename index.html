@@ -5875,20 +5875,18 @@ async function sendLoanDueReminderEmail(group) {
 async function checkUpcomingLoanReminders() {
   if (!_ejsReady) return; // don't mark as sent if EmailJS isn't ready yet — will retry after init
   const today = nzDate();
+
+  // ── Part 1: conflict-created upcoming loans (stored in /upcomingLoans) ──────
   for (const upcoming of upcomingLoans) {
     if (!upcoming.startDate) continue;
     const daysUntilStart = daysBetween(today, upcoming.startDate);
-    if (daysUntilStart !== 2) continue; // Only trigger on exactly 2 days out
+    if (daysUntilStart !== 2) continue;
     const notifKey = 'upcoming_reminder_' + upcoming.id;
-    if (_sentNotifications[notifKey]) continue; // already sent today
+    if (_sentNotifications[notifKey]) continue;
 
-    // Always notify demo@chsnz.co.nz that an upcoming loan is starting in 2 days
-    if (DUE_REMINDER_EMAIL) {
-      await sendUpcomingLoanStartNotification(upcoming);
-    }
+    if (DUE_REMINDER_EMAIL) await sendUpcomingLoanStartNotification(upcoming);
 
-    // Additionally notify the current AM for any items that are actively on another loan
-    // (transfer scenario — they need to arrange shipping)
+    // Also notify current AM if items are actively on another loan (transfer scenario)
     const affectedAMs = {};
     for (const uItem of upcoming.items) {
       const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
@@ -5901,7 +5899,37 @@ async function checkUpcomingLoanReminders() {
     for (const [email, info] of Object.entries(affectedAMs)) {
       await sendUpcomingTransferReminder(email, info.am, info.loanTo, info.items, upcoming);
     }
+    await markNotificationSent(notifKey);
+  }
 
+  // ── Part 2: scheduled loans (regular equipment with LoanStartDate in future) ─
+  // These are batch loans created with a future start date — they live in the
+  // main equipment array, NOT in upcomingLoans, so the loop above misses them.
+  const scheduledItems = equipment.filter(e =>
+    e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today
+  );
+  const scheduledGroups = {};
+  scheduledItems.forEach(e => {
+    const key = e.OnLoanTo + '|||' + (e.LoanStartDate || '') + '|||' + (e.LoanEndDate || '');
+    if (!scheduledGroups[key]) scheduledGroups[key] = {
+      loanTo: e.OnLoanTo, location: e.Location || '',
+      startDate: e.LoanStartDate, endDate: e.LoanEndDate || '',
+      accountManager: e.AccountManager || '', items: []
+    };
+    scheduledGroups[key].items.push({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, SerialNo: e.SerialNo });
+  });
+  for (const g of Object.values(scheduledGroups)) {
+    const daysUntilStart = daysBetween(today, g.startDate);
+    if (daysUntilStart !== 2) continue;
+    const notifKey = 'upcoming_reminder_scheduled_' + g.loanTo + '|||' + g.startDate;
+    if (_sentNotifications[notifKey]) continue;
+    if (DUE_REMINDER_EMAIL) {
+      await sendUpcomingLoanStartNotification({
+        loanTo: g.loanTo, location: g.location,
+        startDate: g.startDate, endDate: g.endDate,
+        accountManager: g.accountManager, items: g.items
+      });
+    }
     await markNotificationSent(notifKey);
   }
 }
