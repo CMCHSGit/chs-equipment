@@ -4149,10 +4149,18 @@ async function closeLoanDoc() {
     try { await sendLoanDocEmail(); } catch(e) { console.warn('Auto-send email failed:', e); }
   }
   window._autoSendOnClose = false;
-  // Auto-create Simpro job only on first close after a new loan is confirmed
+  // Auto-create Simpro job only on first close after a new loan is confirmed.
+  // Skip if the auto-save already created it (real job ID already in cache/Firebase).
   if (window._autoCreateSimproOnClose) {
     window._autoCreateSimproOnClose = false;
-    try { await createSimproJob(); } catch(e) { console.warn('Auto Simpro job failed:', e); }
+    const _closePdfKey = window._currentLoanDocInfo?._pdfKey;
+    const _cachedId = _closePdfKey && window._simproJobCache?.[_closePdfKey];
+    const _alreadyCreated = _cachedId && _cachedId !== 'pending' && !(typeof _cachedId === 'object' && _cachedId.status === 'pending');
+    if (!_alreadyCreated) {
+      try { await createSimproJob(); } catch(e) { console.warn('Auto Simpro job failed:', e); }
+    } else {
+      console.log('Simpro: job already created by auto-save, skipping close-handler call');
+    }
   }
   document.getElementById('loan-doc-modal').classList.remove('open');
   window._currentLoanDocInfo = null;
@@ -4317,8 +4325,14 @@ async function saveLoanDocChanges() {
   const ldcAfterSave = document.getElementById('loan-doc-content');
   if (ldcAfterSave) { ldcAfterSave.removeEventListener('input', _loanDocEditHandler); ldcAfterSave.addEventListener('input', _loanDocEditHandler); }
   showToast('success', 'Loan form saved ✓' + (updated > 0 ? ' — ' + updated + ' device' + (updated > 1 ? 's' : '') + ' updated' : ''));
-  // Auto-update Simpro job if one exists for this loan (skip if creation still in flight)
-  if (SIMPRO_PROXY_URL && !window._simproCreating) { try { await createSimproJob(); } catch(e) {} }
+  // Auto-update Simpro job only if one already exists for this loan.
+  // Creation of new jobs is handled by the _autoCreateSimproOnClose close handler —
+  // calling createSimproJob() here for a brand-new loan would fire before the job exists,
+  // then _autoCreateSimproOnClose fires again on close and sees the real ID, causing a
+  // redundant update call that shows "Simpro job updated" instead of "created".
+  if (SIMPRO_PROXY_URL && !window._simproCreating && !window._autoCreateSimproOnClose) {
+    try { await createSimproJob(); } catch(e) {}
+  }
 }
 
 function getLoanGroupByKey(key) {
