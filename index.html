@@ -4255,15 +4255,23 @@ async function createSimproJob(existingJobId) {
 
   const pdfKey = window._currentLoanDocInfo?._pdfKey;
 
-  // If no jobId passed, check Firebase for a stored one
-  let jobId = existingJobId || null;
+  // Check local cache first (avoids Firebase round-trip timing issues)
+  window._simproJobCache = window._simproJobCache || {};
+  let jobId = existingJobId || window._simproJobCache[pdfKey] || null;
+
+  // If not in cache, check Firebase
   if (!jobId && pdfKey) {
     try {
       const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
       const d = await r.json();
-      if (d?.simproJobId) jobId = d.simproJobId;
+      if (d?.simproJobId) {
+        jobId = d.simproJobId;
+        window._simproJobCache[pdfKey] = jobId; // cache it
+      }
     } catch(e) {}
   }
+
+  const isNew = !jobId;
 
   const params = new URLSearchParams({
     data: JSON.stringify({
@@ -4274,7 +4282,7 @@ async function createSimproJob(existingJobId) {
       contactNumber:  contactNum,
       items:          loanItems,
       jobId:          jobId || null,
-      pdfKey:         pdfKey || null  // proxy writes jobId back to Firebase
+      pdfKey:         pdfKey || null
     })
   });
 
@@ -4285,8 +4293,22 @@ async function createSimproJob(existingJobId) {
     setTimeout(resolve, 8000);
   });
 
-  if (!jobId) {
-    showToast('success', 'Simpro job created');
+  if (isNew && pdfKey) {
+    // Poll Firebase for the job ID written back by Apps Script (up to 15s)
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+        const d = await r.json();
+        if (d?.simproJobId) {
+          window._simproJobCache[pdfKey] = d.simproJobId;
+          clearInterval(poll);
+          showToast('success', 'Simpro job created — ID: ' + d.simproJobId);
+        }
+      } catch(e) {}
+      if (attempts >= 5) { clearInterval(poll); showToast('success', 'Simpro job created'); }
+    }, 3000);
   } else {
     showToast('success', 'Simpro job updated');
   }
