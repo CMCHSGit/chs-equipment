@@ -4264,7 +4264,8 @@ async function createSimproJob() {
   try {
     const resp = await fetch(SIMPRO_PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         loanTo, location, notes,
         startDate:     toISO(startDate),
@@ -4274,12 +4275,9 @@ async function createSimproJob() {
         items:         loanItems
       })
     });
-    const data = await resp.json();
-    if (data.success) {
-      showToast('success', 'Simpro job created — ID: ' + data.jobId);
-    } else {
-      showToast('error', 'Simpro error: ' + (data.error || 'Unknown error'));
-    }
+    // no-cors returns opaque response — we can't read the body
+    // but if we got here without throwing, the request was sent
+    showToast('success', 'Simpro job creation sent — check Simpro to confirm');
   } catch(e) {
     showToast('error', 'Could not reach Simpro proxy: ' + e.message);
   } finally {
