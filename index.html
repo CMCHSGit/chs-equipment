@@ -5005,69 +5005,105 @@ function proceedFromBasket() {
     const g = getLoanGroupByKey(_basketLoanKey);
     if (!g) { showToast('error', 'Could not find loan'); return; }
     const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
-    let added = 0;
+
+    // Split into clean (not currently on any active loan) and conflicting (on loan elsewhere)
+    const _bsk_clean = [], _bsk_conflicts = [];
     newItems.forEach(b => {
       const idx = equipment.findIndex(e => e.id === b.id);
       if (idx < 0) return;
       if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
-        showToast('error', b.CHSAssetNo + ' is already on loan — skipped');
-        return;
+        _bsk_conflicts.push({ b, idx, item: equipment[idx] });
+      } else {
+        _bsk_clean.push({ b, idx });
       }
-      Object.assign(equipment[idx], {
-        OnLoanTo: g.loanTo, Location: g.location,
-        LoanStartDate: g.startDate || nzDate(),
-        LoanEndDate: g.endDate || '',
-        Returned: 'No', BatchID: batchId,
-        AccountManager: g.items[0]?.AccountManager || '',
-        BorrowerEmail: g.items[0]?.BorrowerEmail || ''
-      });
-      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
-      added++;
     });
-    scheduleSave(); renderTable(); updateStats(); renderLoans();
-    clearBasket();
-    showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
 
-    // Collect all items now on this loan, new items at the bottom
-    const _newBasketAssetNos = new Set(newItems.map(b => (b.CHSAssetNo || '').toLowerCase()));
-    const _allBasketItems = batchId
-      ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
-      : equipment.filter(e =>
-          e.OnLoanTo === g.loanTo &&
-          (e.LoanEndDate || '') === (g.endDate || '') &&
-          e.Returned !== 'Yes'
-        );
-    const _loanItems = [
-      ..._allBasketItems.filter(e => !_newBasketAssetNos.has((e.CHSAssetNo || '').toLowerCase())),
-      ..._allBasketItems.filter(e => _newBasketAssetNos.has((e.CHSAssetNo || '').toLowerCase()))
-    ];
-    const _reviewInfo = {
-      loanTo: g.loanTo, location: g.location,
-      startDate: g.startDate || nzDate(),
-      endDate: g.endDate || '',
-      accountManager: g.items[0]?.AccountManager || ''
-    };
+    const _doBasketAdd = async (itemsToAdd) => {
+      let added = 0;
+      itemsToAdd.forEach(({ b, idx }) => {
+        Object.assign(equipment[idx], {
+          OnLoanTo: g.loanTo, Location: g.location,
+          LoanStartDate: g.startDate || nzDate(),
+          LoanEndDate: g.endDate || '',
+          Returned: 'No', BatchID: batchId,
+          AccountManager: g.items[0]?.AccountManager || '',
+          BorrowerEmail: g.items[0]?.BorrowerEmail || ''
+        });
+        historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+        added++;
+      });
+      scheduleSave(); renderTable(); updateStats(); renderLoans();
+      clearBasket();
+      showToast('success', added + ' item' + (added > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
 
-    // Switch to Active Loans tab then open the updated loan form
-    switchTab('loans');
-    (async () => {
+      // Collect all items now on this loan, new items at the bottom
+      const _newBskAssetNos = new Set(itemsToAdd.map(({ b }) => (b.CHSAssetNo || '').toLowerCase()));
+      const _allBskItems = batchId
+        ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
+        : equipment.filter(e => e.OnLoanTo === g.loanTo && (e.LoanEndDate || '') === (g.endDate || '') && e.Returned !== 'Yes');
+      const _loanItems = [
+        ..._allBskItems.filter(e => !_newBskAssetNos.has((e.CHSAssetNo || '').toLowerCase())),
+        ..._allBskItems.filter(e => _newBskAssetNos.has((e.CHSAssetNo || '').toLowerCase()))
+      ];
+      const _reviewInfo = {
+        loanTo: g.loanTo, location: g.location,
+        startDate: g.startDate || nzDate(),
+        endDate: g.endDate || '',
+        accountManager: g.items[0]?.AccountManager || ''
+      };
+
+      switchTab('loans');
       let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+      let _savedRows = null;
       try {
         const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
         if (_r.ok) {
           const _d = await _r.json();
-          if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
+          if (_d) {
+            _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
+            _savedRows = _d.savedRows || null;
+          }
         }
       } catch(e) {}
+
+      // Append new item rows at bottom of any existing manually-edited rows
+      let _mergedSavedRows = null;
+      if (_savedRows && _savedRows.length > 0) {
+        const _newRows = itemsToAdd.map(({ b }) => {
+          const eq = equipment.find(e => e.id === b.id);
+          return [eq?.CHSAssetNo || b.CHSAssetNo || '', eq?.Description || eq?.Model || b.Model || '', eq?.SerialNo || b.SerialNo || '', '', '', '', ''];
+        });
+        _mergedSavedRows = [..._savedRows, ..._newRows];
+      }
+
       setTimeout(() => {
         window._autoSendOnClose = false;
         window._pendingLoanDocPdfKey = batchId || null;
-        generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
+        generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, _mergedSavedRows, _savedExtra);
         setTimeout(async () => {
           try { await saveLoanDocChanges(); } catch(e) {}
         }, 600);
       }, 400);
-    })();
+    };
+
+    // If some items are already on another loan, show conflict modal before proceeding
+    if (_bsk_conflicts.length > 0) {
+      showConflictModal(
+        _bsk_conflicts.map(c => ({ assetNo: c.item.CHSAssetNo, model: c.item.Model, currentLoanTo: c.item.OnLoanTo, currentEnd: c.item.LoanEndDate, type: 'overlap', overlapDays: 0 })),
+        g.loanTo, g.startDate || nzDate(),
+        async (overrideAssetNos) => {
+          const toAdd = [
+            ..._bsk_clean,
+            ..._bsk_conflicts.filter(c => overrideAssetNos.has(c.item.CHSAssetNo)).map(c => ({ b: c.b, idx: c.idx }))
+          ];
+          if (!toAdd.length) { showToast('warn', 'No items selected to add'); return; }
+          await _doBasketAdd(toAdd);
+        }
+      );
+      return;
+    }
+
+    await _doBasketAdd(_bsk_clean);
     return;
   }
 
@@ -5294,16 +5330,29 @@ async function _doAddItemsToLoan(g, validRows) {
     accountManager: g.items[0]?.AccountManager || ''
   };
 
-  // Load any existing saved extras (notes, auth) from Firebase so they aren't lost
+  // Load any existing saved extras (notes, auth, and manually-added rows) from Firebase
   let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+  let _savedRows = null;
   if (batchId) {
     try {
       const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       if (_r.ok) {
         const _d = await _r.json();
-        if (_d) _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
+        if (_d) {
+          _savedExtra = { notesCell: _d.notesCell || '', authCell: _d.authCell || '', batchNotes: _d.notes || '', contactNumber: _d.contactNumber || '' };
+          _savedRows = _d.savedRows || null;
+        }
       }
     } catch(e) {}
+  }
+
+  // Append new item rows at the bottom of any existing manually-edited rows
+  let _mergedSavedRows = null;
+  if (_savedRows && _savedRows.length > 0) {
+    const _newItemRows = added.map(e => [
+      e.CHSAssetNo || '', e.Description || e.Model || '', e.SerialNo || e.PartNo || '', '', '', '', ''
+    ]);
+    _mergedSavedRows = [..._savedRows, ..._newItemRows];
   }
 
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
@@ -5312,7 +5361,7 @@ async function _doAddItemsToLoan(g, validRows) {
   setTimeout(() => {
     window._autoSendOnClose = false;
     window._pendingLoanDocPdfKey = batchId || null;
-    generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
+    generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, _mergedSavedRows, _savedExtra);
     // Auto-save the updated loan doc (persists new items to Firebase) then update Simpro
     setTimeout(async () => {
       try { await saveLoanDocChanges(); } catch(e) {}
