@@ -872,6 +872,9 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="btn btn-sm" onclick="exportLoanRTF()" title="Export as RTF for Simpro">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Create RTF
         </button>
+        <button class="btn btn-sm" id="simpro-job-btn" onclick="createSimproJob()" title="Create job in Simpro" style="background:#f97316;border-color:#f97316;color:white">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Create Simpro Job
+        </button>
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
@@ -1181,6 +1184,7 @@ const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation tem
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'http://demo.chsnz.co.nz';
 const DUE_REMINDER_EMAIL    = 'demo@chsnz.co.nz';         // recipient for 2-day due reminders
+const SIMPRO_PROXY_URL      = '';                          // paste Google Apps Script web app URL here
 
 // NZ timezone date helper
 function nzDate() {
@@ -4211,6 +4215,76 @@ function openBatchReturnByGroup(g) {
   document.getElementById('br-subtitle').textContent = currentBatchGroup.location + (currentBatchGroup.endDate ? ' · Due: ' + formatDisplayDate(currentBatchGroup.endDate) : '');
   renderBatchReturnItems();
   document.getElementById('batch-return-modal').classList.add('open');
+}
+
+async function createSimproJob() {
+  if (!SIMPRO_PROXY_URL) {
+    showToast('error', 'Simpro proxy URL not configured — see SIMPRO_PROXY_URL in code');
+    return;
+  }
+  const info  = window._currentLoanDocInfo?.loanInfo;
+  const items = window._currentLoanDocInfo?.loanItems || _currentLoanDocItems || [];
+  if (!info) { showToast('error', 'No loan data available'); return; }
+
+  // Read live editable cells
+  const doc = document.getElementById('printable-loan-doc');
+  const headerCells = doc?.querySelectorAll('table')[1]?.querySelectorAll('tr')[1]?.querySelectorAll('td');
+  const loanTo      = headerCells?.[0]?.innerText?.trim() || info.loanTo || '';
+  const location    = headerCells?.[1]?.innerText?.trim() || info.location || '';
+  const startDate   = headerCells?.[2]?.innerText?.trim() || info.startDate || '';
+  const endDate     = headerCells?.[3]?.innerText?.trim() || info.endDate || '';
+  const am          = headerCells?.[4]?.innerText?.trim() || info.accountManager || '';
+  const contactNum  = headerCells?.[5]?.innerText?.trim() || info.contactNumber || '';
+  const notes       = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
+
+  // Read item rows from equipment table
+  const equipTable = document.getElementById('loan-doc-equip-table') || doc?.querySelectorAll('table')?.[2];
+  const loanItems = [];
+  if (equipTable) {
+    equipTable.querySelectorAll('tbody tr').forEach(row => {
+      const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText?.trim() || '');
+      if (cells.some(c => c)) loanItems.push({ CHSAssetNo: cells[0], Description: cells[1], SerialNo: cells[2] });
+    });
+  }
+
+  // Convert display dates back to YYYY-MM-DD for Simpro
+  function toISO(d) {
+    if (!d) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) {
+      const [dd,mm,yyyy] = d.split('/');
+      return yyyy + '-' + mm.padStart(2,'0') + '-' + dd.padStart(2,'0');
+    }
+    return d;
+  }
+
+  const btn = document.getElementById('simpro-job-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
+
+  try {
+    const resp = await fetch(SIMPRO_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        loanTo, location, notes,
+        startDate:     toISO(startDate),
+        endDate:       toISO(endDate),
+        accountManager: am,
+        contactNumber: contactNum,
+        items:         loanItems
+      })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      showToast('success', 'Simpro job created — ID: ' + data.jobId);
+    } else {
+      showToast('error', 'Simpro error: ' + (data.error || 'Unknown error'));
+    }
+  } catch(e) {
+    showToast('error', 'Could not reach Simpro proxy: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>Create Simpro Job'; }
+  }
 }
 
 function exportLoanRTF() {
