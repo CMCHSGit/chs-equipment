@@ -4535,12 +4535,15 @@ async function createSimproJob(existingJobId) {
   });
 
   try {
-    const resp = await fetch(SIMPRO_PROXY_URL, {
+    // mode: 'no-cors' is intentional — GAS web apps redirect POSTs and some clients
+    // convert them to GET, losing the body. no-cors fires and forgets safely; we
+    // read the result from Firebase via polling rather than from the response.
+    await fetch(SIMPRO_PROXY_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight on Apps Script
-      body: requestBody
+      headers: { 'Content-Type': 'text/plain' },
+      body: requestBody,
+      mode: 'no-cors'
     });
-    if (!resp.ok) console.warn('Simpro proxy HTTP error:', resp.status);
   } catch(err) {
     console.warn('Simpro proxy request failed:', err);
   }
