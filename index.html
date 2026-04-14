@@ -2042,7 +2042,10 @@ function initBatchForm() {
   batchDevices = [{ id: 'bd_0', value: '' }];
   window._batchStatus = {};
   renderBatchDevices();
-  document.getElementById('b-start-date').value = nzDate();
+  // Only set start date if empty — don't overwrite a date the user already set
+  // (setScanMode('batch') calls this when returning from the database picker)
+  const startEl = document.getElementById('b-start-date');
+  if (startEl && !startEl.value) startEl.value = nzDate();
   // Populate autocomplete
   document.getElementById('b-contacts-list').innerHTML = [...new Set(equipment.filter(e=>e.OnLoanTo).map(e=>e.OnLoanTo))].map(c=>`<option value="${esc(c)}">`).join('');
   document.getElementById('b-locations-list').innerHTML = [...new Set(equipment.filter(e=>e.Location).map(e=>e.Location))].map(l=>`<option value="${esc(l)}">`).join('');
@@ -4033,10 +4036,11 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   document.getElementById('doc-edited-note').style.display = 'none';
   const saveBtn = document.getElementById('doc-save-btn');
   if (saveBtn) saveBtn.style.display = 'none';
-  // Show "Send Email" button whenever there is an email address for this loan
+  // Show "Send Email" button only when there's an email AND the user needs to trigger it manually.
+  // When _autoSendOnClose is true the email fires automatically on close — button is redundant.
   const sendBtn = document.getElementById('doc-send-email-btn');
   const sendNote = document.getElementById('doc-send-email-note');
-  if (sendBtn) sendBtn.style.display = window._pendingLoanEmail ? 'inline-flex' : 'none';
+  if (sendBtn) sendBtn.style.display = (window._pendingLoanEmail && !window._autoSendOnClose) ? 'inline-flex' : 'none';
   if (sendNote) sendNote.style.display = (window._pendingLoanEmail && window._autoSendOnClose) ? 'inline-flex' : 'none';
   // Store current loan info for saving
   window._currentLoanDocInfo = { loanInfo, loanItems, _pdfKey: window._pendingLoanDocPdfKey || null };
@@ -5865,7 +5869,14 @@ async function checkUpcomingLoanReminders() {
     if (daysUntilStart !== 2) continue; // Only trigger on exactly 2 days out
     const notifKey = 'upcoming_reminder_' + upcoming.id;
     if (_sentNotifications[notifKey]) continue; // already sent today
-    // Send to each unique current AM of affected equipment
+
+    // Always notify demo@chsnz.co.nz that an upcoming loan is starting in 2 days
+    if (DUE_REMINDER_EMAIL) {
+      await sendUpcomingLoanStartNotification(upcoming);
+    }
+
+    // Additionally notify the current AM for any items that are actively on another loan
+    // (transfer scenario — they need to arrange shipping)
     const affectedAMs = {};
     for (const uItem of upcoming.items) {
       const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
@@ -5878,7 +5889,30 @@ async function checkUpcomingLoanReminders() {
     for (const [email, info] of Object.entries(affectedAMs)) {
       await sendUpcomingTransferReminder(email, info.am, info.loanTo, info.items, upcoming);
     }
+
     await markNotificationSent(notifKey);
+  }
+}
+
+async function sendUpcomingLoanStartNotification(upcoming) {
+  if (!_ejsReady || !DUE_REMINDER_EMAIL) return;
+  const itemsList = (upcoming.items || []).map(e =>
+    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
+  ).join('\n');
+  try {
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email:       DUE_REMINDER_EMAIL,
+      to_name:        'CHS Team',
+      items:          itemsList,
+      due_date:       formatDisplayDate(upcoming.startDate),
+      return_link:    APP_URL + '?tab=loans',
+      extend_link:    APP_URL + '?tab=loans',
+      custom_subject: 'Upcoming Loan Starting in 2 Days — ' + upcoming.loanTo,
+      custom_message: 'This is a reminder that the following demo equipment is due to be loaned out in 2 days.\n\nCustomer: ' + upcoming.loanTo + '\nLoan Start: ' + formatDisplayDate(upcoming.startDate) + '\nLoan End: ' + formatDisplayDate(upcoming.endDate) + '\nLocation: ' + (upcoming.location || '—') + '\nAccount Manager: ' + (upcoming.accountManager || '—') + '\n\nEquipment:\n' + itemsList
+    });
+    console.log('Upcoming loan start notification sent to', DUE_REMINDER_EMAIL, 'for', upcoming.loanTo);
+  } catch(err) {
+    console.error('Upcoming loan start notification failed:', err);
   }
 }
 
