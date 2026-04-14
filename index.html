@@ -2472,30 +2472,55 @@ function openAddItemsToUpcomingLoan(upcomingId) {
 async function confirmAddItemsToUpcomingLoan() {
   const u = upcomingLoans.find(x => x.id === _addItemsGroup?._upcomingId);
   if (!u) return;
-  const toAdd = _addItemsRows.filter(r => {
-    if (!r.value) return false;
+
+  const available = [], conflicts = [];
+  _addItemsRows.forEach(r => {
+    if (!r.value) return;
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
-    if (!item) return false;
+    if (!item) return;
+    // Skip if already in this upcoming loan
+    if (u.items.some(i => i.CHSAssetNo === item.CHSAssetNo)) return;
     // Check for date overlap with existing active loan
     if (item.OnLoanTo && item.Returned !== 'Yes') {
       const exStart = item.LoanStartDate || '', exEnd = item.LoanEndDate || '';
       const newStart = u.startDate || '', newEnd = u.endDate || '';
       const overlaps = !(newEnd && exStart && newEnd <= exStart) && !(exEnd && newStart && exEnd <= newStart);
-      if (overlaps) return false; // skip conflicting items (could show modal too)
+      if (overlaps) { conflicts.push({ row: r, item }); return; }
     }
-    // Not already in this upcoming loan
-    return !u.items.some(i => i.CHSAssetNo === item.CHSAssetNo);
+    available.push(r);
   });
-  if (!toAdd.length) {
+
+  if (!available.length && !conflicts.length) {
     const fb = document.getElementById('add-items-feedback');
     fb.style.display = 'block';
-    fb.innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found or all have date conflicts.</div>';
+    fb.innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found.</div>';
     return;
   }
-  toAdd.forEach(r => {
+
+  // Show conflict modal if there are overlapping items
+  if (conflicts.length > 0) {
+    closeAddItemsModal();
+    showConflictModal(
+      conflicts.map(c => ({ assetNo: c.item.CHSAssetNo, model: c.item.Model, currentLoanTo: c.item.OnLoanTo, currentEnd: c.item.LoanEndDate, type: 'overlap', overlapDays: 0 })),
+      u.loanTo, u.startDate,
+      async (overrideAssetNos) => {
+        const allToAdd = [
+          ...available,
+          ...conflicts.filter(c => overrideAssetNos.has(c.item.CHSAssetNo)).map(c => c.row)
+        ];
+        await _doAddItemsToUpcoming(u, allToAdd);
+      }
+    );
+    return;
+  }
+
+  await _doAddItemsToUpcoming(u, available);
+}
+
+async function _doAddItemsToUpcoming(u, rows) {
+  rows.forEach(r => {
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
     if (!item) return;
-    // Mark item with upcoming loan reference
     const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
     if (idx >= 0) equipment[idx]._upcomingLoanId = u.id;
     u.items.push({ id: item.id, CHSAssetNo: item.CHSAssetNo });
@@ -2503,7 +2528,7 @@ async function confirmAddItemsToUpcomingLoan() {
   await saveUpcomingLoans();
   closeAddItemsModal();
   renderLoans(); renderTable();
-  showToast('success', toAdd.length + ' item' + (toAdd.length > 1 ? 's' : '') + ' added to upcoming loan for ' + u.loanTo);
+  showToast('success', rows.length + ' item' + (rows.length > 1 ? 's' : '') + ' added to upcoming loan for ' + u.loanTo);
 }
 
 function daysBetween(dateA, dateB) {
@@ -4374,8 +4399,8 @@ async function createSimproJob(existingJobId) {
 
   const pdfKey = window._currentLoanDocInfo?._pdfKey;
 
-  // Check local cache first (avoids Firebase round-trip timing issues)
-  window._simproJobCache = window._simproJobCache || {};
+  // Check local cache first — load from localStorage so cache survives page refresh
+  window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
   let jobId = existingJobId || window._simproJobCache[pdfKey] || null;
 
   // If not in cache, check Firebase
@@ -4385,13 +4410,34 @@ async function createSimproJob(existingJobId) {
       const d = await r.json();
       if (d?.simproJobId) {
         jobId = d.simproJobId;
-        window._simproJobCache[pdfKey] = jobId; // cache it
+        window._simproJobCache[pdfKey] = jobId;
+        localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
       }
     } catch(e) {}
   }
 
+  // If jobId is 'pending', creation is in flight — skip entirely to avoid duplicates
+  if (jobId === 'pending') {
+    console.log('Simpro: creation in flight, skipping update');
+    return;
+  }
+
   const isNew = !jobId;
-  if (isNew) window._simproCreating = pdfKey; // block updates until job ID confirmed
+  if (isNew && pdfKey) {
+    // Write a placeholder immediately so subsequent reads don't create a duplicate
+    window._simproCreating = pdfKey;
+    window._simproCreatedAt = Date.now();
+    try {
+      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify('pending')
+      });
+      // Also cache it so the guard works across form open/close
+      window._simproJobCache[pdfKey] = 'pending';
+      localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+    } catch(e) {}
+  }
 
   const params = new URLSearchParams({
     data: JSON.stringify({
@@ -4414,22 +4460,23 @@ async function createSimproJob(existingJobId) {
   });
 
   if (isNew && pdfKey) {
-    // Poll Firebase for the job ID written back by Apps Script (up to 15s)
+    // Poll Firebase for the real job ID written back by Apps Script (up to 15s)
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
       try {
         const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
         const d = await r.json();
-        if (d?.simproJobId) {
+        if (d?.simproJobId && d.simproJobId !== 'pending') {
           window._simproJobCache[pdfKey] = d.simproJobId;
-          window._simproCreating = null; // unblock updates
+          localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+          window._simproCreating = null;
           clearInterval(poll);
           showToast('success', 'Simpro job created — ID: ' + d.simproJobId);
         }
       } catch(e) {}
       if (attempts >= 5) {
-        window._simproCreating = null; // unblock even if polling timed out
+        window._simproCreating = null;
         clearInterval(poll);
         showToast('success', 'Simpro job created');
       }
@@ -5016,9 +5063,9 @@ function proceedFromBasket() {
         window._autoSendOnClose = false;
         window._pendingLoanDocPdfKey = batchId || null;
         generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
-        if (SIMPRO_PROXY_URL && !window._simproCreating) {
-          setTimeout(() => { try { createSimproJob(); } catch(e) {} }, 600);
-        }
+        setTimeout(async () => {
+          try { await saveLoanDocChanges(); } catch(e) {}
+        }, 600);
       }, 400);
     })();
     return;
@@ -5110,8 +5157,19 @@ function updateAddItemRow(id, val) {
   if (item) {
     const on = item.OnLoanTo && item.Returned !== 'Yes';
     const upcoming = getUpcomingLoanForItem(item.id);
+    // Check date overlap if we're adding to an upcoming loan
+    let overlapWarning = '';
+    if (on && _addItemsGroup?._upcomingId) {
+      const u = upcomingLoans.find(x => x.id === _addItemsGroup._upcomingId);
+      if (u) {
+        const exStart = item.LoanStartDate || '', exEnd = item.LoanEndDate || '';
+        const newStart = u.startDate || '', newEnd = u.endDate || '';
+        const overlaps = !(newEnd && exStart && newEnd <= exStart) && !(exEnd && newStart && exEnd <= newStart);
+        if (overlaps) overlapWarning = ` <span style="color:var(--red);font-size:11px">⚠ Date overlap</span>`;
+      }
+    }
     let statusHtml = on
-      ? `<span style="color:var(--amber)">⚠ ${item.Model||val} — on loan to ${item.OnLoanTo}</span>`
+      ? `<span style="color:var(--amber)">⚠ ${item.Model||val} — on loan to ${item.OnLoanTo}</span>${overlapWarning}`
       : `<span style="color:var(--green)">✓ ${item.Model||'Found'}</span>`;
     if (upcoming) statusHtml += ` <span style="color:#6d28d9;font-size:11px">⏳ Due for ${esc(upcoming.loanTo)} ${formatDisplayDate(upcoming.startDate)}</span>`;
     _addItemsStatus[id] = statusHtml;
@@ -5255,10 +5313,10 @@ async function _doAddItemsToLoan(g, validRows) {
     window._autoSendOnClose = false;
     window._pendingLoanDocPdfKey = batchId || null;
     generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, null, _savedExtra);
-    // Auto-update Simpro after form has rendered (skip if creation still in flight)
-    if (SIMPRO_PROXY_URL && !window._simproCreating) {
-      setTimeout(() => { try { createSimproJob(); } catch(e) {} }, 600);
-    }
+    // Auto-save the updated loan doc (persists new items to Firebase) then update Simpro
+    setTimeout(async () => {
+      try { await saveLoanDocChanges(); } catch(e) {}
+    }, 600);
   }, 400);
 }
 
