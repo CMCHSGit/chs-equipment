@@ -1180,6 +1180,7 @@ const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder temp
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'http://demo.chsnz.co.nz';
+const DUE_REMINDER_EMAIL    = 'demo@chsnz.co.nz';         // recipient for 2-day due reminders
 
 // NZ timezone date helper
 function nzDate() {
@@ -5313,23 +5314,23 @@ async function checkLoanDueReminders() {
 }
 
 async function sendLoanDueReminderEmail(group) {
-  if (!_ejsReady || !group.email) return;
+  if (!_ejsReady || !DUE_REMINDER_EMAIL) return;
   const itemsList = group.items.map(e =>
     '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
   ).join('\n');
   const returnLink = buildReturnLink(group.loanTo, group.endDate);
   try {
     await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email:       group.email,
-      to_name:        group.loanTo,
+      to_email:       DUE_REMINDER_EMAIL,
+      to_name:        'CHS Team',
       items:          itemsList,
       due_date:       formatDisplayDate(group.endDate),
       return_link:    returnLink,
       extend_link:    APP_URL + '?extend=' + loanReturnToken(group.loanTo, group.endDate),
-      custom_subject: 'Reminder: Demo Equipment Due Back in 2 Days',
-      custom_message: 'This is a reminder that the following demo equipment is due for return in 2 days on ' + formatDisplayDate(group.endDate) + '.\n\nPlease arrange return to Connected Healthcare Systems.\n\nEquipment:\n' + itemsList + '\n\nAccount Manager: ' + (group.accountManager || 'CHS Team')
+      custom_subject: 'Reminder: Demo Equipment Due Back in 2 Days — ' + group.loanTo,
+      custom_message: 'This is a reminder that the following demo equipment loaned to ' + group.loanTo + ' is due for return in 2 days on ' + formatDisplayDate(group.endDate) + '.\n\nAccount Manager: ' + (group.accountManager || '—') + '\n\nEquipment:\n' + itemsList
     });
-    console.log('Due reminder email sent to', group.email);
+    console.log('Due reminder email sent to', DUE_REMINDER_EMAIL);
   } catch(err) {
     console.error('Due reminder email failed:', err);
   }
