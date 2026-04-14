@@ -955,7 +955,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div id="add-items-feedback" style="display:none"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeAddItemsModal()">Cancel</button>
-      <button class="btn btn-primary" onclick="confirmAddItemsToLoan()">
+      <button class="btn btn-primary" onclick="_addItemsGroup?._upcomingId ? confirmAddItemsToUpcomingLoan() : confirmAddItemsToLoan()">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Add to Loan
       </button>
     </div>
@@ -2368,8 +2368,36 @@ function confirmConflictAndProceed() {
   if (_conflictProceedCallback) _conflictProceedCallback();
 }
 
-// Build and show the conflict modal, call onProceed() if user confirms
+// Conflict modal for "Add items" — shows checkboxes so user picks which conflicts to override
 function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
+  // If called from addItems flow (onProceed takes overrideAssetNos), show checkbox version
+  if (onProceed.length === 1) {
+    let html = '<div style="font-size:13px;color:var(--text2);margin-bottom:12px">The following items are already on loan during the same period. Check any you want to add anyway:</div>';
+    conflicts.forEach(c => {
+      html += '<label style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">' +
+        '<input type="checkbox" id="aicb_' + c.assetNo + '" style="margin-top:3px">' +
+        '<div><span style="font-family:\'DM Mono\',monospace;font-weight:600">' + esc(c.assetNo) + '</span>' +
+        ' <span style="color:var(--text2)">· ' + esc(c.model) + '</span>' +
+        '<div style="font-size:12px;color:var(--red);margin-top:2px">On loan to <strong>' + esc(c.currentLoanTo) + '</strong> · Due: ' + formatDisplayDate(c.currentEnd) + '</div></div></label>';
+    });
+    document.getElementById('conflict-title').textContent = '⚠ Date Conflict — ' + conflicts.length + ' item' + (conflicts.length !== 1 ? 's' : '');
+    document.getElementById('conflict-subtitle').textContent = 'Adding to: ' + newLoanTo + ' · Starts: ' + formatDisplayDate(newStart);
+    document.getElementById('conflict-body').innerHTML = html;
+    document.getElementById('conflict-confirm-btn').innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Add Selected';
+    document.getElementById('conflict-confirm-btn').style.background = 'var(--accent)';
+    document.getElementById('conflict-confirm-btn').style.borderColor = 'var(--accent)';
+    _conflictProceedCallback = () => {
+      const overrides = new Set(conflicts.filter(c => document.getElementById('aicb_' + c.assetNo)?.checked).map(c => c.assetNo));
+      onProceed(overrides);
+    };
+    document.getElementById('conflict-modal').classList.add('open');
+    return;
+  }
+  // Original conflict modal for new loan creation
+  _showNewLoanConflictModal(conflicts, newLoanTo, newStart, onProceed);
+}
+
+function _showNewLoanConflictModal(conflicts, newLoanTo, newStart, onProceed) {
   const hasOverlap = conflicts.some(c => c.type === 'overlap');
   const hasAvail   = conflicts.some(c => c.type === 'available');
 
@@ -2417,6 +2445,65 @@ function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
   document.getElementById('conflict-confirm-btn').style.borderColor = '#6d28d9';
   _conflictProceedCallback = onProceed;
   document.getElementById('conflict-modal').classList.add('open');
+}
+
+// ── ADD ITEMS TO UPCOMING LOAN ────────────────────────────────────────
+function openAddItemsToUpcomingLoan(upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) return;
+  // Reuse the add-items modal, storing upcoming loan context
+  _addItemsGroup = {
+    loanTo:    u.loanTo,
+    location:  u.location,
+    startDate: u.startDate,
+    endDate:   u.endDate,
+    items:     u.items.map(i => equipment.find(e => e.id === i.id || e.CHSAssetNo === i.CHSAssetNo) || i),
+    _upcomingId: upcomingId
+  };
+  _addItemsRows = [{ id: 'ai_' + Date.now(), value: '' }];
+  _addItemsStatus = {};
+  document.getElementById('add-items-title').textContent = 'Add Items to Upcoming Loan — ' + u.loanTo;
+  document.getElementById('add-items-feedback').style.display = 'none';
+  renderAddItemsRows();
+  document.getElementById('add-items-modal').classList.add('open');
+  setTimeout(() => { const el = document.querySelector('#add-items-list input'); if (el) el.focus(); }, 50);
+}
+
+async function confirmAddItemsToUpcomingLoan() {
+  const u = upcomingLoans.find(x => x.id === _addItemsGroup?._upcomingId);
+  if (!u) return;
+  const toAdd = _addItemsRows.filter(r => {
+    if (!r.value) return false;
+    const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
+    if (!item) return false;
+    // Check for date overlap with existing active loan
+    if (item.OnLoanTo && item.Returned !== 'Yes') {
+      const exStart = item.LoanStartDate || '', exEnd = item.LoanEndDate || '';
+      const newStart = u.startDate || '', newEnd = u.endDate || '';
+      const overlaps = !(newEnd && exStart && newEnd <= exStart) && !(exEnd && newStart && exEnd <= newStart);
+      if (overlaps) return false; // skip conflicting items (could show modal too)
+    }
+    // Not already in this upcoming loan
+    return !u.items.some(i => i.CHSAssetNo === item.CHSAssetNo);
+  });
+  if (!toAdd.length) {
+    const fb = document.getElementById('add-items-feedback');
+    fb.style.display = 'block';
+    fb.innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found or all have date conflicts.</div>';
+    return;
+  }
+  toAdd.forEach(r => {
+    const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
+    if (!item) return;
+    // Mark item with upcoming loan reference
+    const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
+    if (idx >= 0) equipment[idx]._upcomingLoanId = u.id;
+    u.items.push({ id: item.id, CHSAssetNo: item.CHSAssetNo });
+  });
+  await saveUpcomingLoans();
+  closeAddItemsModal();
+  renderLoans(); renderTable();
+  showToast('success', toAdd.length + ' item' + (toAdd.length > 1 ? 's' : '') + ' added to upcoming loan for ' + u.loanTo);
 }
 
 function daysBetween(dateA, dateB) {
@@ -2775,7 +2862,18 @@ function renderLoans() {
 
   // Build scheduled loan cards, merging any upcomingLoans for the same customer
   const _mergedUpcomingIds = new Set();
-  const scheduledCards = scheduledGroups.map((g, sgi) => {
+  // Apply same sort/filter to scheduled groups
+  let filteredScheduled = Object.values(scheduledGrouped).filter(g => {
+    const matchQ = !q || g.loanTo.toLowerCase().includes(q) || g.location.toLowerCase().includes(q);
+    const matchAM = !amFilter || (g.items[0]?.AccountManager || '') === amFilter;
+    return matchQ && matchAM;
+  });
+  if (sortBy === 'manager') filteredScheduled.sort((a,b) => (a.items[0]?.AccountManager||'zzz').toLowerCase() < (b.items[0]?.AccountManager||'zzz').toLowerCase() ? -1 : 1);
+  if (sortBy === 'recent')  filteredScheduled.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? 1 : -1);
+  if (sortBy === 'alpha')   filteredScheduled.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
+  if (sortBy === 'expiry')  filteredScheduled.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
+  if (sortBy === 'start')   filteredScheduled.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
+  const scheduledCards = filteredScheduled.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
     const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
@@ -2817,6 +2915,13 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(\'' + key + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Reassign account manager" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
+        '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey(\'' + key + '\')" title="Add more devices to this loan">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
+        '</button>' +
         '<button class="btn btn-sm btn-green" onclick="event.stopPropagation();openBatchReturnByKey(\'' + key + '\')">Return items</button>' +
         '<button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteScheduledLoanByKey(\'' + key + '\')" title="Delete this scheduled loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
@@ -2829,7 +2934,18 @@ function renderLoans() {
       '</div>';
   }).join('');
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
-  const upcomingCards = upcomingLoans.filter(u => !_mergedUpcomingIds.has(u.id)).map(u => {
+  // Apply same search/sort to upcoming loans
+  let filteredUpcoming = upcomingLoans.filter(u => !_mergedUpcomingIds.has(u.id)).filter(u => {
+    const matchQ = !q || u.loanTo.toLowerCase().includes(q) || (u.location||'').toLowerCase().includes(q);
+    const matchAM = !amFilter || (u.accountManager || '') === amFilter;
+    return matchQ && matchAM;
+  });
+  if (sortBy === 'manager') filteredUpcoming.sort((a,b) => (a.accountManager||'zzz').toLowerCase() < (b.accountManager||'zzz').toLowerCase() ? -1 : 1);
+  if (sortBy === 'recent')  filteredUpcoming.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? 1 : -1);
+  if (sortBy === 'alpha')   filteredUpcoming.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
+  if (sortBy === 'expiry')  filteredUpcoming.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
+  if (sortBy === 'start')   filteredUpcoming.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
+  const upcomingCards = filteredUpcoming.map(u => {
     const daysUntilStart = daysBetween(today, u.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
     const itemsHtml = u.items.map(uItem => {
@@ -2858,6 +2974,9 @@ function renderLoans() {
         '<span class="status-badge badge-upcoming">⏳ Upcoming</span>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+        '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToUpcomingLoan(\'' + u.id + '\')" title="Add more devices to this upcoming loan">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
         '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" style="color:var(--red);border-color:var(--red-border)" title="Cancel upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
@@ -5023,21 +5142,60 @@ function closeAddItemsModal() {
 
 async function confirmAddItemsToLoan() {
   if (!_addItemsGroup) return;
-  const validRows = _addItemsRows.filter(r => {
+  const g = _addItemsGroup;
+  const newStart = g.startDate || nzDate();
+  const newEnd   = g.endDate   || '';
+
+  // Separate rows into: available, date-conflict, truly blocked (active overlap)
+  const available = [], conflicts = [], blocked = [];
+  _addItemsRows.forEach(r => {
+    if (!r.value) return;
     const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
-    return item && !(item.OnLoanTo && item.Returned !== 'Yes');
+    if (!item) return;
+    if (!item.OnLoanTo || item.Returned === 'Yes') { available.push(r); return; }
+    // Item is on loan — check date overlap
+    const exStart = item.LoanStartDate || '';
+    const exEnd   = item.LoanEndDate   || '';
+    const overlaps = !(newEnd && exStart && newEnd <= exStart) && !(exEnd && newStart && exEnd <= newStart);
+    if (overlaps) conflicts.push({ row: r, item, type: 'overlap' });
+    else available.push(r); // no date overlap — allow freely
   });
-  if (!validRows.length) {
+
+  if (!available.length && !conflicts.length) {
     const fb = document.getElementById('add-items-feedback');
     fb.style.display = 'block';
-    fb.innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid available devices found. Check asset numbers.</div>';
+    fb.innerHTML = '<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">No valid devices found. Check asset numbers.</div>';
     return;
   }
-  const g = _addItemsGroup;
+
+  // If there are conflicts, show modal letting user choose which to add anyway
+  if (conflicts.length > 0) {
+    closeAddItemsModal();
+    showConflictModal(
+      conflicts.map(c => ({ assetNo: c.item.CHSAssetNo, model: c.item.Model, currentLoanTo: c.item.OnLoanTo, currentEnd: c.item.LoanEndDate, type: 'overlap', overlapDays: 0 })),
+      g.loanTo, newStart,
+      async (overrideAssetNos) => {
+        // Add available + any conflict rows the user chose to override
+        const toAdd = [
+          ...available,
+          ...conflicts.filter(c => overrideAssetNos.has(c.item.CHSAssetNo)).map(c => c.row)
+        ];
+        await _doAddItemsToLoan(g, toAdd);
+      }
+    );
+    return;
+  }
+
+  await _doAddItemsToLoan(g, available);
+}
+
+async function _doAddItemsToLoan(g, validRows) {
+  if (!validRows.length) return;
   const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
+  const added = [], skipped = [];
   validRows.forEach(r => {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
-    if (idx < 0) return;
+    if (idx < 0) { skipped.push(r.value); return; }
     Object.assign(equipment[idx], {
       OnLoanTo: g.loanTo, Location: g.location,
       LoanStartDate: g.startDate || nzDate(),
@@ -5047,21 +5205,15 @@ async function confirmAddItemsToLoan() {
       BorrowerEmail: g.items[0]?.BorrowerEmail || ''
     });
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+    added.push(equipment[idx]);
   });
   await saveBin({ equipment, history: historyLog });
   renderTable(); updateStats();
   closeAddItemsModal();
 
-  // Collect ALL items for this loan — BatchID is the most reliable key since
-  // all original + newly added items share the same batchId
   const _allLoanItems = batchId
     ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
-    : equipment.filter(e =>
-        e.OnLoanTo === g.loanTo &&
-        (e.LoanEndDate || '') === (g.endDate || '') &&
-        e.Returned !== 'Yes'
-      );
-  // Put newly added items at the bottom
+    : equipment.filter(e => e.OnLoanTo === g.loanTo && (e.LoanEndDate || '') === (g.endDate || '') && e.Returned !== 'Yes');
   const _newAssetNos = new Set(validRows.map(r => r.value.toLowerCase()));
   const _loanItems = [
     ..._allLoanItems.filter(e => !_newAssetNos.has((e.CHSAssetNo || '').toLowerCase())),
