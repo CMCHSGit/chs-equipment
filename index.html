@@ -3448,21 +3448,14 @@ async function sendOverdueEmail(group) {
     return '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '');
   }).join('\n');
   const returnLink = buildReturnLink(group.loanTo, group.endDate);
-  try {
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email:    group.email,
-      to_name:     group.loanTo,
-      items:       itemsList,
-      due_date:    group.endDate,
-      return_link: returnLink,
-      extend_link: APP_URL + '?extend=' + loanReturnToken(group.loanTo, group.endDate)
-    });
-    console.log('Overdue email sent to', group.email);
-    console.log('Overdue reminder sent to', group.email);
-  } catch(err) {
-    console.error('Email send failed:', err);
-    console.error('Email failed:', err);
-  }
+  await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+    to_email:    group.email,
+    to_name:     group.loanTo,
+    items:       itemsList,
+    due_date:    formatDisplayDate(group.endDate),
+    return_link: returnLink,
+    extend_link: APP_URL + '?extend=' + loanReturnToken(group.loanTo, group.endDate)
+  });
 }
 
 // ── LOAN CONFIRMATION EMAIL via EmailJS ──────────────────────────────
@@ -3591,10 +3584,14 @@ function checkOverdueNotifications() {
     // Send if: never sent, OR last sent before this Monday AND today is Monday after 9am
     const shouldSend = !lastSent || (isMondayMorningNZ() && lastSent < thisMonday);
     if (shouldSend) {
+      // Mark in memory immediately to block duplicate calls before async .then() resolves
+      _sentNotifications[notifKey] = nzDate();
       sendOverdueEmail(g).then(() => {
         markNotificationSent(notifKey);
         console.log('Weekly overdue reminder sent to', g.email, 'for', g.loanTo);
       }).catch(err => {
+        // Roll back in-memory mark so it retries next check
+        delete _sentNotifications[notifKey];
         console.error('Overdue email failed, will retry next check:', err);
       });
     }
