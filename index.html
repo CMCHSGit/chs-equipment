@@ -4406,8 +4406,23 @@ async function viewLoanDocByKey(key) {
   }
   // No BatchID on this loan (older loan) — fall back to equipment Notes field
   if (!batchId) {
-    const fallbackNotes = items.find(e => e.Notes)?.Notes || '';
-    savedExtra = { notesCell: '', authCell: '', batchNotes: fallbackNotes };
+    // Try the fallback loandoc_ key that saveLoanDocChanges uses when there's no BatchID
+    const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo || '') + '|||' + (g.endDate || ''));
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(fallbackKey) + '.json');
+      if (r.ok) {
+        const d = await r.json();
+        if (d) {
+          savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: d.notes || d.notesCell || '', contactNumber: d.contactNumber || '' };
+          if (d.savedRows) savedRows = d.savedRows;
+          window._pendingLoanDocPdfKey = fallbackKey;
+        } else {
+          savedExtra = { notesCell: '', authCell: '', batchNotes: items.find(e => e.Notes)?.Notes || '' };
+        }
+      }
+    } catch(e) {
+      savedExtra = { notesCell: '', authCell: '', batchNotes: items.find(e => e.Notes)?.Notes || '' };
+    }
   }
   // Cache the loanDoc so loan card can show loan-specific notes
   if (batchId) {
