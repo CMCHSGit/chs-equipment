@@ -3677,6 +3677,43 @@ async function confirmExtendLoan() {
     showToast('error', 'New date must be after the current end date'); return;
   }
   const oldKey = currentExtendGroup.loanTo + '|||' + currentExtendGroup.endDate;
+
+  // Resolve the old Firebase loanDoc key — prefer BatchID, fall back to loandoc_ key
+  const batchId = currentExtendGroup.items[0]?.BatchID || null;
+  const oldPdfKey = batchId || ('loandoc_' + encodeURIComponent(currentExtendGroup.loanTo + '|||' + currentExtendGroup.endDate));
+  const newPdfKey = batchId || ('loandoc_' + encodeURIComponent(currentExtendGroup.loanTo + '|||' + newDate));
+
+  // Migrate the loanDoc in Firebase: read old, update endDate, write to new key, delete old
+  // This preserves simproJobId so saveLoanDocChanges updates the existing Simpro job rather than creating a new one
+  if (oldPdfKey !== newPdfKey) {
+    try {
+      const oldR = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(oldPdfKey) + '.json');
+      if (oldR.ok) {
+        const oldDoc = await oldR.json();
+        if (oldDoc) {
+          // Write migrated doc to new key with updated endDate
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(newPdfKey) + '.json', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...oldDoc, endDate: newDate })
+          });
+          // Delete the old key so it doesn't linger
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(oldPdfKey) + '.json', { method: 'DELETE' });
+          // Update local cache
+          if (window._simproJobCache && window._simproJobCache[oldPdfKey]) {
+            window._simproJobCache[newPdfKey] = window._simproJobCache[oldPdfKey];
+            delete window._simproJobCache[oldPdfKey];
+            localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+          }
+          // Update _currentLoanDocInfo if the form is open so next save uses the correct key
+          if (window._currentLoanDocInfo && window._currentLoanDocInfo._pdfKey === oldPdfKey) {
+            window._currentLoanDocInfo._pdfKey = newPdfKey;
+          }
+        }
+      }
+    } catch(e) { console.warn('Could not migrate loanDoc on extend:', e); }
+  }
+
   // Update all items in this loan group
   currentExtendGroup.items.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id);
@@ -4288,7 +4325,11 @@ async function saveLoanDocChanges() {
     if (match) pdfKey = match._pdfKey;
   }
   if (!pdfKey) {
-    pdfKey = 'loandoc_' + encodeURIComponent((newLoanTo || info.loanTo || '') + '|||' + (toISO(newEndDate) || info.endDate || ''));
+    // Use the original endDate from stored loanInfo — NOT the edited form value (newEndDate).
+    // If we used newEndDate here, editing the end date would generate a new key and create
+    // a duplicate Simpro job. The loandoc migration in confirmExtendLoan handles key updates.
+    const stableEndDate = info.endDate || '';
+    pdfKey = 'loandoc_' + encodeURIComponent((newLoanTo || info.loanTo || '') + '|||' + stableEndDate);
   }
   window._currentLoanDocInfo._pdfKey = pdfKey;
 
