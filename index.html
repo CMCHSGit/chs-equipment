@@ -539,13 +539,14 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <span id="count-ov-pct" style="font-weight:600;color:var(--text)">0%</span>
             </div>
             <div style="height:10px;border-radius:99px;background:var(--surface2);overflow:hidden;display:flex">
-              <div id="count-ov-bar-new" style="height:100%;background:var(--green);transition:width .4s ease"></div>
-              <div id="count-ov-bar-old" style="height:100%;background:#8b5cf6;transition:width .4s ease"></div>
+              <div id="count-ov-bar-new"   style="height:100%;background:var(--green);transition:width .4s ease"></div>
+              <div id="count-ov-bar-old"   style="height:100%;background:#8b5cf6;transition:width .4s ease"></div>
+              <div id="count-ov-bar-never" style="height:100%;background:var(--red);transition:width .4s ease;flex:1"></div>
             </div>
             <div style="display:flex;gap:14px;margin-top:5px;font-size:11px;color:var(--text3)">
               <span>&#9632; <span style="color:var(--green)">This system</span></span>
               <span>&#9632; <span style="color:#8b5cf6">Old system</span></span>
-              <span>&#9632; <span style="color:var(--surface2);-webkit-text-stroke:1px var(--border2)">Not counted</span></span>
+              <span>&#9632; <span style="color:var(--red)">Not counted</span></span>
             </div>
           </div>
           <!-- Table -->
@@ -1530,8 +1531,11 @@ function renderCountOverview() {
   const barNew = document.getElementById('count-ov-bar-new');
   const barOld = document.getElementById('count-ov-bar-old');
   if (pctEl) pctEl.textContent = pct + '% counted (' + counted + ' of ' + total + ')';
+  const pctNever = total ? (never.length / total * 100) : 0;
   if (barNew) barNew.style.width = pctNew.toFixed(1) + '%';
   if (barOld) barOld.style.width = pctOld.toFixed(1) + '%';
+  const barNever = document.getElementById('count-ov-bar-never');
+  if (barNever) barNever.style.width = pctNever.toFixed(1) + '%';
 
   // Filter rows for table
   let rows = equipment;
