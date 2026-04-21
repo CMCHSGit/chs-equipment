@@ -444,9 +444,15 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           </div>
           <!-- COUNT FORM -->
           <div id="count-form" style="display:none">
-            <div class="form-actions">
+            <div id="count-on-loan-notice" style="display:none;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:13px;color:var(--amber)">
+              <strong>&#9888; Currently on loan</strong> &mdash; choose how to record this count:
+            </div>
+            <div class="form-actions" style="flex-wrap:wrap;gap:8px">
               <button class="btn btn-primary" id="btn-count" onclick="submitCount()">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Counted
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Count &amp; Return
+              </button>
+              <button class="btn" id="btn-count-keep-loan" onclick="submitCountKeepLoan()" style="display:none;background:var(--amber-light);color:var(--amber);border-color:var(--amber-border)">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Count &mdash; Keep on Loan
               </button>
               <button class="btn" onclick="clearScan()">Cancel</button>
             </div>
@@ -498,6 +504,63 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <thead><tr><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>Time</th></tr></thead>
           <tbody id="session-tbody"></tbody>
         </table></div></div>
+      </div>
+
+      <!-- COUNT / AUDIT OVERVIEW -->
+      <div id="count-overview" style="display:none;margin-top:16px">
+        <div class="scan-card" style="padding:16px">
+          <div style="margin-bottom:14px">
+            <h3 style="margin:0 0 2px;font-size:15px;font-weight:600">Count / Audit Overview</h3>
+            <p style="margin:0;font-size:12px;color:var(--text3)">Tap a card to filter the list below</p>
+          </div>
+          <!-- Clickable summary cards -->
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px">
+            <div id="cof-all" onclick="setCountOverviewFilter('all')" style="cursor:pointer;border-radius:var(--radius-lg);border:2px solid var(--border);background:var(--surface);padding:12px 14px;transition:border-color .15s" title="Show all items">
+              <div style="font-size:22px;font-weight:700;color:var(--text)" id="cof-all-val">0</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px">Total items</div>
+            </div>
+            <div id="cof-new" onclick="setCountOverviewFilter('new')" style="cursor:pointer;border-radius:var(--radius-lg);border:2px solid var(--border);background:var(--green-light);padding:12px 14px;transition:border-color .15s" title="Counted using this tracker">
+              <div style="font-size:22px;font-weight:700;color:var(--green)" id="cof-new-val">0</div>
+              <div style="font-size:12px;color:var(--green);margin-top:2px">&#128994; This system</div>
+            </div>
+            <div id="cof-old" onclick="setCountOverviewFilter('old')" style="cursor:pointer;border-radius:var(--radius-lg);border:2px solid var(--border);background:#ede9fe;padding:12px 14px;transition:border-color .15s" title="Counted in old system / imported">
+              <div style="font-size:22px;font-weight:700;color:#6d28d9" id="cof-old-val">0</div>
+              <div style="font-size:12px;color:#6d28d9;margin-top:2px">&#128309; Old system</div>
+            </div>
+            <div id="cof-never" onclick="setCountOverviewFilter('never')" style="cursor:pointer;border-radius:var(--radius-lg);border:2px solid var(--border);background:var(--surface2);padding:12px 14px;transition:border-color .15s" title="Never been counted">
+              <div style="font-size:22px;font-weight:700;color:var(--red)" id="cof-never-val">0</div>
+              <div style="font-size:12px;color:var(--text2);margin-top:2px">&#128308; Never counted</div>
+            </div>
+          </div>
+          <!-- Progress bar -->
+          <div style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:5px">
+              <span>Audit progress</span>
+              <span id="count-ov-pct" style="font-weight:600;color:var(--text)">0%</span>
+            </div>
+            <div style="height:10px;border-radius:99px;background:var(--surface2);overflow:hidden;display:flex">
+              <div id="count-ov-bar-new" style="height:100%;background:var(--green);transition:width .4s ease"></div>
+              <div id="count-ov-bar-old" style="height:100%;background:#8b5cf6;transition:width .4s ease"></div>
+            </div>
+            <div style="display:flex;gap:14px;margin-top:5px;font-size:11px;color:var(--text3)">
+              <span>&#9632; <span style="color:var(--green)">This system</span></span>
+              <span>&#9632; <span style="color:#8b5cf6">Old system</span></span>
+              <span>&#9632; <span style="color:var(--surface2);-webkit-text-stroke:1px var(--border2)">Not counted</span></span>
+            </div>
+          </div>
+          <!-- Table -->
+          <div class="table-wrap"><div class="table-scroll" style="max-height:380px"><table>
+            <thead><tr>
+              <th>CHS Asset No.</th>
+              <th>Model</th>
+              <th>Status</th>
+              <th>Count Status</th>
+              <th>Last Counted</th>
+            </tr></thead>
+            <tbody id="count-ov-tbody"></tbody>
+          </table></div></div>
+          <div style="font-size:12px;color:var(--text3);margin-top:8px" id="count-ov-footer"></div>
+        </div>
       </div>
     </div>
 
@@ -1422,6 +1485,88 @@ function switchTab(n) {
   if (n === 'retired')  { clearRetiredSelection(); renderRetired(); }
 }
 
+// ── COUNT OVERVIEW ────────────────────────────────────────────────────
+let _countOverviewFilter = 'all';
+
+function setCountOverviewFilter(f) {
+  _countOverviewFilter = f;
+  renderCountOverview();
+}
+
+function getCountCategory(item) {
+  const c = (item.Counted || '').trim();
+  if (!c || c === 'No' || c === '') return 'never';
+  // "Counted DD/MM/YYYY" pattern = new system
+  if (/^Counted\s+\d{2}\/\d{2}\/\d{4}/.test(c)) return 'new';
+  // Any other truthy value = old system import
+  return 'old';
+}
+
+function renderCountOverview() {
+  const never  = equipment.filter(e => getCountCategory(e) === 'never');
+  const newSys = equipment.filter(e => getCountCategory(e) === 'new');
+  const oldSys = equipment.filter(e => getCountCategory(e) === 'old');
+  const total  = equipment.length;
+  const counted = newSys.length + oldSys.length;
+
+  // Update card values
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  setVal('cof-all-val',   total);
+  setVal('cof-new-val',   newSys.length);
+  setVal('cof-old-val',   oldSys.length);
+  setVal('cof-never-val', never.length);
+
+  // Highlight active card
+  ['all','new','old','never'].forEach(f => {
+    const card = document.getElementById('cof-' + f);
+    if (card) card.style.borderColor = f === _countOverviewFilter ? 'var(--accent)' : 'var(--border)';
+  });
+
+  // Progress bar
+  const pct = total ? Math.round((counted / total) * 100) : 0;
+  const pctNew = total ? (newSys.length / total * 100) : 0;
+  const pctOld = total ? (oldSys.length / total * 100) : 0;
+  const pctEl = document.getElementById('count-ov-pct');
+  const barNew = document.getElementById('count-ov-bar-new');
+  const barOld = document.getElementById('count-ov-bar-old');
+  if (pctEl) pctEl.textContent = pct + '% counted (' + counted + ' of ' + total + ')';
+  if (barNew) barNew.style.width = pctNew.toFixed(1) + '%';
+  if (barOld) barOld.style.width = pctOld.toFixed(1) + '%';
+
+  // Filter rows for table
+  let rows = equipment;
+  if (_countOverviewFilter === 'new')   rows = newSys;
+  if (_countOverviewFilter === 'old')   rows = oldSys;
+  if (_countOverviewFilter === 'never') rows = never;
+
+  const tbody = document.getElementById('count-ov-tbody');
+  const footer = document.getElementById('count-ov-footer');
+  if (!tbody) return;
+
+  tbody.innerHTML = rows.length ? rows.map(e => {
+    const on = e.OnLoanTo && e.Returned !== 'Yes';
+    const cat = getCountCategory(e);
+    const catBadge = cat === 'new'
+      ? '<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--green-light);color:var(--green)">&#128994; This system</span>'
+      : cat === 'old'
+        ? '<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:#ede9fe;color:#6d28d9">&#128309; Old system</span>'
+        : '<span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--surface2);color:var(--text3)">&#128308; Never counted</span>';
+    const statusBadge = on
+      ? '<span class="status-badge badge-loan">On loan</span>'
+      : '<span class="status-badge badge-avail">Available</span>';
+    const lastCounted = cat === 'never' ? '—' : esc(e.Counted || '');
+    return '<tr>'
+      + '<td class="td-mono">' + esc(e.CHSAssetNo) + '</td>'
+      + '<td>' + esc(e.Model) + '</td>'
+      + '<td>' + statusBadge + '</td>'
+      + '<td>' + catBadge + '</td>'
+      + '<td style="font-size:12px;color:var(--text2)">' + lastCounted + '</td>'
+      + '</tr>';
+  }).join('') : '<tr><td colspan="5" class="table-empty">No items match this filter</td></tr>';
+
+  if (footer) footer.textContent = 'Showing ' + rows.length + ' of ' + total + ' items';
+}
+
 // ── STATS ──────────────────────────────────────────────────────────────
 function updateStats() {
   const today = nzDate();
@@ -1450,6 +1595,10 @@ function setScanMode(m) {
   if (siw) siw.style.display = m === 'batch' ? 'none' : 'block';
   document.getElementById('scan-feedback').style.display = 'none';
   document.getElementById('asset-preview').style.display = 'none';
+  // Show count overview panel only when in count mode
+  const ov = document.getElementById('count-overview');
+  if (ov) { ov.style.display = m === 'count' ? 'block' : 'none'; }
+  if (m === 'count') renderCountOverview();
   if (m === 'batch') { initBatchForm(); return; }
   clearScan();
   document.getElementById('scan-input').focus();
@@ -1511,6 +1660,20 @@ function showAssetPreview(item) {
     document.getElementById('locations-list').innerHTML = [...new Set(equipment.filter(e=>e.Location).map(e=>e.Location))].map(l=>`<option value="${esc(l)}">`).join('');
   }
   if (scanMode === 'return' && on) document.getElementById('return-details').innerHTML = `Loaned to: <strong>${item.OnLoanTo}</strong><br>Location: ${item.Location||'—'} &nbsp;·&nbsp; Due: ${item.LoanEndDate||'—'}`;
+  if (scanMode === 'count') {
+    const notice = document.getElementById('count-on-loan-notice');
+    const keepBtn = document.getElementById('btn-count-keep-loan');
+    const countBtn = document.getElementById('btn-count');
+    if (on) {
+      if (notice) notice.style.display = 'block';
+      if (keepBtn) keepBtn.style.display = 'inline-flex';
+      if (countBtn) { countBtn.textContent = ''; countBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Count &amp; Return'; }
+    } else {
+      if (notice) notice.style.display = 'none';
+      if (keepBtn) keepBtn.style.display = 'none';
+      if (countBtn) { countBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Counted'; }
+    }
+  }
 }
 
 function submitLoan() {
@@ -1593,7 +1756,21 @@ function submitCount() {
   historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
+  if (scanMode === 'count') renderCountOverview();
   showToast('success', `${currentItem.CHSAssetNo} counted and marked as returned`);
+}
+
+function submitCountKeepLoan() {
+  if (!currentItem) return;
+  const idx = equipment.findIndex(e => e.id === currentItem.id);
+  const countedValue = 'Counted ' + formatDisplayDate(nzDate());
+  // Mark as counted but leave loan intact
+  equipment[idx].Counted = countedValue;
+  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: countedValue + ' (kept on loan)' });
+  addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location });
+  scheduleSave(); updateStats(); renderTable(); clearScan();
+  if (scanMode === 'count') renderCountOverview();
+  showToast('success', currentItem.CHSAssetNo + ' counted — still on loan to ' + equipment[idx].OnLoanTo);
 }
 
 function clearScan() {
@@ -4231,7 +4408,8 @@ async function viewHistoryPDF(pdfKey) {
   try {
     const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
     const d = await r.json();
-    if (d && d.items) {
+    if (d && (d.items || d.loanTo)) {
+      if (!d.items) d.items = [];
       window._pendingLoanDocPdfKey = pdfKey;
       generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' });
     } else {
