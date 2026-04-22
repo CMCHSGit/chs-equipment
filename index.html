@@ -4625,15 +4625,14 @@ async function viewLoanDocByKey(key) {
           ]);
           savedRows = [...savedRows, ...newRows];
         }
-        const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
+        const fallbackNotes = d.notes || '';
         savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes, contactNumber: d.contactNumber || '' };
       } else if (d) {
-        const fallbackNotes = d.notes || items.find(e => e.Notes)?.Notes || '';
+        const fallbackNotes = d.notes || '';
         savedExtra = { notesCell: d.notesCell || '', authCell: d.authCell || '', batchNotes: fallbackNotes, contactNumber: d.contactNumber || '' };
       } else {
-        // No Firebase doc at all -- try equipment Notes field
-        const fallbackNotes = items.find(e => e.Notes)?.Notes || '';
-        savedExtra = { notesCell: '', authCell: '', batchNotes: fallbackNotes };
+        // No Firebase doc at all — start with empty notes
+        savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
       }
     } catch(e) { /* no saved doc yet, generate fresh */ }
   }
@@ -4650,11 +4649,11 @@ async function viewLoanDocByKey(key) {
           if (d.savedRows) savedRows = d.savedRows;
           window._pendingLoanDocPdfKey = fallbackKey;
         } else {
-          savedExtra = { notesCell: '', authCell: '', batchNotes: items.find(e => e.Notes)?.Notes || '' };
+          savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
         }
       }
     } catch(e) {
-      savedExtra = { notesCell: '', authCell: '', batchNotes: items.find(e => e.Notes)?.Notes || '' };
+      savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
     }
   }
   // Cache the loanDoc so loan card can show loan-specific notes
@@ -5821,6 +5820,9 @@ function removeDeviceFromLoan(id, assetNo) {
 async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
   const u = upcomingLoans.find(x => x.id === upcomingId);
   if (!u) { showToast('error', 'Upcoming loan not found'); return; }
+  const pw = prompt('Enter admin password to remove ' + assetNo + ' from this loan:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm('Remove ' + assetNo + ' from the upcoming loan for ' + u.loanTo + '?')) return;
   // Remove from the upcoming loan's item list
   u.items = u.items.filter(i => i.CHSAssetNo !== assetNo);
