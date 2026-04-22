@@ -3046,13 +3046,11 @@ function renderLoans() {
   const today = nzDate();
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
   const grouped = {}, scheduledGrouped = {};
-  // Build a set of asset numbers that are in upcomingLoans (not yet confirmed loans)
-  const upcomingAssetNos = new Set(upcomingLoans.flatMap(u => u.items.map(i => i.CHSAssetNo)));
   onLoan.forEach(e => {
-    // Only treat as "scheduled" if this item is explicitly listed in upcomingLoans
-    // AND has a future start date. Confirmed loans (written directly to equipment)
-    // always show as active regardless of their LoanStartDate.
-    const isScheduled = e.LoanStartDate && e.LoanStartDate > today && upcomingAssetNos.has(e.CHSAssetNo);
+    // A confirmed loan with a future start date shows under "Upcoming Loans" section
+    // (as a scheduled card), but is NEVER hidden — it always appears somewhere.
+    // Items that are ONLY in upcomingLoans (unconfirmed bookings) are handled separately below.
+    const isScheduled = e.LoanStartDate && e.LoanStartDate > today;
     const target = isScheduled ? scheduledGrouped : grouped;
     const key = e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||'');
     if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled };
