@@ -854,6 +854,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="form-group"><label>Model</label><input type="text" id="m-Model"></div>
       <div class="form-group" style="grid-column:1/-1"><label>Description</label><input type="text" id="m-Description"></div>
       <div class="form-group"><label>Serial Number</label><input type="text" id="m-SerialNo"></div>
+      <div class="form-group"><label>Battery Serial Number</label><input type="text" id="m-BatterySerialNo" placeholder="—"></div>
       <div class="form-group"><label>Part Number</label><input type="text" id="m-PartNo"></div>
       <div class="form-group"><label>Manufacturing Date</label><input type="date" id="m-MfgDate"></div>
       <div class="form-group"><label>Purchase Date</label><input type="date" id="m-PurchaseDate"></div>
@@ -1902,7 +1903,7 @@ function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;
 function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
-const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','AccountManager'];
+const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','AccountManager','BatterySerialNo'];
 
 function openAddModal() {
   editingId=null;
@@ -2063,6 +2064,7 @@ function closeQR() {
 const COL_MAP = {
   'model':'Model','description':'Description',
   'serial number':'SerialNo','serial no':'SerialNo','serial':'SerialNo',
+  'battery serial number':'BatterySerialNo','battery serial no':'BatterySerialNo','battery serial':'BatterySerialNo',
   'manufacture date':'MfgDate','manufacturing date':'MfgDate','mfg date':'MfgDate',
   'chs asset number':'CHSAssetNo','chs asset no':'CHSAssetNo','chs asset':'CHSAssetNo','asset number':'CHSAssetNo','asset no':'CHSAssetNo',
   'tile number':'TileNo','tile no':'TileNo','tile':'TileNo',
@@ -2146,7 +2148,7 @@ async function confirmImport() {
     m.CHSAssetNo = String(m.CHSAssetNo).trim();
     const existing = equipment.find(e=>e.CHSAssetNo.toLowerCase()===m.CHSAssetNo.toLowerCase());
     if (existing) { Object.assign(existing, m); updated++; }
-    else { equipment.unshift({ id: uid(), ...m }); added++; }
+    else { equipment.unshift({ id: uid(), BatterySerialNo: '—', ...m }); added++; }
   }
   scheduleSave(); cancelImport(); updateStats(); renderTable();
   showToast('success',`Import done: ${added} added, ${updated} updated`);
@@ -3423,6 +3425,7 @@ function openDetail(id) {
         <div class="detail-field"><label>Model</label><span>${esc2(item.Model)}</span></div>
         <div class="detail-field full"><label>Description</label><span>${esc2(item.Description)}</span></div>
         <div class="detail-field"><label>Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.SerialNo)}</span></div>
+        <div class="detail-field"><label>Battery Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${item.BatterySerialNo || '—'}</span></div>
         <div class="detail-field"><label>Part Number</label><span>${esc2(item.PartNo)}</span></div>
         <div class="detail-field"><label>Manufacture Date</label><span>${esc2(item.MfgDate)}</span></div>
         <div class="detail-field"><label>Purchase Date</label><span>${esc2(item.PurchaseDate)}</span></div>
@@ -3524,6 +3527,7 @@ function openRetiredDetail(id) {
         <div class="detail-field"><label>Model</label><span>${esc2(item.Model)}</span></div>
         <div class="detail-field full"><label>Description</label><span>${esc2(item.Description)}</span></div>
         <div class="detail-field"><label>Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.SerialNo)}</span></div>
+        <div class="detail-field"><label>Battery Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${item.BatterySerialNo || '—'}</span></div>
         <div class="detail-field"><label>Part Number</label><span>${esc2(item.PartNo)}</span></div>
         <div class="detail-field"><label>Manufacture Date</label><span>${esc2(item.MfgDate)}</span></div>
         <div class="detail-field"><label>Purchase Date</label><span>${esc2(item.PurchaseDate)}</span></div>
