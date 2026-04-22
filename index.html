@@ -2870,10 +2870,8 @@ async function submitBatchLoan() {
     for (const d of devicesToLoan) {
       const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
       if (!item) continue;
-      const currentlyOut = item.OnLoanTo && item.Returned !== 'Yes';
-      const exEnd = item.LoanEndDate || '';
-      // If on a different non-overlapping loan, queue as upcoming
-      if (currentlyOut && item.OnLoanTo !== loanTo && exEnd && startDate && exEnd <= startDate) {
+      const currentlyOut = item.OnLoanTo && item.Returned !== 'Yes' && item.OnLoanTo !== loanTo;
+      if (currentlyOut) {
         upcomingDevices.push(item);
       } else {
         directDevices.push(item);
@@ -3045,9 +3043,15 @@ async function submitBatchLoan() {
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
 
 function buildLoanDeviceRow(e, loanNotes) {
-  const upcoming = getUpcomingLoanForItem(e.id) || getUpcomingLoanForAssetNo(e.CHSAssetNo);
-  const upcomingBadge = upcoming
-    ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Scheduled for <strong>' + esc(upcoming.loanTo) + '</strong> from ' + formatDisplayDate(upcoming.startDate) + (upcoming.endDate ? ' &ndash; ' + formatDisplayDate(upcoming.endDate) : '') + '</div>'
+  const allUpcoming = getAllUpcomingLoansForAssetNo(e.CHSAssetNo);
+  const upcomingBadge = allUpcoming.length
+    ? allUpcoming.map((u, i) =>
+        '<div style="font-size:11px;color:#6d28d9;margin-top:2px">' +
+        (i === 0 ? '&#x23F3; ' : '&#x21AA; Then ') +
+        'Scheduled for <strong>' + esc(u.loanTo) + '</strong> from ' + formatDisplayDate(u.startDate) +
+        (u.endDate ? ' &ndash; ' + formatDisplayDate(u.endDate) : '') +
+        '</div>'
+      ).join('')
     : '';
   return '<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
     '<div class="loan-device-info">' +
@@ -3197,11 +3201,16 @@ function renderLoans() {
       if (!eq) return '';
       const currentLoan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
       const dueDate = currentLoan && eq.LoanEndDate ? ' · due back ' + formatDisplayDate(eq.LoanEndDate) : '';
+      const furtherLoans = getAllUpcomingLoansForAssetNo(eq.CHSAssetNo).filter(x => x.id !== u.id);
+      const furtherHtml = furtherLoans.map(x =>
+        '<div style="font-size:11px;color:#6d28d9;margin-top:1px">&#x21AA; Then scheduled for <strong>' + esc(x.loanTo) + '</strong> from ' + formatDisplayDate(x.startDate) + (x.endDate ? ' &ndash; ' + formatDisplayDate(x.endDate) : '') + '</div>'
+      ).join('');
       return '<div class="loan-device">' +
         '<div class="loan-device-info">' +
         '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
         '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' &middot; ' + eq.SerialNo : '') + '</div>' +
         (currentLoan ? '<div style="font-size:11px;color:#e67e22;margin-top:2px">&#x26A0; Currently on loan to <strong>' + esc(currentLoan) + '</strong>' + dueDate + '</div>' : '') +
+        furtherHtml +
         '</div>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + u.id + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
         'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from upcoming loan">' +
@@ -3266,11 +3275,17 @@ function renderLoans() {
       if (!eq) return '';
       const currentLoan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
       const dueDate = currentLoan && eq.LoanEndDate ? ' · due back ' + formatDisplayDate(eq.LoanEndDate) : '';
+      // Show any OTHER upcoming loans after this one (the chain beyond this booking)
+      const furtherLoans = getAllUpcomingLoansForAssetNo(eq.CHSAssetNo).filter(x => x.id !== u.id);
+      const furtherHtml = furtherLoans.map(x =>
+        '<div style="font-size:11px;color:#6d28d9;margin-top:1px">&#x21AA; Then scheduled for <strong>' + esc(x.loanTo) + '</strong> from ' + formatDisplayDate(x.startDate) + (x.endDate ? ' &ndash; ' + formatDisplayDate(x.endDate) : '') + '</div>'
+      ).join('');
       return '<div class="loan-device">' +
         '<div class="loan-device-info">' +
         '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
         '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') + '</div>' +
         (currentLoan ? '<div style="font-size:11px;color:#e67e22;margin-top:2px">&#x26A0; Currently on loan to <strong>' + esc(currentLoan) + '</strong>' + dueDate + '</div>' : '') +
+        furtherHtml +
         '</div>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + u.id + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
         'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from upcoming loan">' +
@@ -5400,17 +5415,13 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
   let added = 0;
 
-  // Separate items into: ones we can write directly vs ones currently on a non-overlapping loan
+  // Separate items: if currently out on a DIFFERENT loan, store as upcoming (preserve current record)
   const directItems = [], upcomingItems = [];
   itemsToAdd.forEach(b => {
     const eq = equipment.find(e => e.id === b.id);
     if (!eq) return;
-    const currentlyOut = eq.OnLoanTo && eq.Returned !== 'Yes';
-    const exEnd = eq.LoanEndDate || '';
-    const newStart = g.startDate || '';
-    // If currently out on a different loan that ends before this loan starts — keep equipment
-    // record intact and store as upcoming instead of overwriting
-    if (currentlyOut && eq.OnLoanTo !== g.loanTo && exEnd && newStart && exEnd <= newStart) {
+    const currentlyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.OnLoanTo !== g.loanTo;
+    if (currentlyOut) {
       upcomingItems.push(b);
     } else {
       directItems.push(b);
@@ -5541,7 +5552,7 @@ function proceedFromBasket() {
     newItems.forEach(b => {
       const eq = equipment.find(e => e.id === b.id);
       if (!eq) return;
-      const isOnLoan = eq.OnLoanTo && eq.Returned !== 'Yes';
+      const isOnLoan = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.OnLoanTo !== g.loanTo;
       if (!isOnLoan) { clean.push(b); return; }
 
       const exStart = eq.LoanStartDate || '';
@@ -5549,18 +5560,18 @@ function proceedFromBasket() {
       const newStart = g.startDate || '';
       const newEnd   = g.endDate   || '';
 
-      // No overlap if existing loan ends on or before new loan starts
+      // Dates don't overlap — still flag as active so user sees the note, but it will be booked as upcoming
       const noOverlap = exEnd && newStart && exEnd <= newStart;
-      // No overlap if existing loan hasn't started yet and starts on or after new loan ends
       const notYetStarted = exStart && newEnd && exStart >= newEnd;
 
-      if (noOverlap || notYetStarted) {
+      if (exStart && exStart > today && (noOverlap || notYetStarted)) {
+        // Upcoming scheduled loan with no overlap — treat as clean
         clean.push(b);
       } else if (exStart && exStart > today) {
-        // Existing loan is upcoming (hasn't started) and dates overlap
+        // Upcoming scheduled loan with overlap
         dateConflicts.push({ ...b, scheduledUntil: exEnd, scheduledFor: eq.OnLoanTo });
       } else {
-        // Existing loan is active now and dates overlap
+        // Currently active on another loan (overlapping or not) — show amber notice, book as upcoming
         activeConflicts.push(b);
       }
     });
@@ -5590,7 +5601,7 @@ function proceedFromBasket() {
       const activeSection = activeConflicts.length ? `
         <div style="margin-bottom:12px">
           <div style="padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius) var(--radius) 0 0;font-size:12px;font-weight:600;color:var(--amber)">
-            &#9888; Currently on loan — will be added anyway
+            &#9888; Currently on loan — will be booked as upcoming for this loan
           </div>
           <div style="border:1px solid var(--amber-border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:0 10px">
             ${activeConflicts.map(b => {
@@ -6156,11 +6167,22 @@ async function deleteUpcomingLoan(id) {
 }
 
 // Get upcoming loan for a given equipment id (if any)
+// Get the soonest upcoming loan for a given equipment id
 function getUpcomingLoanForItem(equipId) {
-  return upcomingLoans.find(u => u.items.some(i => i.id === equipId || i.CHSAssetNo === equipId));
+  const matches = upcomingLoans.filter(u => u.items.some(i => i.id === equipId || i.CHSAssetNo === equipId));
+  if (!matches.length) return null;
+  return matches.sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1)[0];
 }
 function getUpcomingLoanForAssetNo(assetNo) {
-  return upcomingLoans.find(u => u.items.some(i => i.CHSAssetNo === assetNo));
+  const matches = upcomingLoans.filter(u => u.items.some(i => i.CHSAssetNo === assetNo));
+  if (!matches.length) return null;
+  return matches.sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1)[0];
+}
+// Get ALL upcoming loans for an asset (sorted soonest first) — for chained scheduling
+function getAllUpcomingLoansForAssetNo(assetNo) {
+  return upcomingLoans
+    .filter(u => u.items.some(i => i.CHSAssetNo === assetNo))
+    .sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
 }
 
 // Called on app load — activate any upcoming loans whose start date has arrived
