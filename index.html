@@ -2866,12 +2866,13 @@ async function submitBatchLoan() {
     const contactNumber  = document.getElementById('b-contact-number')?.value.trim() || '';
     const batchAM    = document.getElementById('b-account-manager')?.value || '';
 
+    const targetIsFuture = startDate && startDate > today;
     const directDevices = [], upcomingDevices = [];
     for (const d of devicesToLoan) {
       const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
       if (!item) continue;
       const currentlyOut = item.OnLoanTo && item.Returned !== 'Yes' && item.OnLoanTo !== loanTo;
-      if (currentlyOut) {
+      if (targetIsFuture && currentlyOut) {
         upcomingDevices.push(item);
       } else {
         directDevices.push(item);
@@ -3234,6 +3235,7 @@ function renderLoans() {
       '</div>' +
       '<div class="loan-card-badge">' +
         '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();convertScheduledToUpcoming(\'' + key + '\')" title="Move items back to upcoming — fixes equipment records that were incorrectly set as active" style="font-size:11px;color:#6d28d9;border-color:#c4b5fd">&#x21BA; Fix: Move to Upcoming</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
@@ -5415,13 +5417,16 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
   let added = 0;
 
-  // Separate items: if currently out on a DIFFERENT loan, store as upcoming (preserve current record)
+  const today = nzDate();
+  // Separate items: only preserve current equipment record if the TARGET loan is future
+  // and the item is already out on a DIFFERENT active loan. If target is already active, write directly.
+  const targetIsFuture = g.startDate && g.startDate > today;
   const directItems = [], upcomingItems = [];
   itemsToAdd.forEach(b => {
     const eq = equipment.find(e => e.id === b.id);
     if (!eq) return;
     const currentlyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.OnLoanTo !== g.loanTo;
-    if (currentlyOut) {
+    if (targetIsFuture && currentlyOut) {
       upcomingItems.push(b);
     } else {
       directItems.push(b);
@@ -5547,6 +5552,8 @@ function proceedFromBasket() {
     const g = getLoanGroupByKey(_basketLoanKey);
     if (!g) { showToast('error', 'Could not find loan'); return; }
 
+    const targetIsFuture = g.startDate && g.startDate > today;
+
     // Categorise items before doing anything
     const clean = [], activeConflicts = [], dateConflicts = [];
     newItems.forEach(b => {
@@ -5560,18 +5567,18 @@ function proceedFromBasket() {
       const newStart = g.startDate || '';
       const newEnd   = g.endDate   || '';
 
-      // Dates don't overlap — still flag as active so user sees the note, but it will be booked as upcoming
       const noOverlap = exEnd && newStart && exEnd <= newStart;
       const notYetStarted = exStart && newEnd && exStart >= newEnd;
 
-      if (exStart && exStart > today && (noOverlap || notYetStarted)) {
-        // Upcoming scheduled loan with no overlap — treat as clean
+      if (!targetIsFuture) {
+        // Target loan is already active — always write directly, just warn user
+        activeConflicts.push(b);
+      } else if (exStart && exStart > today && (noOverlap || notYetStarted)) {
         clean.push(b);
       } else if (exStart && exStart > today) {
-        // Upcoming scheduled loan with overlap
         dateConflicts.push({ ...b, scheduledUntil: exEnd, scheduledFor: eq.OnLoanTo });
       } else {
-        // Currently active on another loan (overlapping or not) — show amber notice, book as upcoming
+        // Currently active on another loan — will be booked as upcoming on future target loan
         activeConflicts.push(b);
       }
     });
@@ -5601,7 +5608,7 @@ function proceedFromBasket() {
       const activeSection = activeConflicts.length ? `
         <div style="margin-bottom:12px">
           <div style="padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius) var(--radius) 0 0;font-size:12px;font-weight:600;color:var(--amber)">
-            &#9888; Currently on loan — will be booked as upcoming for this loan
+            &#9888; Currently on loan — ${targetIsFuture ? 'will be booked as upcoming for this loan' : 'will be added to this active loan'}
           </div>
           <div style="border:1px solid var(--amber-border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:0 10px">
             ${activeConflicts.map(b => {
@@ -5932,7 +5939,53 @@ function removeDeviceFromLoan(id, assetNo) {
   }
 }
 
-async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
+async function convertScheduledToUpcoming(key) {
+  const pw = prompt('Enter admin password to convert this scheduled loan to upcoming:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Loan not found'); return; }
+  if (!confirm('Move all ' + g.items.length + ' item(s) from "' + g.loanTo + '" equipment records into the upcoming loans list?\n\nThis will clear their OnLoanTo field so they appear as available, then book them as upcoming for this loan.')) return;
+
+  // Create or find an upcomingLoan entry for this group
+  const upcomingId = g.items[0]?.BatchID || ('upcoming_' + Date.now());
+  let uLoan = upcomingLoans.find(u => u.id === upcomingId);
+  if (!uLoan) {
+    uLoan = {
+      id: upcomingId,
+      loanTo: g.loanTo,
+      location: g.location,
+      startDate: g.startDate || '',
+      endDate: g.endDate || '',
+      accountManager: g.items[0]?.AccountManager || '',
+      borrowerEmail: g.items[0]?.BorrowerEmail || '',
+      items: []
+    };
+    upcomingLoans.push(uLoan);
+  }
+
+  // Clear equipment records and add to upcomingLoan
+  g.items.forEach(e => {
+    const idx = equipment.findIndex(eq => eq.id === e.id || eq.CHSAssetNo === e.CHSAssetNo);
+    if (idx < 0) return;
+    // Add to upcoming items list if not already there
+    if (!uLoan.items.some(i => i.CHSAssetNo === equipment[idx].CHSAssetNo)) {
+      uLoan.items.push({ id: equipment[idx].id, CHSAssetNo: equipment[idx].CHSAssetNo, Model: equipment[idx].Model, SerialNo: equipment[idx].SerialNo });
+    }
+    // Clear the equipment record so item appears as available / back on its real current loan
+    Object.assign(equipment[idx], {
+      OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '',
+      Returned: 'Yes', BatchID: '', _upcomingLoanId: upcomingId
+    });
+  });
+
+  await saveUpcomingLoans();
+  scheduleSave();
+  renderTable(); updateStats(); renderLoans();
+  showToast('info', g.items.length + ' item(s) moved to upcoming loan for ' + g.loanTo);
+}
+
+
   const u = upcomingLoans.find(x => x.id === upcomingId);
   if (!u) { showToast('error', 'Upcoming loan not found'); return; }
   const pw = prompt('Enter admin password to remove ' + assetNo + ' from this loan:');
