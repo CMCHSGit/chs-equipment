@@ -5455,14 +5455,27 @@ function proceedFromBasket() {
     newItems.forEach(b => {
       const eq = equipment.find(e => e.id === b.id);
       if (!eq) return;
-      const isScheduled = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.LoanStartDate && eq.LoanStartDate > today;
-      const isActivelyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && !isScheduled;
-      if (isActivelyOut) {
-        activeConflicts.push(b);
-      } else if (isScheduled && g.startDate && eq.LoanEndDate && eq.LoanEndDate > g.startDate) {
-        dateConflicts.push({ ...b, scheduledUntil: eq.LoanEndDate, scheduledFor: eq.OnLoanTo });
-      } else {
+      const isOnLoan = eq.OnLoanTo && eq.Returned !== 'Yes';
+      if (!isOnLoan) { clean.push(b); return; }
+
+      const exStart = eq.LoanStartDate || '';
+      const exEnd   = eq.LoanEndDate   || '';
+      const newStart = g.startDate || '';
+      const newEnd   = g.endDate   || '';
+
+      // No overlap if existing loan ends on or before new loan starts
+      const noOverlap = exEnd && newStart && exEnd <= newStart;
+      // No overlap if existing loan hasn't started yet and starts on or after new loan ends
+      const notYetStarted = exStart && newEnd && exStart >= newEnd;
+
+      if (noOverlap || notYetStarted) {
         clean.push(b);
+      } else if (exStart && exStart > today) {
+        // Existing loan is upcoming (hasn't started) and dates overlap
+        dateConflicts.push({ ...b, scheduledUntil: exEnd, scheduledFor: eq.OnLoanTo });
+      } else {
+        // Existing loan is active now and dates overlap
+        activeConflicts.push(b);
       }
     });
 
