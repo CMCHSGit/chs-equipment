@@ -2591,7 +2591,7 @@ function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
         ' <span style="color:var(--text2)">· ' + esc(c.model) + '</span>' +
         '<div style="font-size:12px;color:var(--red);margin-top:2px">On loan to <strong>' + esc(c.currentLoanTo) + '</strong> · Due: ' + formatDisplayDate(c.currentEnd) + '</div></div></label>';
     });
-    document.getElementById('conflict-title').textContent = '⚠ Date Conflict — ' + conflicts.length + ' item' + (conflicts.length !== 1 ? 's' : '');
+    document.getElementById('conflict-title').innerHTML = '&#10006; Date Conflict &mdash; ' + conflicts.length + ' item' + (conflicts.length !== 1 ? 's' : '');
     document.getElementById('conflict-subtitle').textContent = 'Adding to: ' + newLoanTo + ' · Starts: ' + formatDisplayDate(newStart);
     document.getElementById('conflict-body').innerHTML = html;
     document.getElementById('conflict-confirm-btn').innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Add Selected';
@@ -3045,7 +3045,11 @@ function renderLoans() {
   const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
   const grouped = {}, scheduledGrouped = {};
   onLoan.forEach(e => {
-    const isScheduled = e.LoanStartDate && e.LoanStartDate > today;
+    // An item is "scheduled" (upcoming) only if it has a future start date AND is NOT
+    // currently linked to an active loan via _upcomingLoanId. Items with _upcomingLoanId
+    // are already out on a current loan and just have a future booking — they must stay
+    // visible in the active loan list.
+    const isScheduled = e.LoanStartDate && e.LoanStartDate > today && !e._upcomingLoanId;
     const target = isScheduled ? scheduledGrouped : grouped;
     const key = e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||'');
     if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled };
@@ -3161,11 +3165,16 @@ function renderLoans() {
         '<div class="loan-device-info">' +
         '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
         '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' &middot; ' + eq.SerialNo : '') + '</div>' +
-        (currentLoan ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer from <strong>' + esc(currentLoan) + '</strong></div>' : '') +
-        '</div></div>';
+        (currentLoan ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Currently on loan to <strong>' + esc(currentLoan) + '</strong></div>' : '') +
+        '</div>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + u.id + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
+        'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from upcoming loan">' +
+        'Remove</button>' +
+        '</div>';
     })).join('');
     const totalDevices = g.items.length + matchingUpcoming.reduce((s, u) => s + u.items.length, 0);
-    const hasTransfer = mergedItemsHtml.includes('Upcoming transfer from');
+    // Bug 3 fix: don't auto-open the card just because items have transfer notes
+    const _bodyOpen = 'display:none';
     return '<div class="loan-card" style="border-color:#c4b5fd">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'slc_' + sgi + '\')">' +
       '<div>' +
@@ -3196,7 +3205,7 @@ function renderLoans() {
         '</button>' +
       '</div>' +
       '</div>' +
-      '<div class="loan-card-body" id="' + _slcId + '" style="' + (hasTransfer ? 'display:block' : 'display:none') + '">' +
+      '<div class="loan-card-body" id="' + _slcId + '" style="' + _bodyOpen + '">' +
         g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('') + mergedItemsHtml +
       '</div>' +
       '</div>';
@@ -3224,8 +3233,12 @@ function renderLoans() {
         '<div class="loan-device-info">' +
         '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
         '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') + '</div>' +
-        (currentLoan ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Upcoming transfer from <strong>' + esc(currentLoan) + '</strong></div>' : '') +
-        '</div></div></div>';
+        (currentLoan ? '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x23F3; Currently on loan to <strong>' + esc(currentLoan) + '</strong> — transferring here</div>' : '') +
+        '</div>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + u.id + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
+        'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from upcoming loan">' +
+        'Remove</button>' +
+        '</div>';
     }).join('');
     return '<div class="loan-card" style="border-color:#c4b5fd">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'ulc_' + u.id + '\')">' +
@@ -3251,7 +3264,7 @@ function renderLoans() {
         '</button>' +
       '</div>' +
       '</div>' +
-      '<div class="loan-card-body" id="ulc_' + u.id + '" style="' + (itemsHtml.includes('Upcoming transfer from') ? 'display:block' : 'display:none') + '">' + itemsHtml + '</div>' +
+      '<div class="loan-card-body" id="ulc_' + u.id + '" style="display:none">' + itemsHtml + '</div>' +
       '</div>';
   }).join('');
 
@@ -5803,6 +5816,29 @@ function removeDeviceFromLoan(id, assetNo) {
       closeLoanDoc();
     }
   }
+}
+
+async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) { showToast('error', 'Upcoming loan not found'); return; }
+  if (!confirm('Remove ' + assetNo + ' from the upcoming loan for ' + u.loanTo + '?')) return;
+  // Remove from the upcoming loan's item list
+  u.items = u.items.filter(i => i.CHSAssetNo !== assetNo);
+  // Clear the _upcomingLoanId marker on the equipment record
+  const idx = equipment.findIndex(e => e.CHSAssetNo === assetNo);
+  if (idx >= 0 && equipment[idx]._upcomingLoanId === upcomingId) {
+    equipment[idx]._upcomingLoanId = null;
+  }
+  // If the upcoming loan is now empty, remove it entirely
+  if (u.items.length === 0) {
+    upcomingLoans.splice(upcomingLoans.indexOf(u), 1);
+    showToast('info', assetNo + ' removed — upcoming loan cancelled (no items left)');
+  } else {
+    showToast('info', assetNo + ' removed from upcoming loan for ' + u.loanTo);
+  }
+  await saveUpcomingLoans();
+  scheduleSave();
+  renderLoans(); renderTable();
 }
 
 // ── REASSIGN ACCOUNT MANAGER ──────────────────────────────────────────
