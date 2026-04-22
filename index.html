@@ -3306,14 +3306,18 @@ function renderLoans() {
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
-        '<span class="status-badge badge-upcoming">⏳ Upcoming</span>' +
+        '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
+        '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendUpcomingLoan(\'' + u.id + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Reassign account manager" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
         '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToUpcomingLoan(\'' + u.id + '\')" title="Add more devices to this upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
         '</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" style="color:var(--red);border-color:var(--red-border)" title="Cancel upcoming loan">' +
+        '<button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" title="Cancel upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
         '</button>' +
       '</div>' +
@@ -3965,6 +3969,14 @@ async function confirmExtendLoan() {
   }
 
   // Update all items in this loan group
+  if (currentExtendGroup._upcomingId) {
+    // Upcoming loan — update the upcomingLoans entry instead of equipment records
+    const u = upcomingLoans.find(x => x.id === currentExtendGroup._upcomingId);
+    if (u) { u.endDate = newDate; await saveUpcomingLoans(); }
+    closeExtendModal(); renderLoans();
+    showToast('success', 'Loan extended to ' + formatDisplayDate(newDate) + ' for ' + currentExtendGroup.loanTo);
+    return;
+  }
   currentExtendGroup.items.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx >= 0) equipment[idx].LoanEndDate = newDate;
@@ -4734,6 +4746,38 @@ function openExtendLoanByKey(key) {
   if (!g) return;
   const gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
   if (gi >= 0) openExtendLoan(gi);
+}
+
+function openExtendUpcomingLoan(upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) return;
+  currentExtendGroup = { loanTo: u.loanTo, endDate: u.endDate, items: u.items, _upcomingId: upcomingId };
+  document.getElementById('extend-title').textContent = 'Extend Loan — ' + u.loanTo;
+  document.getElementById('extend-subtitle').textContent =
+    u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
+    ' · Current due date: ' + (u.endDate ? formatDisplayDate(u.endDate) : 'none');
+  document.getElementById('extend-date').value = u.endDate || nzDate();
+  document.getElementById('extend-modal').classList.add('open');
+}
+
+function openReassignUpcomingAM(upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) return;
+  // Reuse the same reassign modal — store upcomingId so confirmReassignAM knows what to update
+  _reassignLoanKey = null;
+  _reassignUpcomingId = upcomingId;
+  document.getElementById('reassign-am-title').textContent = 'Reassign AM — ' + u.loanTo;
+  document.getElementById('reassign-am-subtitle').textContent = u.items.length + ' device' + (u.items.length !== 1 ? 's' : '');
+  const sel = document.getElementById('reassign-am-select');
+  sel.innerHTML = '<option value="">Select account manager...</option>' +
+    accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === (u.accountManager||'') ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
+  const currentAM = accountManagers.find(a => a.name === u.accountManager);
+  document.getElementById('reassign-am-email').value = currentAM?.email || u.borrowerEmail || '';
+  sel.onchange = () => {
+    const am = accountManagers.find(a => a.name === sel.value);
+    if (am) document.getElementById('reassign-am-email').value = am.email || '';
+  };
+  document.getElementById('reassign-am-modal').classList.add('open');
 }
 
 function openBatchReturnByKey(key) {
@@ -6011,6 +6055,7 @@ async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
 
 // ── REASSIGN ACCOUNT MANAGER ──────────────────────────────────────────
 let _reassignLoanKey = null;
+let _reassignUpcomingId = null;
 
 function openReassignAMByKey(key) {
   const g = getLoanGroupByKey(key);
@@ -6036,12 +6081,27 @@ function openReassignAMByKey(key) {
 function closeReassignAMModal() {
   document.getElementById('reassign-am-modal').classList.remove('open');
   _reassignLoanKey = null;
+  _reassignUpcomingId = null;
 }
 
 function confirmReassignAM() {
   const newAM    = document.getElementById('reassign-am-select').value;
   const newEmail = document.getElementById('reassign-am-email').value.trim();
   if (!newAM) { showToast('error', 'Please select an account manager'); return; }
+
+  if (_reassignUpcomingId) {
+    const u = upcomingLoans.find(x => x.id === _reassignUpcomingId);
+    if (u) {
+      u.accountManager = newAM;
+      if (newEmail) u.borrowerEmail = newEmail;
+      saveUpcomingLoans();
+      renderLoans();
+      showToast('success', 'Loan reassigned to ' + newAM);
+    }
+    closeReassignAMModal();
+    return;
+  }
+
   const g = getLoanGroupByKey(_reassignLoanKey);
   if (!g) { closeReassignAMModal(); return; }
   g.items.forEach(item => {
