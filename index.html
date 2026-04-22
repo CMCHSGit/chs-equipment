@@ -5449,49 +5449,69 @@ function proceedFromBasket() {
       }
     });
 
-    // Date conflicts — show prompt with checkboxes
-    if (dateConflicts.length) {
-      const conflictRows = dateConflicts.map(b =>
-        `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-          <div>
-            <div style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)}</div>
-            <div style="font-size:12px;color:var(--text2)">${esc(b.Model||'')} — scheduled for <strong>${esc(b.scheduledFor)}</strong> until ${formatDisplayDate(b.scheduledUntil)}</div>
+    // Show a unified modal whenever there are any conflicts (date or active)
+    if (dateConflicts.length || activeConflicts.length) {
+      // Red section — date conflicts with checkboxes
+      const dateSection = dateConflicts.length ? `
+        <div style="margin-bottom:12px">
+          <div style="padding:8px 10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius) var(--radius) 0 0;font-size:12px;font-weight:600;color:var(--red)">
+            &#10006; Date conflict — loan dates overlap (tick to add anyway)
           </div>
-          <input type="checkbox" id="force_${b.id}" style="width:16px;height:16px;cursor:pointer" checked>
-        </div>`
-      ).join('');
-      const activeRows = activeConflicts.length
-        ? `<div style="margin-top:10px;padding:10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);font-size:12px;color:var(--red)">
-            <strong>Cannot add (already out in field):</strong> ${activeConflicts.map(b => esc(b.CHSAssetNo)).join(', ')}
-           </div>` : '';
-      const cleanNote = clean.length
-        ? `<div style="margin-top:10px;padding:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:12px;color:#166534">
-            <strong>${clean.length} item${clean.length>1?'s':''} will be added without issue:</strong> ${clean.map(b => esc(b.CHSAssetNo)).join(', ')}
-           </div>` : '';
+          <div style="border:1px solid var(--red-border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:0 10px">
+            ${dateConflicts.map(b => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
+                <div>
+                  <div style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)} &mdash; ${esc(b.Model||'')}</div>
+                  <div style="font-size:12px;color:var(--red);margin-top:2px">Scheduled for <strong>${esc(b.scheduledFor)}</strong> &mdash; due back ${formatDisplayDate(b.scheduledUntil)}</div>
+                  <div style="font-size:12px;color:var(--text3);margin-top:1px">New loan starts ${formatDisplayDate(g.startDate)} — dates overlap</div>
+                </div>
+                <input type="checkbox" id="force_${b.id}" style="width:16px;height:16px;cursor:pointer;margin-left:12px;flex-shrink:0" checked>
+              </div>`).join('')}
+          </div>
+        </div>` : '';
+
+      // Amber section — actively out on loan
+      const activeSection = activeConflicts.length ? `
+        <div style="margin-bottom:12px">
+          <div style="padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius) var(--radius) 0 0;font-size:12px;font-weight:600;color:var(--amber)">
+            &#9888; Currently on loan — will be added anyway
+          </div>
+          <div style="border:1px solid var(--amber-border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:0 10px">
+            ${activeConflicts.map(b => {
+              const eq = equipment.find(e => e.id === b.id);
+              const due = eq && eq.LoanEndDate ? 'Due back ' + formatDisplayDate(eq.LoanEndDate) : 'No return date set';
+              const loanedTo = eq && eq.OnLoanTo ? eq.OnLoanTo : '—';
+              return `<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+                <div style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)} &mdash; ${esc(b.Model||'')}</div>
+                <div style="font-size:12px;color:var(--text2);margin-top:2px">On loan to <strong>${esc(loanedTo)}</strong></div>
+                <div style="font-size:12px;color:var(--amber);margin-top:1px">${due}</div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>` : '';
+
+      // Green section — clean items
+      const cleanSection = clean.length ? `
+        <div style="padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:12px;color:#166534">
+          <strong>&#10003; ${clean.length} item${clean.length>1?'s':''} ready to add:</strong> ${clean.map(b => esc(b.CHSAssetNo)).join(', ')}
+        </div>` : '';
+
+      const hasDateConflicts = dateConflicts.length > 0;
       showGenericModal(
-        '⚠️ Date Conflicts Detected',
-        `<div style="font-size:13px;color:var(--text2);margin-bottom:12px">The following items have scheduled loans that overlap with <strong>${esc(g.loanTo)}</strong> (starts ${formatDisplayDate(g.startDate)}). Tick to add anyway:</div>
-        ${conflictRows}${activeRows}${cleanNote}`,
+        (dateConflicts.length ? '&#10006; Date Conflict' : '') + (dateConflicts.length && activeConflicts.length ? ' &amp; ' : '') + (activeConflicts.length ? '&#9888; Items On Loan' : ''),
+        `<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Please review the items below before proceeding${hasDateConflicts ? ' — untick any date-conflicted items you do not want to add' : ''}:</div>
+        ${dateSection}${activeSection}${cleanSection}`,
         [
           { label: 'Add Selected', style: 'btn-primary', action: () => {
             const forced = dateConflicts.filter(b => document.getElementById('force_' + b.id)?.checked);
-            _doBasketAddToLoan(g, [...clean, ...forced]);
+            _doBasketAddToLoan(g, [...clean, ...forced, ...activeConflicts]);
           }},
           { label: 'Cancel', style: '', action: () => {} }
         ]
       );
       return;
     }
-
-    // All actively out — block entirely
-    if (activeConflicts.length && !clean.length) {
-      showGenericModal('Cannot Add Items',
-        `<div style="font-size:13px">The following items are already actively out on loan and cannot be added:<br><br><strong>${activeConflicts.map(b => esc(b.CHSAssetNo)).join(', ')}</strong></div>`,
-        [{ label: 'OK', style: '', action: () => {} }]);
-      return;
-    }
-
-    _doBasketAddToLoan(g, clean, activeConflicts);
+    _doBasketAddToLoan(g, clean);
     return;
   }
 
