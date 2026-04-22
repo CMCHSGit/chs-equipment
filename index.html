@@ -2866,12 +2866,46 @@ async function submitBatchLoan() {
     const contactNumber  = document.getElementById('b-contact-number')?.value.trim() || '';
     const batchAM    = document.getElementById('b-account-manager')?.value || '';
 
+    const directDevices = [], upcomingDevices = [];
     for (const d of devicesToLoan) {
-      const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+      const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+      if (!item) continue;
+      const currentlyOut = item.OnLoanTo && item.Returned !== 'Yes';
+      const exEnd = item.LoanEndDate || '';
+      // If on a different non-overlapping loan, queue as upcoming
+      if (currentlyOut && item.OnLoanTo !== loanTo && exEnd && startDate && exEnd <= startDate) {
+        upcomingDevices.push(item);
+      } else {
+        directDevices.push(item);
+      }
+    }
+
+    for (const item of directDevices) {
+      const idx = equipment.findIndex(e => e.id === item.id);
       if (idx < 0) continue;
       Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', BatchID: batchId, BorrowerEmail: batchEmail, AccountManager: batchAM });
       historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
     }
+
+    if (upcomingDevices.length) {
+      const uLoan = {
+        id: batchId,
+        loanTo, location,
+        startDate: startDate || '',
+        endDate: endDate || '',
+        accountManager: batchAM,
+        borrowerEmail: batchEmail,
+        items: upcomingDevices.map(e => ({ id: e.id, CHSAssetNo: e.CHSAssetNo, Model: e.Model, SerialNo: e.SerialNo }))
+      };
+      upcomingLoans.push(uLoan);
+      upcomingDevices.forEach(item => {
+        historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes: (notes ? notes + ' — ' : '') + 'Booked as upcoming (currently on loan to ' + item.OnLoanTo + ')', batchId, _pdfKey: batchId });
+      });
+      await saveUpcomingLoans();
+    }
+
+    // All devices for PDF purposes
+    const devicesToLoanAll = [...directDevices, ...upcomingDevices];
 
     // Use immediate save — scheduleSave() is debounced 800ms and can be lost
     // on page refresh, leaving only the BatchID in Firebase with no loan data.
@@ -2887,9 +2921,9 @@ async function submitBatchLoan() {
     }
     renderTable(); updateStats();
 
-    const batchLoanItems = devicesToLoan.map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase())).filter(Boolean);
+    const batchLoanItems = devicesToLoanAll;
     window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
-    window._pendingLoanDocPdfKey = batchId; // must be set before generateLoanDoc so _currentLoanDocInfo._pdfKey is correct
+    window._pendingLoanDocPdfKey = batchId;
     generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber }, null, { notesCell: '', authCell: '', batchNotes: notes });
 
     setTimeout(async () => {
@@ -5365,7 +5399,26 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   if (!itemsToAdd.length) return;
   const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
   let added = 0;
+
+  // Separate items into: ones we can write directly vs ones currently on a non-overlapping loan
+  const directItems = [], upcomingItems = [];
   itemsToAdd.forEach(b => {
+    const eq = equipment.find(e => e.id === b.id);
+    if (!eq) return;
+    const currentlyOut = eq.OnLoanTo && eq.Returned !== 'Yes';
+    const exEnd = eq.LoanEndDate || '';
+    const newStart = g.startDate || '';
+    // If currently out on a different loan that ends before this loan starts — keep equipment
+    // record intact and store as upcoming instead of overwriting
+    if (currentlyOut && eq.OnLoanTo !== g.loanTo && exEnd && newStart && exEnd <= newStart) {
+      upcomingItems.push(b);
+    } else {
+      directItems.push(b);
+    }
+  });
+
+  // Direct items — overwrite equipment record as before
+  directItems.forEach(b => {
     const idx = equipment.findIndex(e => e.id === b.id);
     if (idx < 0) return;
     Object.assign(equipment[idx], {
@@ -5379,6 +5432,39 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
     added++;
   });
+
+  // Upcoming items — store in upcomingLoans so equipment record stays on current loan
+  if (upcomingItems.length) {
+    // Find or create an upcoming loan entry for this group
+    let uLoan = upcomingLoans.find(u =>
+      u.loanTo === g.loanTo && u.startDate === g.startDate && u.endDate === (g.endDate||'')
+    );
+    if (!uLoan) {
+      uLoan = {
+        id: batchId,
+        loanTo: g.loanTo,
+        location: g.location,
+        startDate: g.startDate || '',
+        endDate: g.endDate || '',
+        accountManager: g.items[0]?.AccountManager || '',
+        borrowerEmail: g.items[0]?.BorrowerEmail || '',
+        items: []
+      };
+      upcomingLoans.push(uLoan);
+    }
+    upcomingItems.forEach(b => {
+      const eq = equipment.find(e => e.id === b.id);
+      if (!eq) return;
+      // Avoid duplicates
+      if (!uLoan.items.some(i => i.CHSAssetNo === eq.CHSAssetNo)) {
+        uLoan.items.push({ id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, SerialNo: eq.SerialNo });
+      }
+      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: eq.CHSAssetNo, model: eq.Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Booked as upcoming (currently on loan to ' + eq.OnLoanTo + ')' });
+      added++;
+    });
+    await saveUpcomingLoans();
+  }
+
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   clearBasket();
 
