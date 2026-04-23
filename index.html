@@ -2829,6 +2829,7 @@ async function submitBatchLoan() {
   // Helper to actually do the loan after all checks pass
   const doLoan = async (devicesToLoan) => {
     if (!devicesToLoan.length) { showErr('No devices selected to loan.'); return; }
+    const today = nzDate();
     const btn = document.getElementById('btn-batch');
     btn.disabled = true; btn.textContent = 'Saving…';
 
