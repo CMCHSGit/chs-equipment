@@ -2829,56 +2829,13 @@ async function submitBatchLoan() {
   // Helper to actually do the loan after all checks pass
   const doLoan = async (devicesToLoan) => {
     if (!devicesToLoan.length) { showErr('No devices selected to loan.'); return; }
-    const btn        = document.getElementById('btn-batch');
-    btn.disabled = true; btn.textContent = 'Checking availability…';
+    const btn = document.getElementById('btn-batch');
+    btn.disabled = true; btn.textContent = 'Saving…';
 
-    // ── Pre-flight: re-fetch Firebase to catch concurrent loans from other users
-    try {
-      const pfResp = await fetchWithTimeout(FB_URL + '/data.json', {}, 5000);
-      if (pfResp.ok) {
-        const latest = await pfResp.json();
-        if (latest && Array.isArray(latest.equipment)) {
-          // Update local equipment with the absolute latest state
-          latest.equipment.forEach(latestItem => {
-            const idx = equipment.findIndex(e => e.id === latestItem.id);
-            if (idx >= 0) equipment[idx] = latestItem;
-          });
-          _dataVersion = latest._v || _dataVersion;
-          renderTable(); updateStats(); renderLoans();
-
-          // Re-check: are any of the requested devices now conflicting? (same overlap logic)
-          const nowConflicting = devicesToLoan.filter(d => {
-            const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-            if (!item || !item.OnLoanTo || item.Returned === 'Yes') return false;
-            const exStart = item.LoanStartDate || '';
-            const exEnd   = item.LoanEndDate   || '';
-            if (exEnd && exEnd <= startDate) return false;
-            if (exStart && endDate && exStart >= endDate) return false;
-            return true;
-          });
-          if (nowConflicting.length) {
-            btn.disabled = false; btn.textContent = 'Confirm Loan';
-            const freshConflicts = nowConflicting.map(d => {
-              const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-              return { assetNo: item.CHSAssetNo, model: item.Model || '',
-                currentLoanTo: item.OnLoanTo, currentEnd: item.LoanEndDate || '',
-                type: 'overlap', overlapDays: 0 };
-            });
-            showToast('warn', 'Another user just loaned ' + nowConflicting.length + ' device(s) — see conflict details.');
-            showConflictModal(freshConflicts, loanTo, startDate, () => doLoan(devicesToLoan));
-            return;
-          }
-        }
-      }
-    } catch(e) { /* pre-flight failed — proceed anyway */ }
-
-    btn.textContent = 'Saving…';
-    // Safety net — if anything goes wrong silently, reset the button after 15s
+    // Safety net — reset button if anything fails silently
     const savingTimeout = setTimeout(() => {
-      if (btn.textContent === 'Saving…' || btn.textContent === 'Checking availability…') {
-        btn.disabled = false; btn.textContent = 'Confirm Loan';
-        showToast('error', 'Save timed out — please try again.');
-      }
+      btn.disabled = false; btn.textContent = 'Confirm Loan';
+      showToast('error', 'Save timed out — please try again.');
     }, 15000);
     const batchId    = 'batch_' + Date.now();
     const notes          = document.getElementById('b-notes').value;
