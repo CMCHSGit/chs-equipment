@@ -2437,9 +2437,14 @@ async function _findOrphanCandidates() {
         const docItems = Array.isArray(doc.items) ? doc.items : Object.values(doc.items);
         const assetNos = docItems.map(i => i.CHSAssetNo).filter(Boolean);
         if (!assetNos.length) continue;
-        // Check whether any of those equipment items already reflect this loan
-        // Only match on loanTo + not-returned — NOT end date, because the end date
-        // may have been changed since the loanDoc was created (extend, edit, etc.).
+        // Check whether any of those equipment items already reflect this loan,
+        // OR whether this loan is already tracked in upcomingLoans (items booked
+        // as upcoming don't write to equipment records — not an orphan).
+        const trackedAsUpcoming = upcomingLoans.some(u =>
+          u.id === batchId ||
+          (u.loanTo === doc.loanTo && u.items.some(i => assetNos.includes(i.CHSAssetNo)))
+        );
+        if (trackedAsUpcoming) continue;
         const anyOnLoan = equipment.some(e =>
           assetNos.includes(e.CHSAssetNo) &&
           (e.BatchID === batchId ||
@@ -3235,7 +3240,6 @@ function renderLoans() {
       '</div>' +
       '<div class="loan-card-badge">' +
         '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();convertScheduledToUpcoming(\'' + key + '\')" title="Move items back to upcoming — fixes equipment records that were incorrectly set as active" style="font-size:11px;color:#6d28d9;border-color:#c4b5fd">&#x21BA; Fix: Move to Upcoming</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
