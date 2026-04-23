@@ -2865,6 +2865,13 @@ async function submitBatchLoan() {
     } catch(e) { /* pre-flight failed — proceed anyway */ }
 
     btn.textContent = 'Saving…';
+    // Safety net — if anything goes wrong silently, reset the button after 15s
+    const savingTimeout = setTimeout(() => {
+      if (btn.textContent === 'Saving…' || btn.textContent === 'Checking availability…') {
+        btn.disabled = false; btn.textContent = 'Confirm Loan';
+        showToast('error', 'Save timed out — please try again.');
+      }
+    }, 15000);
     const batchId    = 'batch_' + Date.now();
     const notes          = document.getElementById('b-notes').value;
     const batchEmail     = document.getElementById('b-email').value.trim();
@@ -2916,8 +2923,10 @@ async function submitBatchLoan() {
     setSync('saving', 'Saving...');
     try {
       await saveBin({ equipment, history: historyLog });
+      clearTimeout(savingTimeout);
       setSync('ok', 'Saved');
     } catch(saveErr) {
+      clearTimeout(savingTimeout);
       setSync('err', 'Save failed');
       showToast('error', 'Loan save failed — please try again. ' + saveErr.message);
       btn.disabled = false; btn.textContent = 'Confirm Loan';
@@ -2958,6 +2967,7 @@ async function submitBatchLoan() {
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
 
     btn.disabled = false; btn.textContent = 'Confirm Loan';
+    clearTimeout(savingTimeout);
     batchDevices = [{ id: 'bd_0', value: '' }];
     window._batchStatus = {};
     ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
