@@ -1320,13 +1320,14 @@ async function fetchBin() {
 // Version token recorded at last load — used to detect concurrent saves
 let _dataVersion = null;
 
+// Helper: fetch with an AbortController timeout
+function fetchWithTimeout(url, opts = {}, ms = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
 async function saveBin(data) {
-  // Helper: fetch with a timeout
-  const fetchWithTimeout = (url, opts = {}, ms = 8000) => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), ms);
-    return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
-  };
 
   // Concurrent-save guard: before writing, check whether another session has
   // saved since we loaded. If so, auto-merge rather than silently overwriting.
@@ -2833,7 +2834,7 @@ async function submitBatchLoan() {
 
     // ── Pre-flight: re-fetch Firebase to catch concurrent loans from other users
     try {
-      const pfResp = await fetch(FB_URL + '/data.json');
+      const pfResp = await fetchWithTimeout(FB_URL + '/data.json', {}, 5000);
       if (pfResp.ok) {
         const latest = await pfResp.json();
         if (latest && Array.isArray(latest.equipment)) {
@@ -6271,10 +6272,10 @@ async function saveUpcomingLoans() {
   const obj = {};
   upcomingLoans.forEach(u => { obj[u.id] = u; });
   try {
-    await fetch(FB_URL + '/upcomingLoans.json', {
+    await fetchWithTimeout(FB_URL + '/upcomingLoans.json', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(obj)
-    });
+    }, 8000);
   } catch(e) { console.warn('Could not save upcoming loans', e); }
 }
 
