@@ -2677,22 +2677,23 @@ function _showNewLoanConflictModal(conflicts, newLoanTo, newStart, onProceed) {
 function openAddItemsToUpcomingLoan(upcomingId) {
   const u = upcomingLoans.find(x => x.id === upcomingId);
   if (!u) return;
-  // Reuse the add-items modal, storing upcoming loan context
-  _addItemsGroup = {
-    loanTo:    u.loanTo,
-    location:  u.location,
-    startDate: u.startDate,
-    endDate:   u.endDate,
-    items:     u.items.map(i => equipment.find(e => e.id === i.id || e.CHSAssetNo === i.CHSAssetNo) || i),
-    _upcomingId: upcomingId
-  };
-  _addItemsRows = [{ id: 'ai_' + Date.now(), value: '' }];
-  _addItemsStatus = {};
-  document.getElementById('add-items-title').textContent = 'Add Items to Upcoming Loan — ' + u.loanTo;
-  document.getElementById('add-items-feedback').style.display = 'none';
-  renderAddItemsRows();
-  document.getElementById('add-items-modal').classList.add('open');
-  setTimeout(() => { const el = document.querySelector('#add-items-list input'); if (el) el.focus(); }, 50);
+  // Use the same database basket flow as current loans
+  _basketLoanKey = null;
+  _basketUpcomingId = upcomingId;
+  _basketItems = u.items.map(i => {
+    const eq = equipment.find(e => e.id === i.id || e.CHSAssetNo === i.CHSAssetNo) || i;
+    return { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: true };
+  });
+  switchTab('database');
+  const search = document.getElementById('db-search');
+  if (search) search.value = '';
+  const statusFilter = document.getElementById('db-status');
+  if (statusFilter) statusFilter.value = '';
+  setTimeout(() => {
+    renderTable();
+    renderBasket();
+    showToast('info', 'Tick items in the database to add to ' + u.loanTo + ', then click "Add to Loan"');
+  }, 150);
 }
 
 async function confirmAddItemsToUpcomingLoan() {
@@ -5364,7 +5365,8 @@ function clearSelection(alsoBasket) {
 // _basketItems: [{ id, CHSAssetNo, Model, Description, SerialNo, locked }]
 // locked = true means already in an existing loan (from "Add items" on Active Loans)
 let _basketItems = [];
-let _basketLoanKey = null; // null = new loan, otherwise existing loan key
+let _basketLoanKey = null; // null = new loan, key = existing current loan
+let _basketUpcomingId = null; // set when adding to an upcoming loan
 
 function issueLoanFromSelection() {
   if (_selectedIds.size === 0) return;
@@ -5390,9 +5392,12 @@ function renderBasket() {
   const newItems = _basketItems.filter(b => !b.locked);
   const lockedItems = _basketItems.filter(b => b.locked);
   // Update header
-  const isAddMode = _basketLoanKey !== null;
+  const isAddMode = _basketLoanKey !== null || _basketUpcomingId !== null;
+  let addModeLabel = '';
+  if (_basketLoanKey !== null) addModeLabel = getLoanGroupByKey(_basketLoanKey)?.loanTo || '';
+  if (_basketUpcomingId !== null) addModeLabel = upcomingLoans.find(u => u.id === _basketUpcomingId)?.loanTo || '';
   document.getElementById('basket-title').textContent = isAddMode
-    ? 'Adding to Loan — ' + (getLoanGroupByKey(_basketLoanKey)?.loanTo || '')
+    ? 'Adding to Loan — ' + addModeLabel
     : 'Loan Basket';
   document.getElementById('basket-count').textContent = newItems.length + ' item' + (newItems.length !== 1 ? 's' : '') + ' to add';
   document.getElementById('basket-proceed-label').textContent = isAddMode ? 'Add to Loan' : 'Proceed to Loan';
@@ -5420,6 +5425,7 @@ function removeFromBasket(id) {
 function clearBasket() {
   _basketItems = [];
   _basketLoanKey = null;
+  _basketUpcomingId = null;
   document.getElementById('loan-basket').style.display = 'none';
 }
 
@@ -5558,6 +5564,21 @@ function proceedFromBasket() {
   const today = nzDate();
   const newItems = _basketItems.filter(b => !b.locked);
   if (!newItems.length) { showToast('error', 'No new items in basket'); return; }
+
+  // Upcoming loan basket flow
+  if (_basketUpcomingId !== null) {
+    const u = upcomingLoans.find(x => x.id === _basketUpcomingId);
+    if (!u) { showToast('error', 'Could not find upcoming loan'); return; }
+    const g = {
+      loanTo: u.loanTo, location: u.location,
+      startDate: u.startDate, endDate: u.endDate,
+      items: u.items.map(i => equipment.find(e => e.CHSAssetNo === i.CHSAssetNo) || i),
+      _upcomingId: _basketUpcomingId
+    };
+    _basketUpcomingId = null;
+    _doBasketAddToLoan(g, newItems, []);
+    return;
+  }
 
   if (_basketLoanKey !== null) {
     const g = getLoanGroupByKey(_basketLoanKey);
