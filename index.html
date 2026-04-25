@@ -96,6 +96,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:500;white-space:nowrap}
 .badge-loan{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border)}
 .badge-avail{background:var(--green-light);color:var(--green);border:1px solid var(--green-border)}
+.badge-booked{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
 .badge-upcoming{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
 .badge-upcoming-sm{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;white-space:nowrap}
 
@@ -381,6 +382,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="stats-row">
         <div class="stat-card" onclick="filterDB('')" style="cursor:pointer" title="View all items"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total items</div></div>
         <div class="stat-card" onclick="filterDB('on-loan')" style="cursor:pointer" title="Filter by on loan"><div class="stat-val" style="color:var(--amber)" id="stat-onloan">0</div><div class="stat-label">On loan</div></div>
+        <div class="stat-card" onclick="filterDB('booked')" style="cursor:pointer" title="Filter by booked"><div class="stat-val" style="color:#6d28d9" id="stat-booked">0</div><div class="stat-label">Booked</div></div>
         <div class="stat-card" onclick="filterDB('available')" style="cursor:pointer" title="Filter by available"><div class="stat-val" style="color:var(--green)" id="stat-available">0</div><div class="stat-label">Available</div></div>
         <div class="stat-card" onclick="filterDB('overdue')" style="cursor:pointer" title="Filter by overdue"><div class="stat-val" style="color:var(--red)" id="stat-overdue">0</div><div class="stat-label">Overdue</div></div>
       </div>
@@ -574,7 +576,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </div>
         <select class="filter-select" id="db-status" onchange="renderTable()">
           <option value="">All statuses</option><option value="available">Available</option>
-          <option value="on-loan">On loan</option><option value="overdue">Overdue</option>
+          <option value="on-loan">On loan</option><option value="overdue">Overdue</option><option value="booked">Booked</option>
         </select>
         <!-- SELECTION ACTION BAR -->
         <div id="selection-bar" style="display:none;align-items:center;gap:6px;padding:5px 10px;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:var(--radius);flex-wrap:wrap">
@@ -1584,12 +1586,21 @@ function renderCountOverview() {
 function updateStats() {
   const today = nzDate();
   const total = equipment.length;
-  const on    = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes').length;
+  const booked = equipment.filter(e => {
+    const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+    return isScheduled || !!getUpcomingLoanForItem(e.id);
+  }).length;
+  const on = equipment.filter(e => {
+    const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+    const isUpcoming = !isScheduled && !!getUpcomingLoanForItem(e.id);
+    return e.OnLoanTo && e.Returned !== 'Yes' && !isScheduled && !isUpcoming;
+  }).length;
   const odItems = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && e.LoanEndDate < today);
   const od = odItems.length;
   document.getElementById('stat-total').textContent     = total;
   document.getElementById('stat-onloan').textContent    = on;
-  document.getElementById('stat-available').textContent = total - on;
+  document.getElementById('stat-available').textContent = total - on - booked;
+  document.getElementById('stat-booked').textContent    = booked;
   document.getElementById('stat-overdue').textContent   = od;
   // Show overdue filter label if there are overdue items
   const fl = document.getElementById('overdue-filter-label');
@@ -1853,12 +1864,10 @@ function buildStatusCell(e, on, od) {
   const upcomingLoanTo = upcoming ? upcoming.loanTo : scheduledLoanTo;
   const upcomingStartDate = upcoming ? upcoming.startDate : (isScheduled ? e.LoanStartDate : null);
 
-  const upcomingTag = upcomingLoanTo
-    ? '<span class="badge-upcoming-sm" style="margin-left:4px" title="Upcoming loan for ' + esc(upcomingLoanTo) + ' from ' + upcomingStartDate + '">⏳ ' + esc(upcomingLoanTo) + '</span>'
-    : '';
-  if (on) return '<span class="status-badge badge-loan">' + (od ? '⚠ Overdue' : 'On loan') + '</span>' + upcomingTag;
-  if (isScheduled) return '<span class="status-badge badge-avail">Available</span><span class="badge-upcoming-sm" style="margin-left:4px">⏳ Due for ' + esc(scheduledLoanTo) + '</span>';
-  if (upcoming) return '<span class="status-badge badge-avail">Available</span><span class="badge-upcoming-sm" style="margin-left:4px">⏳ Due for ' + esc(upcoming.loanTo) + '</span>';
+  // Items in any upcoming/scheduled loan show as "Booked" regardless of their current on-loan state
+  if (isScheduled) return '<span class="status-badge badge-booked">⏳ Booked</span><span class="badge-upcoming-sm" style="margin-left:4px">' + esc(scheduledLoanTo) + '</span>';
+  if (upcoming) return '<span class="status-badge badge-booked">⏳ Booked</span><span class="badge-upcoming-sm" style="margin-left:4px">' + esc(upcoming.loanTo) + '</span>';
+  if (on) return '<span class="status-badge badge-loan">' + (od ? '⚠ Overdue' : 'On loan') + '</span>';
   return '<span class="status-badge badge-avail">Available</span>';
 }
 
@@ -1868,11 +1877,14 @@ function renderTable() {
   const today = nzDate();
   let rows = equipment.filter(e => {
     const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
-    const on = e.OnLoanTo && e.Returned !== 'Yes' && !isScheduled, od = on && e.LoanEndDate && e.LoanEndDate < today;
+    const isUpcoming = !isScheduled && !!getUpcomingLoanForItem(e.id);
+    const isBooked = isScheduled || isUpcoming;
+    const on = e.OnLoanTo && e.Returned !== 'Yes' && !isBooked, od = on && e.LoanEndDate && e.LoanEndDate < today;
     const match = !q || Object.values(e).join(' ').toLowerCase().includes(q);
-    if (sf === 'available') return match && !on;
+    if (sf === 'available') return match && !on && !isBooked;
     if (sf === 'on-loan')   return match && on;
     if (sf === 'overdue')   return match && od;
+    if (sf === 'booked')    return match && isBooked;
     return match;
   });
   rows.sort((a,b) => {
