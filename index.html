@@ -1843,11 +1843,21 @@ function sortTable(col) { if (sortCol===col) sortDir*=-1; else { sortCol=col; so
 
 // Build status cell HTML — extracted to avoid nested template literals
 function buildStatusCell(e, on, od) {
+  // Check upcomingLoans array (conflict-booked items)
   const upcoming = getUpcomingLoanForItem(e.id);
-  const upcomingTag = upcoming
-    ? '<span class="badge-upcoming-sm" style="margin-left:4px" title="Upcoming loan for ' + esc(upcoming.loanTo) + ' from ' + upcoming.startDate + '">⏳ ' + esc(upcoming.loanTo) + '</span>'
+  // Also check if this equipment item IS itself a scheduled loan (future LoanStartDate on the record)
+  const today = nzDate();
+  const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+  const scheduledLoanTo = isScheduled ? e.OnLoanTo : null;
+
+  const upcomingLoanTo = upcoming ? upcoming.loanTo : scheduledLoanTo;
+  const upcomingStartDate = upcoming ? upcoming.startDate : (isScheduled ? e.LoanStartDate : null);
+
+  const upcomingTag = upcomingLoanTo
+    ? '<span class="badge-upcoming-sm" style="margin-left:4px" title="Upcoming loan for ' + esc(upcomingLoanTo) + ' from ' + upcomingStartDate + '">⏳ ' + esc(upcomingLoanTo) + '</span>'
     : '';
   if (on) return '<span class="status-badge badge-loan">' + (od ? '⚠ Overdue' : 'On loan') + '</span>' + upcomingTag;
+  if (isScheduled) return '<span class="status-badge badge-avail">Available</span><span class="badge-upcoming-sm" style="margin-left:4px">⏳ Due for ' + esc(scheduledLoanTo) + '</span>';
   if (upcoming) return '<span class="status-badge badge-avail">Available</span><span class="badge-upcoming-sm" style="margin-left:4px">⏳ Due for ' + esc(upcoming.loanTo) + '</span>';
   return '<span class="status-badge badge-avail">Available</span>';
 }
