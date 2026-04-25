@@ -1401,6 +1401,12 @@ let upcomingLoans = []; // [{id,loanTo,location,startDate,endDate,accountManager
 let scanMode = 'loan', currentItem = null, editingId = null, sessionItems = [];
 let saveTimer = null;
 
+// ── DIRTY FLAGS — only re-render a tab if data has changed since last render ──
+const _dirty = { database: true, loans: true, history: true, retired: true, calendar: true };
+function markDirty(...tabs) { tabs.forEach(t => _dirty[t] = true); }
+function markDataChanged() { markDirty('database', 'loans', 'history', 'calendar'); }
+function markRetiredChanged() { markDirty('retired'); }
+
 async function loadData() {
   setSync('saving', 'Loading…');
   showLoading('Loading equipment data…');
@@ -1436,6 +1442,7 @@ async function loadData() {
 
 // Debounced save — waits 800ms after last change then saves
 function scheduleSave() {
+  markDataChanged(); // data has changed — tabs need re-render
   setSync('saving', 'Saving…');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
@@ -1489,12 +1496,12 @@ function switchTab(n) {
     const ipw = document.getElementById('import-pw'); if(ipw) ipw.value = '';
     const ipe = document.getElementById('import-pw-err'); if(ipe) ipe.style.display = 'none';
   }
-  if (n === 'database') { renderTable(); loadTileLocationCache(); }
-  if (n === 'history')  renderHistory();
+  if (n === 'database') { if (_dirty.database) { renderTable(); loadTileLocationCache(); _dirty.database = false; } }
+  if (n === 'history')  { if (_dirty.history)  { renderHistory();  _dirty.history  = false; } }
   if (n === 'scan')     updateStats();
-  if (n === 'loans')    renderLoans();
-  if (n === 'calendar') renderCalendar();
-  if (n === 'retired')  { clearRetiredSelection(); renderRetired(); }
+  if (n === 'loans')    { if (_dirty.loans)    { renderLoans();    _dirty.loans    = false; } }
+  if (n === 'calendar') { if (_dirty.calendar) { renderCalendar(); _dirty.calendar = false; } }
+  if (n === 'retired')  { clearRetiredSelection(); if (_dirty.retired) { renderRetired(); _dirty.retired = false; } }
 }
 
 // ── COUNT OVERVIEW ────────────────────────────────────────────────────
@@ -1832,6 +1839,7 @@ function clearSession() { sessionItems = []; document.getElementById('scan-sessi
 
 // ── HISTORY ────────────────────────────────────────────────────────────
 function renderHistory() {
+  _dirty.history = false;
   const q  = (document.getElementById('hist-search').value || '').toLowerCase();
   const af = document.getElementById('hist-filter').value;
   const rows = historyLog.filter(h => (!q || [h.chsAssetNo,h.model,h.loanTo,h.location,h.notes].join(' ').toLowerCase().includes(q)) && (!af || h.action === af));
@@ -1872,6 +1880,7 @@ function buildStatusCell(e, on, od) {
 }
 
 function renderTable() {
+  _dirty.database = false;
   const q   = (document.getElementById('db-search').value || '').toLowerCase();
   const sf  = document.getElementById('db-status').value;
   const today = nzDate();
@@ -3072,6 +3081,7 @@ function buildGhostDeviceRow(e) {
 }
 
 function renderLoans() {
+  _dirty.loans = false;
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
   const sortBy = document.getElementById('loans-sort')?.value || 'added';
   const today = nzDate();
@@ -6270,6 +6280,7 @@ async function loadUpcomingLoans() {
 }
 
 async function saveUpcomingLoans() {
+  markDirty('loans', 'database', 'calendar');
   const obj = {};
   upcomingLoans.forEach(u => { obj[u.id] = u; });
   try {
@@ -6281,6 +6292,7 @@ async function saveUpcomingLoans() {
 }
 
 async function deleteUpcomingLoan(id) {
+  markDirty('loans', 'database', 'calendar');
   upcomingLoans = upcomingLoans.filter(u => u.id !== id);
   try {
     await fetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
@@ -6522,6 +6534,7 @@ async function sendUpcomingTransferReminder(toEmail, toName, currentLoanTo, item
 }
 
 async function saveRetiredAssets() {
+  markRetiredChanged();
   try {
     await fetch(FB_URL + '/retired.json', {
       method: 'PUT',
@@ -6575,6 +6588,7 @@ function sortRetired(col) {
 }
 
 function renderRetired() {
+  _dirty.retired = false;
   const q = (document.getElementById('retired-search')?.value || '').toLowerCase();
   let rows = retiredAssets.filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q));
   rows.sort((a,b) => {
@@ -6843,6 +6857,7 @@ function calShift(dir) {
 }
 
 function renderCalendar() {
+  _dirty.calendar = false;
   const container = document.getElementById('calendar-container');
   if (!container) return;
 
