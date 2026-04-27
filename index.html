@@ -4813,7 +4813,6 @@ async function createSimproJob(existingJobId) {
   const endDate    = headerCells?.[3]?.innerText?.trim() || info.endDate || '';
   const am         = headerCells?.[4]?.innerText?.trim() || info.accountManager || '';
   const contactNum = headerCells?.[5]?.innerText?.trim() || info.contactNumber || '';
-  const notes      = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
 
   const equipTable = document.getElementById('loan-doc-equip-table') || doc?.querySelectorAll('table')?.[2];
   const loanItems = [];
@@ -4835,6 +4834,11 @@ async function createSimproJob(existingJobId) {
   }
 
   const pdfKey = window._currentLoanDocInfo?._pdfKey;
+  // Read notes from DOM; fall back to in-memory cache (populated from Firebase when the doc was opened)
+  // so notes are always sent even if the contenteditable cell is somehow empty at call time
+  const notes = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() ||
+                window._loanDocCache?.[pdfKey]?.notesCell ||
+                window._loanDocCache?.[pdfKey]?.notes || '';
 
   // Check local cache first — load from localStorage so cache survives page refresh
   window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
