@@ -1978,6 +1978,7 @@ async function saveItem() {
     equipment.unshift(obj);
   }
   closeModal(); renderTable(); updateStats();
+  markDirty('loans', 'history', 'calendar');
   setSync('saving', 'Saving...');
   try {
     await saveBin({ equipment, history: historyLog });
@@ -4633,6 +4634,12 @@ async function saveLoanDocChanges() {
       updated++;
     }
   });
+  // Keep _loanDocCache fresh so renderLoans() shows the new notes immediately
+  const _cacheKey = loanItems[0]?.BatchID;
+  if (_cacheKey) {
+    window._loanDocCache = window._loanDocCache || {};
+    window._loanDocCache[_cacheKey] = { notesCell, notes: notesCell };
+  }
   if (updated > 0) { scheduleSave(); renderTable(); renderLoans(); }
   if (newContactNumber) window._currentLoanDocInfo.loanInfo.contactNumber = newContactNumber;
 
