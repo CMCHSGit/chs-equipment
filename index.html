@@ -4842,7 +4842,17 @@ async function createSimproJob(existingJobId) {
   if ('null' in window._simproJobCache) { delete window._simproJobCache['null']; localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache)); }
   let jobId = existingJobId || window._simproJobCache[pdfKey] || null;
 
-  // If not in cache, check Firebase
+  // If not in cache, check equipment records (most durable store — survives localStorage clear)
+  if (!jobId && pdfKey) {
+    const itemWithJob = equipment.find(e => e.BatchID === pdfKey && e.SimproJobId);
+    if (itemWithJob) {
+      jobId = itemWithJob.SimproJobId;
+      window._simproJobCache[pdfKey] = jobId;
+      localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+    }
+  }
+
+  // If still not found, check Firebase
   if (!jobId && pdfKey) {
     try {
       const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
@@ -4927,6 +4937,10 @@ async function createSimproJob(existingJobId) {
           if (storedId && !isPending) {
             window._simproJobCache[pdfKey] = storedId;
             localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+            // Persist job ID on equipment items so it survives cache/Firebase changes
+            let saved = false;
+            equipment.forEach(e => { if (e.BatchID === pdfKey) { e.SimproJobId = storedId; saved = true; } });
+            if (saved) scheduleSave();
             window._simproCreating = null;
             clearInterval(poll);
             showToast('success', 'Simpro job created — ID: ' + storedId);
