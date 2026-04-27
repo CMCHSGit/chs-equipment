@@ -1690,7 +1690,7 @@ function showAssetPreview(item) {
     document.getElementById('contacts-list').innerHTML = [...new Set(equipment.filter(e=>e.OnLoanTo).map(e=>e.OnLoanTo))].map(c=>`<option value="${esc(c)}">`).join('');
     document.getElementById('locations-list').innerHTML = [...new Set(equipment.filter(e=>e.Location).map(e=>e.Location))].map(l=>`<option value="${esc(l)}">`).join('');
   }
-  if (scanMode === 'return' && on) document.getElementById('return-details').innerHTML = `Loaned to: <strong>${item.OnLoanTo}</strong><br>Location: ${item.Location||'—'} &nbsp;·&nbsp; Due: ${item.LoanEndDate||'—'}`;
+  if (scanMode === 'return' && on) document.getElementById('return-details').innerHTML = `Loaned to: <strong>${esc(item.OnLoanTo)}</strong><br>Location: ${esc(item.Location)||'—'} &nbsp;·&nbsp; Due: ${esc(item.LoanEndDate)||'—'}`;
   if (scanMode === 'count') {
     const notice = document.getElementById('count-on-loan-notice');
     const keepBtn = document.getElementById('btn-count-keep-loan');
@@ -2185,7 +2185,7 @@ async function confirmImport() {
   for (const row of importRows) {
     const m = mapRow(row); if (!m.CHSAssetNo) continue;
     m.CHSAssetNo = String(m.CHSAssetNo).trim();
-    const existing = equipment.find(e=>e.CHSAssetNo.toLowerCase()===m.CHSAssetNo.toLowerCase());
+    const existing = equipment.find(e=>e.CHSAssetNo && e.CHSAssetNo.toLowerCase()===m.CHSAssetNo.toLowerCase());
     if (existing) { Object.assign(existing, m); updated++; }
     else { equipment.unshift({ id: uid(), BatterySerialNo: '—', ...m }); added++; }
   }
@@ -2841,7 +2841,7 @@ async function submitBatchLoan() {
 
   // Build conflict info for already-on-loan devices
   const conflicts = alreadyOnLoan.map(d => {
-    const item = equipment.find(e => e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
+    const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
     const existingStart = item.LoanStartDate || '';
     const existingEnd   = item.LoanEndDate   || '';
     // Overlap period = intersection of [startDate,endDate] and [existingStart,existingEnd]
@@ -4482,7 +4482,7 @@ async function closeLoanDoc() {
 async function viewHistoryPDF(pdfKey) {
   const html = (window._loanPDFs || {})[pdfKey];
   if (html) {
-    document.getElementById('loan-doc-content').innerHTML = '<div id="printable-loan-doc">' + html + '</div>';
+    document.getElementById('loan-doc-content').innerHTML = '<div id="printable-loan-doc-history">' + html + '</div>';
     document.getElementById('doc-edited-note').style.display = 'none';
     const sb = document.getElementById('doc-save-btn'); if (sb) sb.style.display = 'none';
     document.getElementById('loan-doc-modal').classList.add('open');
@@ -4596,10 +4596,11 @@ async function saveLoanDocChanges() {
   }
   window._currentLoanDocInfo._pdfKey = pdfKey;
 
-  // Persist to Firebase — this is what makes it survive page reloads
+  // Persist to Firebase — use PATCH instead of PUT so fields not included here
+  // (e.g. simproJobId) are preserved rather than overwritten
   try {
     const saveResp = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
-      method: 'PUT',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         loanTo: newLoanTo || info.loanTo || '',
