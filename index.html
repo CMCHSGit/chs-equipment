@@ -1417,7 +1417,7 @@ async function loadData() {
     equipment  = Array.isArray(data.equipment)  ? data.equipment  : [];
     historyLog = Array.isArray(data.history)     ? data.history    : [];
     setSync('ok', 'Live — auto-saving');
-    updateStats(); renderTable(); renderHistory();
+    renderTable(); renderHistory();
     setScanMode('batch');
     hideLoading();
     await loadSentNotifications();
