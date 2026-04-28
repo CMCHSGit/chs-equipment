@@ -472,6 +472,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
+              <div class="form-group"><label>Job Type</label><select id="b-job-type"><option value="Demo">Demo</option><option value="PMV">PMV</option><option value="Repair">Repair</option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include (Asset Numbers)</div>
@@ -2875,7 +2876,8 @@ async function submitBatchLoan() {
     const notes          = document.getElementById('b-notes').value;
     const batchEmail     = document.getElementById('b-email').value.trim();
     const contactNumber  = document.getElementById('b-contact-number')?.value.trim() || '';
-    const batchAM    = document.getElementById('b-account-manager')?.value || '';
+    const batchAM        = document.getElementById('b-account-manager')?.value || '';
+    const batchJobType   = document.getElementById('b-job-type')?.value || 'Demo';
 
     const targetIsFuture = startDate && startDate > today;
     const directDevices = [], upcomingDevices = [];
@@ -2922,15 +2924,15 @@ async function submitBatchLoan() {
     clearTimeout(savingTimeout);
 
     const batchLoanItems = devicesToLoanAll;
-    window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM } };
+    window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM, jobType: batchJobType } };
     window._pendingLoanDocPdfKey = batchId;
-    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber }, null, { notesCell: '', authCell: '', batchNotes: notes });
+    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType }, null, { notesCell: '', authCell: '', batchNotes: notes });
 
     setTimeout(async () => {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, notes: notes, notesCell: notes,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, notes: notes, notesCell: notes,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -2959,6 +2961,7 @@ async function submitBatchLoan() {
     window._batchStatus = {};
     ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+    const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
     clearBasket(); // clear basket now that loan is confirmed
@@ -2980,12 +2983,14 @@ async function submitBatchLoan() {
     }).filter(Boolean);
 
     if (upcomingItems.length > 0) {
-      const batchEmail = document.getElementById('b-email').value.trim();
-      const batchAM    = document.getElementById('b-account-manager')?.value || '';
+      const batchEmail    = document.getElementById('b-email').value.trim();
+      const batchAM       = document.getElementById('b-account-manager')?.value || '';
+      const upcomingJobType = document.getElementById('b-job-type')?.value || 'Demo';
       const upcomingId = 'upcoming_' + Date.now();
       const newUpcoming = {
         id: upcomingId, loanTo, location, startDate, endDate,
         accountManager: batchAM, borrowerEmail: batchEmail,
+        jobType: upcomingJobType,
         items: upcomingItems, status: 'upcoming',
         notes: document.getElementById('b-notes').value
       };
@@ -3010,6 +3015,7 @@ async function submitBatchLoan() {
       // Save the loanDoc for this upcoming loan too
       try {
         const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM,
+          jobType: upcomingJobType,
           notes: document.getElementById('b-notes').value,
           items: upcomingEquipItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(upcomingId) + '.json', {
@@ -3020,7 +3026,7 @@ async function submitBatchLoan() {
       } catch(e) {}
 
       const bNotes = document.getElementById('b-notes').value;
-      generateLoanDoc(upcomingEquipItems, { loanTo, location, startDate, endDate, accountManager: batchAM },
+      generateLoanDoc(upcomingEquipItems, { loanTo, location, startDate, endDate, accountManager: batchAM, jobType: upcomingJobType },
         null, { notesCell: '', authCell: '', batchNotes: bNotes });
     }
     // Clean devices (no current loan) proceed as normal
@@ -3033,6 +3039,7 @@ async function submitBatchLoan() {
       window._batchStatus = {};
       ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
       const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+      const jtEl2 = document.getElementById('b-job-type'); if(jtEl2) jtEl2.value = 'Demo';
       document.getElementById('b-start-date').value = nzDate();
       document.getElementById('batch-feedback').style.display = 'none';
       renderBatchDevices(); renderLoans();
@@ -4497,7 +4504,7 @@ async function viewHistoryPDF(pdfKey) {
     if (d && (d.items || d.loanTo)) {
       if (!d.items) d.items = [];
       window._pendingLoanDocPdfKey = pdfKey;
-      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' });
+      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '', jobType: d.jobType || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' });
     } else {
       showToast('error', 'Loan document not found');
     }
@@ -4611,6 +4618,7 @@ async function saveLoanDocChanges() {
       endDate: toISO(newEndDate) || info.endDate || '',
       accountManager: newAM || info.accountManager || '',
       contactNumber: newContactNumber || info.contactNumber || '',
+      jobType: info.jobType || '',
       items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
       savedRows,
       notesCell,
@@ -4920,6 +4928,7 @@ async function createSimproJob(existingJobId) {
     endDate:        toISO(endDate),
     accountManager: am,
     contactNumber:  contactNum,
+    jobType:        info.jobType || 'Demo',
     items:          loanItems,
     jobId:          (jobId != null && !isNaN(Number(jobId))) ? Number(jobId) : (jobId || null),
     pdfKey:         pdfKey || null
