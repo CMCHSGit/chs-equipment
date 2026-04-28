@@ -6314,6 +6314,7 @@ async function loadUpcomingLoans() {
     const d = await r.json();
     upcomingLoans = d ? Object.values(d) : [];
   } catch(e) { upcomingLoans = []; }
+  updateStats();
 }
 
 async function saveUpcomingLoans() {
