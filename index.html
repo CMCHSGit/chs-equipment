@@ -3241,6 +3241,7 @@ function renderLoans() {
         ' <span style="color:var(--text3)">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
         ' · ' + totalDevices + ' device' + (totalDevices !== 1 ? 's' : '') +
+        (() => { const bId = g.items[0]?.BatchID; const sj = bId && window._loanDocCache?.[bId]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
@@ -3311,6 +3312,7 @@ function renderLoans() {
         esc(u.location) + ' · Starts: ' + formatDisplayDate(u.startDate) +
         ' <span style="color:var(--text3)">(' + daysLabel + ')</span>' +
         ' · ' + u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
+        (() => { const sj = window._loanDocCache?.[u.id]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
@@ -3346,7 +3348,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
+          <div class="loan-card-meta">${g.items[0]?.AccountManager ? `<span style="color:var(--accent);font-weight:500">${esc(g.items[0].AccountManager)}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const sj = bId && window._loanDocCache?.[bId]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
@@ -6281,6 +6283,7 @@ async function loadLoanDocNotes() {
       window._loanDocCache[batchId] = {
         notes:     doc.notes     || '',
         notesCell: doc.notesCell || doc.notes || ''
+        simproJobId: doc.simproJobId || ''
       };
     }
   } catch(e) { console.warn('Could not load loan doc notes', e); }
