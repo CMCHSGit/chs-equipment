@@ -6281,8 +6281,8 @@ async function loadLoanDocNotes() {
     for (const [batchId, doc] of Object.entries(allDocs)) {
       if (!doc) continue;
       window._loanDocCache[batchId] = {
-        notes:     doc.notes     || '',
-        notesCell: doc.notesCell || doc.notes || ''
+        notes:       doc.notes       || '',
+        notesCell:   doc.notesCell   || doc.notes || '',
         simproJobId: doc.simproJobId || ''
       };
     }
