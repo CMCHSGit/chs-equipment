@@ -4599,21 +4599,28 @@ async function saveLoanDocChanges() {
 
   // Persist to Firebase — this is what makes it survive page reloads
   try {
+    // Preserve any real simproJobId so a PUT doesn't wipe out what GAS wrote
+    window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
+    const _cachedJobId = window._simproJobCache[pdfKey];
+    const _isPendingId = _cachedJobId === 'pending' || (typeof _cachedJobId === 'object' && _cachedJobId?.status === 'pending');
+    const _realJobId = (_cachedJobId && !_isPendingId) ? _cachedJobId : undefined;
+    const saveBody = {
+      loanTo: newLoanTo || info.loanTo || '',
+      location: newLocation || info.location || '',
+      startDate: toISO(newStartDate) || info.startDate || '',
+      endDate: toISO(newEndDate) || info.endDate || '',
+      accountManager: newAM || info.accountManager || '',
+      contactNumber: newContactNumber || info.contactNumber || '',
+      items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
+      savedRows,
+      notesCell,
+      authCell
+    };
+    if (_realJobId !== undefined) saveBody.simproJobId = _realJobId;
     const saveResp = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        loanTo: newLoanTo || info.loanTo || '',
-        location: newLocation || info.location || '',
-        startDate: toISO(newStartDate) || info.startDate || '',
-        endDate: toISO(newEndDate) || info.endDate || '',
-        accountManager: newAM || info.accountManager || '',
-        contactNumber: newContactNumber || info.contactNumber || '',
-        items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
-        savedRows,
-        notesCell,
-        authCell
-      })
+      body: JSON.stringify(saveBody)
     });
     if (!saveResp.ok) throw new Error('HTTP ' + saveResp.status);
   } catch(e) {
@@ -4870,10 +4877,24 @@ async function createSimproJob(existingJobId) {
       console.log('Simpro: creation in flight, skipping update');
       return;
     }
-    // Stale — clear it and allow re-creation
+    // Stale — clear it and re-check Firebase before falling through to create
     console.log('Simpro: stale pending detected, clearing and retrying');
     jobId = null;
     if (window._simproJobCache) { delete window._simproJobCache[pdfKey]; localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache)); }
+    // GAS may have written a real ID even if the local poll timed out — check now
+    if (pdfKey) {
+      try {
+        const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+        const _d = await _r.json();
+        const _storedId = _d?.simproJobId;
+        const _stillPending = _storedId === 'pending' || (typeof _storedId === 'object' && _storedId?.status === 'pending');
+        if (_storedId && !_stillPending) {
+          jobId = _storedId;
+          window._simproJobCache[pdfKey] = jobId;
+          localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+        }
+      } catch(e) {}
+    }
   }
 
   const isNew = !jobId;
@@ -4900,7 +4921,7 @@ async function createSimproJob(existingJobId) {
     accountManager: am,
     contactNumber:  contactNum,
     items:          loanItems,
-    jobId:          jobId || null,
+    jobId:          (jobId != null && !isNaN(Number(jobId))) ? Number(jobId) : (jobId || null),
     pdfKey:         pdfKey || null
   });
 
