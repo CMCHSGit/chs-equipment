@@ -3200,6 +3200,7 @@ function renderLoans() {
   const scheduledCards = filteredScheduled.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
+    const isSoon = daysUntilStart <= 2;
     const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
     window._loanGroupMap = window._loanGroupMap || {};
     window._loanGroupMap[key] = g;
@@ -3233,21 +3234,21 @@ function renderLoans() {
     const totalDevices = g.items.length + matchingUpcoming.reduce((s, u) => s + u.items.length, 0);
     // Bug 3 fix: don't auto-open the card just because items have transfer notes
     const _bodyOpen = 'display:none';
-    return '<div class="loan-card" style="border-color:#c4b5fd">' +
+    return '<div class="loan-card" style="border-color:' + (isSoon ? 'var(--amber-border)' : '#c4b5fd') + '">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'slc_' + sgi + '\')">' +
       '<div>' +
-      '<div class="loan-card-customer" style="color:#4c1d95">' + esc(g.loanTo) + '</div>' +
+      '<div class="loan-card-customer" style="color:' + (isSoon ? 'var(--amber)' : '#4c1d95') + '">' + esc(g.loanTo) + '</div>' +
       '<div class="loan-card-meta">' +
-        (g.items[0]?.AccountManager ? '<span style="color:#6d28d9;font-weight:500">' + esc(g.items[0].AccountManager) + '</span> · ' : '') +
+        (g.items[0]?.AccountManager ? '<span style="color:' + (isSoon ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(g.items[0].AccountManager) + '</span> · ' : '') +
         esc(g.location) + ' · Starts: ' + formatDisplayDate(g.startDate) +
-        ' <span style="color:var(--text3)">(' + daysLabel + ')</span>' +
+        ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
         ' · ' + totalDevices + ' device' + (totalDevices !== 1 ? 's' : '') +
         (() => { const bId = g.items[0]?.BatchID; const sj = bId && window._loanDocCache?.[bId]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
-        '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
+        (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
@@ -3283,6 +3284,7 @@ function renderLoans() {
   const upcomingCards = filteredUpcoming.map(u => {
     const daysUntilStart = daysBetween(today, u.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
+    const isSoon = daysUntilStart <= 2;
     const itemsHtml = u.items.map(uItem => {
       const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (!eq) return '';
@@ -3305,20 +3307,20 @@ function renderLoans() {
         'Remove</button>' +
         '</div>';
     }).join('');
-    return '<div class="loan-card" style="border-color:#c4b5fd">' +
+    return '<div class="loan-card" style="border-color:' + (isSoon ? 'var(--amber-border)' : '#c4b5fd') + '">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'ulc_' + u.id + '\')">' +
       '<div>' +
-      '<div class="loan-card-customer" style="color:#4c1d95">' + esc(u.loanTo) + '</div>' +
+      '<div class="loan-card-customer" style="color:' + (isSoon ? 'var(--amber)' : '#4c1d95') + '">' + esc(u.loanTo) + '</div>' +
       '<div class="loan-card-meta">' +
-        (u.accountManager ? '<span style="color:#6d28d9;font-weight:500">' + esc(u.accountManager) + '</span> · ' : '') +
+        (u.accountManager ? '<span style="color:' + (isSoon ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(u.accountManager) + '</span> · ' : '') +
         esc(u.location) + ' · Starts: ' + formatDisplayDate(u.startDate) +
-        ' <span style="color:var(--text3)">(' + daysLabel + ')</span>' +
+        ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         ' · ' + u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
         (() => { const sj = window._loanDocCache?.[u.id]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
-        '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>' +
+        (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
