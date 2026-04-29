@@ -1817,7 +1817,7 @@ function clearScan() {
   // Also reset batch form
   batchDevices = [{ id: 'bd_0', value: '' }];
   window._batchStatus = {};
-  ['b-loan-to','b-location','b-end-date','b-notes','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
   const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
   const bsEl = document.getElementById('b-start-date'); if(bsEl) bsEl.value = nzDate();
   const fb = document.getElementById('batch-feedback'); if(fb) { fb.style.display='none'; fb.innerHTML=''; }
@@ -2961,7 +2961,7 @@ async function submitBatchLoan() {
     clearTimeout(savingTimeout);
     batchDevices = [{ id: 'bd_0', value: '' }];
     window._batchStatus = {};
-    ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+    ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
     const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
     document.getElementById('b-start-date').value = nzDate();
@@ -3039,7 +3039,7 @@ async function submitBatchLoan() {
       if (btn) { btn.disabled = false; btn.textContent = 'Confirm Loan'; }
       batchDevices = [{ id: 'bd_0', value: '' }];
       window._batchStatus = {};
-      ['b-loan-to','b-location','b-end-date','b-notes','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+      ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
       const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
       const jtEl2 = document.getElementById('b-job-type'); if(jtEl2) jtEl2.value = 'Demo';
       document.getElementById('b-start-date').value = nzDate();
@@ -4167,6 +4167,34 @@ async function saveLoanDocNotes(val) {
   }
 }
 
+async function saveLoanDocAuth(val) {
+  if (!window._currentLoanDocInfo) return;
+  const authCell = document.getElementById('loan-doc-auth-cell');
+  if (authCell) {
+    val = authCell.innerHTML
+      .replace(/<div>/gi, '\n').replace(/<\/div>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/<[^>]+>/g, '').trim();
+  }
+  const pdfKey = window._currentLoanDocInfo._pdfKey;
+  if (pdfKey) {
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+      const existing = r.ok ? await r.json() : {};
+      if (existing) {
+        existing.authCell = val;
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(existing)
+        });
+        window._loanDocCache = window._loanDocCache || {};
+        window._loanDocCache[pdfKey] = existing;
+      }
+    } catch(e) { console.warn('Could not update loanDoc auth cell', e); }
+  }
+}
+
 // Send the loan form email when the user is happy with the form
 async function sendLoanDocEmail() {
   const pending = window._pendingLoanEmail;
@@ -4332,7 +4360,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
         </tr>
         <tr>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;text-align:right">Shipping Details:</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to edit shipping details">${savedExtra?.authCell||''}</td>
+          <td id="loan-doc-auth-cell" contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;min-height:30px;height:auto;vertical-align:top;font-size:12px;white-space:pre-wrap" colspan="6" title="Click to edit shipping details">${savedExtra?.authCell||''}</td>
         </tr>
       </table>
       <!-- FOOTER -->
@@ -4390,6 +4418,19 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       }, 1500);
     };
   }
+  const authCell = document.getElementById('loan-doc-auth-cell');
+  if (authCell) {
+    const storedAuth = authCell.innerText;
+    if (storedAuth.includes('\n')) {
+      authCell.innerHTML = storedAuth.replace(/\n/g, '<br>');
+    }
+    authCell.oninput = function() {
+      clearTimeout(window._authSaveTimer);
+      window._authSaveTimer = setTimeout(() => {
+        saveLoanDocAuth(document.getElementById('loan-doc-auth-cell')?.innerText.trim() || '');
+      }, 1500);
+    };
+  }
 
 }
 
@@ -4433,6 +4474,10 @@ function _loanDocNotesFocusOut(e) {
   if (notesCell && (e.target === notesCell || notesCell.contains(e.target))) {
     saveLoanDocNotes(notesCell.innerText.trim());
   }
+  const authCell = document.getElementById('loan-doc-auth-cell');
+  if (authCell && (e.target === authCell || authCell.contains(e.target))) {
+    saveLoanDocAuth(authCell.innerText.trim());
+  }
 }
 
 function formatDisplayDate(d) {
@@ -4460,9 +4505,12 @@ function formatDisplayDate(d) {
 async function closeLoanDoc() {
   // Auto-save the full form before closing (catches any unsaved edits)
   clearTimeout(window._notesSaveTimer);
+  clearTimeout(window._authSaveTimer);
   if (window._currentLoanDocInfo) {
     const notesCell = document.getElementById('loan-doc-notes-cell');
     if (notesCell) saveLoanDocNotes(notesCell.innerText.trim());
+    const authCell = document.getElementById('loan-doc-auth-cell');
+    if (authCell) saveLoanDocAuth(authCell.innerText.trim());
     // Auto-save the whole doc if it has edits (doc-edited-note is visible)
     const editedNote = document.getElementById('doc-edited-note');
     if (editedNote && editedNote.style.display !== 'none') {
@@ -4838,7 +4886,8 @@ async function createSimproJob(existingJobId) {
   const endDate    = headerCells?.[3]?.innerText?.trim() || info.endDate || '';
   const am         = headerCells?.[4]?.innerText?.trim() || info.accountManager || '';
   const contactNum = headerCells?.[5]?.innerText?.trim() || info.contactNumber || '';
-  const notes      = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
+  const notes           = document.getElementById('loan-doc-notes-cell')?.innerText?.trim() || '';
+  const shippingDetails = document.getElementById('loan-doc-auth-cell')?.innerText?.trim() || '';
 
   const equipTable = document.getElementById('loan-doc-equip-table') || doc?.querySelectorAll('table')?.[2];
   const loanItems = [];
@@ -4927,7 +4976,7 @@ async function createSimproJob(existingJobId) {
   }
 
   const requestBody = JSON.stringify({
-    loanTo, location, notes,
+    loanTo, location, notes, shippingDetails,
     startDate:      toISO(startDate),
     endDate:        toISO(endDate),
     accountManager: am,
