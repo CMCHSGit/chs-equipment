@@ -474,6 +474,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
               <div class="form-group"><label>Job Type</label><select id="b-job-type"><option value="Demo">Demo</option><option value="PMV">PMV</option><option value="Repair">Repair</option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
+              <div class="form-group" style="grid-column:1/-1"><label>Shipping Details</label><textarea id="b-shipping-details" rows="2" style="resize:vertical"></textarea></div>
             </div>
             <div style="font-weight:500;font-size:13px;margin-bottom:8px">Devices to include (Asset Numbers)</div>
             <div id="batch-devices-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
@@ -2874,6 +2875,7 @@ async function submitBatchLoan() {
     }, 15000);
     const batchId    = 'batch_' + Date.now();
     const notes          = document.getElementById('b-notes').value;
+    const shippingDetails = document.getElementById('b-shipping-details')?.value || '';
     const batchEmail     = document.getElementById('b-email').value.trim();
     const contactNumber  = document.getElementById('b-contact-number')?.value.trim() || '';
     const batchAM        = document.getElementById('b-account-manager')?.value || '';
@@ -2926,20 +2928,20 @@ async function submitBatchLoan() {
     const batchLoanItems = devicesToLoanAll;
     window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM, jobType: batchJobType } };
     window._pendingLoanDocPdfKey = batchId;
-    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType }, null, { notesCell: '', authCell: '', batchNotes: notes });
+    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType }, null, { notesCell: '', authCell: shippingDetails, batchNotes: notes });
 
     setTimeout(async () => {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, notes: notes, notesCell: notes,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, notes: notes, notesCell: notes, authCell: shippingDetails,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loanDocPayload)
         });
         window._loanDocCache = window._loanDocCache || {};
-        window._loanDocCache[batchId] = { notes: notes, notesCell: notes };
+        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails };
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
     }, 300);
 
@@ -4329,8 +4331,8 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
           <td id="loan-doc-notes-cell" contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;min-height:36px;height:auto;vertical-align:top;font-size:12px;white-space:pre-wrap" colspan="6" title="Click to edit notes">${savedExtra?.notesCell || savedExtra?.batchNotes || ''}</td>
         </tr>
         <tr>
-          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;text-align:right">CHS Authorised:</td>
-          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to add authorisation">${savedExtra?.authCell||''}</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;text-align:right">Shipping Details:</td>
+          <td contenteditable="true" style="border:1px solid #ccc;padding:6px 8px;height:30px;font-size:12px" colspan="6" title="Click to edit shipping details">${savedExtra?.authCell||''}</td>
         </tr>
       </table>
       <!-- FOOTER -->
