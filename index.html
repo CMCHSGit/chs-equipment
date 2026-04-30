@@ -417,7 +417,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <!-- LOAN FORM -->
           <div id="loan-form" style="display:none">
             <div class="form-grid">
-              <div class="form-group"><label>On Loan To <span style="color:var(--red)">*</span></label><input type="text" id="f-loan-to" list="contacts-list"><datalist id="contacts-list"></datalist></div>
+              <div class="form-group"><label>Event and/or Customer Name <span style="color:var(--red)">*</span></label><input type="text" id="f-loan-to" list="contacts-list"><datalist id="contacts-list"></datalist></div>
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date</label><input type="date" id="f-start-date"></div>
               <div class="form-group"><label>Loan End Date</label><input type="date" id="f-end-date"></div>
@@ -465,7 +465,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <div id="batch-form" style="display:none">
           <div class="scan-card" style="margin-top:0;padding:16px">
             <div class="form-grid" style="margin-bottom:12px">
-              <div class="form-group"><label>On Loan To <span style="color:var(--red)">*</span></label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
+              <div class="form-group"><label>Event and/or Customer Name <span style="color:var(--red)">*</span></label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
               <div class="form-group"><label>Loan Start Date <span style="color:var(--red)">*</span></label><input type="date" id="b-start-date" required></div>
               <div class="form-group"><label>Loan End Date <span style="color:var(--red)">*</span></label><input type="date" id="b-end-date" required></div>
@@ -4321,7 +4321,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <!-- CUSTOMER INFO -->
       <table style="width:100%;border-collapse:collapse;border:1px solid #ccc;border-top:none">
         <tr style="background:#f5f5f5">
-          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:18%">Customer</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:18%">Event and/or Customer Name</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:20%">Customer Address</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:12%">Loan Date</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date</td>
