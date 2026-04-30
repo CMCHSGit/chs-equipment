@@ -4725,6 +4725,30 @@ async function saveLoanDocChanges() {
     window._loanDocCache[_cacheKey] = { notesCell, notes: notesCell };
   }
   if (updated > 0) { scheduleSave(); renderTable(); }
+  // If this is an upcoming loan (stored in /upcomingLoans), sync the new dates back there too.
+  // viewUpcomingLoanDoc() reads u.startDate/u.endDate from the upcomingLoans array, not from
+  // loanDocs, so without this the card and re-opened form always show the original dates.
+  const _matchUpcoming = upcomingLoans.find(u => u.id === pdfKey);
+  if (_matchUpcoming) {
+    if (newLoanTo)    _matchUpcoming.loanTo        = newLoanTo;
+    if (newLocation)  _matchUpcoming.location       = newLocation;
+    if (newStartDate) _matchUpcoming.startDate      = toISO(newStartDate);
+    if (newEndDate)   _matchUpcoming.endDate        = toISO(newEndDate);
+    if (newAM)        _matchUpcoming.accountManager = newAM;
+    try {
+      await fetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(pdfKey) + '.json', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          loanTo:        _matchUpcoming.loanTo,
+          location:      _matchUpcoming.location,
+          startDate:     _matchUpcoming.startDate,
+          endDate:       _matchUpcoming.endDate,
+          accountManager: _matchUpcoming.accountManager
+        })
+      });
+    } catch(e) {}
+  }
   renderLoans();
   // Keep loanInfo in sync so subsequent saves and createSimproJob use the new values
   const _li = window._currentLoanDocInfo.loanInfo;
