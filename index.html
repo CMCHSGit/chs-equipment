@@ -4664,7 +4664,22 @@ async function saveLoanDocChanges() {
     window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
     const _cachedJobId = window._simproJobCache[pdfKey];
     const _isPendingId = _cachedJobId === 'pending' || (typeof _cachedJobId === 'object' && _cachedJobId?.status === 'pending');
-    const _realJobId = (_cachedJobId && !_isPendingId) ? _cachedJobId : undefined;
+    let _realJobId = (_cachedJobId && !_isPendingId) ? _cachedJobId : undefined;
+    // If not in local cache, read Firebase before the PUT so we don't overwrite a stored job ID
+    if (_realJobId === undefined && pdfKey) {
+      try {
+        const _existR = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+        const _exist  = _existR.ok ? await _existR.json() : null;
+        if (_exist?.simproJobId) {
+          const _existPending = _exist.simproJobId === 'pending' || (typeof _exist.simproJobId === 'object' && _exist.simproJobId?.status === 'pending');
+          if (!_existPending) {
+            _realJobId = _exist.simproJobId;
+            window._simproJobCache[pdfKey] = _realJobId;
+            localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+          }
+        }
+      } catch(e) {}
+    }
     const saveBody = {
       loanTo: newLoanTo || info.loanTo || '',
       location: newLocation || info.location || '',
@@ -4709,8 +4724,16 @@ async function saveLoanDocChanges() {
     window._loanDocCache = window._loanDocCache || {};
     window._loanDocCache[_cacheKey] = { notesCell, notes: notesCell };
   }
-  if (updated > 0) { scheduleSave(); renderTable(); renderLoans(); }
-  if (newContactNumber) window._currentLoanDocInfo.loanInfo.contactNumber = newContactNumber;
+  if (updated > 0) { scheduleSave(); renderTable(); }
+  renderLoans();
+  // Keep loanInfo in sync so subsequent saves and createSimproJob use the new values
+  const _li = window._currentLoanDocInfo.loanInfo;
+  if (newLoanTo)        _li.loanTo        = newLoanTo;
+  if (newLocation)      _li.location      = newLocation;
+  if (newStartDate)     _li.startDate     = toISO(newStartDate);
+  if (newEndDate)       _li.endDate       = toISO(newEndDate);
+  if (newAM)            _li.accountManager = newAM;
+  if (newContactNumber) _li.contactNumber = newContactNumber;
 
   document.getElementById('doc-edited-note').style.display = 'none';
   const sb = document.getElementById('doc-save-btn');
