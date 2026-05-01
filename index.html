@@ -3281,7 +3281,7 @@ function renderLoans() {
         ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
         ' · ' + totalDevices + ' device' + (totalDevices !== 1 ? 's' : '') +
-        (() => { const bId = g.items[0]?.BatchID; const sj = bId && window._loanDocCache?.[bId]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
+        (() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
