@@ -6292,7 +6292,7 @@ async function openReassignAMByKey(key) {
   document.getElementById('reassign-toggle-all').textContent = 'Deselect all';
   document.getElementById('reassign-items-list').innerHTML = g.items.map(item =>
     `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
-      <input type="checkbox" checked data-item-id="${esc(item.id)}" style="accent-color:var(--blue);width:14px;height:14px">
+      <input type="checkbox" checked data-assetno="${esc(item.CHSAssetNo)}" style="accent-color:var(--blue);width:14px;height:14px">
       <span><strong>${esc(item.CHSAssetNo)}</strong> &mdash; ${esc(item.Model||item.Description||'')}</span>
     </label>`
   ).join('');
@@ -6381,16 +6381,16 @@ async function confirmReassignAM() {
   const g = getLoanGroupByKey(_reassignLoanKey);
   if (!g) { closeReassignAMModal(); return; }
 
-  // Only update checked items
-  const checkedIds = new Set(
+  // Only update checked items — use CHSAssetNo as key (always a unique non-empty string)
+  const checkedAssetNos = new Set(
     Array.from(document.querySelectorAll('#reassign-items-list input[type=checkbox]:checked'))
-      .map(cb => cb.dataset.itemId)
+      .map(cb => cb.dataset.assetno)
   );
-  if (!checkedIds.size) { showToast('error', 'Select at least one item to update'); return; }
+  if (!checkedAssetNos.size) { showToast('error', 'Select at least one item to update'); return; }
 
   g.items.forEach(item => {
-    if (!checkedIds.has(item.id)) return;
-    const idx = equipment.findIndex(e => e.id === item.id);
+    if (!checkedAssetNos.has(item.CHSAssetNo)) return;
+    const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
     if (newLoanTo)    equipment[idx].OnLoanTo       = newLoanTo;
     if (newLocation)  equipment[idx].Location       = newLocation;
