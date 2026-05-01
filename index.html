@@ -979,16 +979,41 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <!-- REASSIGN ACCOUNT MANAGER MODAL -->
 <div class="modal-overlay" id="reassign-am-modal">
-  <div class="modal" style="max-width:400px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-header">
       <div>
-        <div class="modal-title" id="reassign-am-title">Reassign Account Manager</div>
+        <div class="modal-title" id="reassign-am-title">Edit Loan</div>
         <div style="font-size:12px;color:var(--text2);margin-top:2px" id="reassign-am-subtitle"></div>
       </div>
       <button class="modal-close" onclick="closeReassignAMModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <div id="reassign-items-section" style="margin-bottom:12px;display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <label style="font-size:12px;font-weight:600;color:var(--text2)">Items to update</label>
+        <button class="btn btn-sm" onclick="toggleAllReassignItems()" id="reassign-toggle-all" style="font-size:11px;padding:2px 8px">Deselect all</button>
+      </div>
+      <div id="reassign-items-list" style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div class="form-group" style="margin:0;grid-column:1/-1">
+        <label>Event and/or Customer Name</label>
+        <input type="text" id="reassign-loan-to" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      </div>
+      <div class="form-group" style="margin:0;grid-column:1/-1">
+        <label>Location / Address</label>
+        <input type="text" id="reassign-location" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Start Date</label>
+        <input type="date" id="reassign-start-date" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>End Date</label>
+        <input type="date" id="reassign-end-date" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      </div>
+    </div>
     <div class="form-group" style="margin-bottom:8px">
-      <label>Account Manager <span style="color:var(--red)">*</span></label>
+      <label>Account Manager</label>
       <select id="reassign-am-select" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
         <option value="">Select account manager...</option>
       </select>
@@ -1000,7 +1025,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="modal-footer">
       <button class="btn" onclick="closeReassignAMModal()">Cancel</button>
       <button class="btn btn-primary" onclick="confirmReassignAM()">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Reassign
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Save Changes
       </button>
     </div>
   </div>
@@ -2378,7 +2403,7 @@ function goToDatabaseForMoreDevices() {
   }).filter(Boolean);
   switchTab('database');
   const sf = document.getElementById('db-status');
-  if (sf) sf.value = 'available';
+  if (sf) sf.value = '';
   setTimeout(function() { renderTable(); renderBasket(); showToast('info', 'Tick items to add, then click Proceed to Loan'); }, 150);
 }
 
@@ -4886,16 +4911,23 @@ function openExtendUpcomingLoan(upcomingId) {
 function openReassignUpcomingAM(upcomingId) {
   const u = upcomingLoans.find(x => x.id === upcomingId);
   if (!u) return;
-  // Reuse the same reassign modal — store upcomingId so confirmReassignAM knows what to update
   _reassignLoanKey = null;
   _reassignUpcomingId = upcomingId;
-  document.getElementById('reassign-am-title').textContent = 'Reassign AM — ' + u.loanTo;
+  document.getElementById('reassign-am-title').textContent = 'Edit Loan — ' + u.loanTo;
   document.getElementById('reassign-am-subtitle').textContent = u.items.length + ' device' + (u.items.length !== 1 ? 's' : '');
+  // No per-item selection for upcoming loans — all items move together
+  document.getElementById('reassign-items-section').style.display = 'none';
+  // Pre-fill loan fields
+  document.getElementById('reassign-loan-to').value    = u.loanTo || '';
+  document.getElementById('reassign-location').value   = u.location || '';
+  document.getElementById('reassign-start-date').value = u.startDate || '';
+  document.getElementById('reassign-end-date').value   = u.endDate || '';
+  // AM dropdown
   const sel = document.getElementById('reassign-am-select');
   sel.innerHTML = '<option value="">Select account manager...</option>' +
     accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === (u.accountManager||'') ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
-  const currentAM = accountManagers.find(a => a.name === u.accountManager);
-  document.getElementById('reassign-am-email').value = currentAM?.email || u.borrowerEmail || '';
+  const curAM = accountManagers.find(a => a.name === u.accountManager);
+  document.getElementById('reassign-am-email').value = curAM?.email || u.borrowerEmail || '';
   sel.onchange = () => {
     const am = accountManagers.find(a => a.name === sel.value);
     if (am) document.getElementById('reassign-am-email').value = am.email || '';
@@ -6220,16 +6252,31 @@ function openReassignAMByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
   _reassignLoanKey = key;
-  document.getElementById('reassign-am-title').textContent = 'Reassign AM — ' + g.loanTo;
+  _reassignUpcomingId = null;
+  document.getElementById('reassign-am-title').textContent = 'Edit Loan — ' + g.loanTo;
   document.getElementById('reassign-am-subtitle').textContent = g.items.length + ' device' + (g.items.length !== 1 ? 's' : '');
-  // Populate dropdown
+  // Item checkboxes
+  const itemsSection = document.getElementById('reassign-items-section');
+  itemsSection.style.display = 'block';
+  document.getElementById('reassign-toggle-all').textContent = 'Deselect all';
+  document.getElementById('reassign-items-list').innerHTML = g.items.map(item =>
+    `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+      <input type="checkbox" checked data-item-id="${esc(item.id)}" style="accent-color:var(--blue);width:14px;height:14px">
+      <span><strong>${esc(item.CHSAssetNo)}</strong> &mdash; ${esc(item.Model||item.Description||'')}</span>
+    </label>`
+  ).join('');
+  // Pre-fill loan fields
+  document.getElementById('reassign-loan-to').value    = g.loanTo || '';
+  document.getElementById('reassign-location').value   = g.location || '';
+  document.getElementById('reassign-start-date').value = g.startDate || '';
+  document.getElementById('reassign-end-date').value   = g.endDate || '';
+  // AM dropdown
   const sel = document.getElementById('reassign-am-select');
+  const curAMName = g.items[0]?.AccountManager || '';
   sel.innerHTML = '<option value="">Select account manager...</option>' +
-    accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === (g.items[0]?.AccountManager||'') ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
-  // Auto-fill email from current AM
-  const currentAM = accountManagers.find(a => a.name === g.items[0]?.AccountManager);
-  document.getElementById('reassign-am-email').value = currentAM?.email || g.items[0]?.BorrowerEmail || '';
-  // Wire up auto-fill on selection change
+    accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === curAMName ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
+  const curAM = accountManagers.find(a => a.name === curAMName);
+  document.getElementById('reassign-am-email').value = curAM?.email || g.items[0]?.BorrowerEmail || '';
   sel.onchange = () => {
     const am = accountManagers.find(a => a.name === sel.value);
     if (am) document.getElementById('reassign-am-email').value = am.email || '';
@@ -6243,19 +6290,26 @@ function closeReassignAMModal() {
   _reassignUpcomingId = null;
 }
 
-function confirmReassignAM() {
-  const newAM    = document.getElementById('reassign-am-select').value;
-  const newEmail = document.getElementById('reassign-am-email').value.trim();
-  if (!newAM) { showToast('error', 'Please select an account manager'); return; }
+async function confirmReassignAM() {
+  const newLoanTo    = document.getElementById('reassign-loan-to').value.trim();
+  const newLocation  = document.getElementById('reassign-location').value.trim();
+  const newStartDate = document.getElementById('reassign-start-date').value;
+  const newEndDate   = document.getElementById('reassign-end-date').value;
+  const newAM        = document.getElementById('reassign-am-select').value;
+  const newEmail     = document.getElementById('reassign-am-email').value.trim();
 
   if (_reassignUpcomingId) {
     const u = upcomingLoans.find(x => x.id === _reassignUpcomingId);
     if (u) {
-      u.accountManager = newAM;
-      if (newEmail) u.borrowerEmail = newEmail;
-      saveUpcomingLoans();
+      if (newLoanTo)    u.loanTo        = newLoanTo;
+      if (newLocation)  u.location      = newLocation;
+      if (newStartDate) u.startDate     = newStartDate;
+      if (newEndDate)   u.endDate       = newEndDate;
+      if (newAM)        u.accountManager = newAM;
+      if (newEmail)     u.borrowerEmail  = newEmail;
+      await saveUpcomingLoans();
       renderLoans();
-      showToast('success', 'Loan reassigned to ' + newAM);
+      showToast('success', 'Loan updated');
     }
     closeReassignAMModal();
     return;
@@ -6263,16 +6317,36 @@ function confirmReassignAM() {
 
   const g = getLoanGroupByKey(_reassignLoanKey);
   if (!g) { closeReassignAMModal(); return; }
+
+  // Only update checked items
+  const checkedIds = new Set(
+    Array.from(document.querySelectorAll('#reassign-items-list input[type=checkbox]:checked'))
+      .map(cb => cb.dataset.itemId)
+  );
+  if (!checkedIds.size) { showToast('error', 'Select at least one item to update'); return; }
+
   g.items.forEach(item => {
+    if (!checkedIds.has(item.id)) return;
     const idx = equipment.findIndex(e => e.id === item.id);
-    if (idx >= 0) {
-      equipment[idx].AccountManager = newAM;
-      if (newEmail) equipment[idx].BorrowerEmail = newEmail;
-    }
+    if (idx < 0) return;
+    if (newLoanTo)    equipment[idx].OnLoanTo       = newLoanTo;
+    if (newLocation)  equipment[idx].Location       = newLocation;
+    if (newStartDate) equipment[idx].LoanStartDate  = newStartDate;
+    if (newEndDate)   equipment[idx].LoanEndDate    = newEndDate;
+    if (newAM)        equipment[idx].AccountManager = newAM;
+    if (newEmail)     equipment[idx].BorrowerEmail  = newEmail;
   });
+
   scheduleSave(); renderLoans(); renderTable();
   closeReassignAMModal();
-  showToast('success', 'Loan reassigned to ' + newAM);
+  showToast('success', 'Loan updated');
+}
+
+function toggleAllReassignItems() {
+  const checkboxes = Array.from(document.querySelectorAll('#reassign-items-list input[type=checkbox]'));
+  const anyUnchecked = checkboxes.some(cb => !cb.checked);
+  checkboxes.forEach(cb => cb.checked = anyUnchecked);
+  document.getElementById('reassign-toggle-all').textContent = anyUnchecked ? 'Deselect all' : 'Select all';
 }
 
 // ── UPCOMING LOAN MANAGEMENT ──────────────────────────────────────────
