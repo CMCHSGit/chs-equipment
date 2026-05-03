@@ -917,7 +917,11 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <!-- LOAN DOCUMENT MODAL -->
 <div class="modal-overlay" id="loan-doc-modal">
-  <div class="modal" style="width:95vw;max-width:1200px;padding:0;max-height:96vh;display:flex;flex-direction:column">
+  <div class="modal" style="width:95vw;max-width:1200px;padding:0;max-height:96vh;display:flex;flex-direction:column;position:relative">
+    <div id="loan-doc-closing-overlay" style="display:none;position:absolute;inset:0;z-index:10;background:rgba(244,243,240,0.88);border-radius:inherit;flex-direction:column;align-items:center;justify-content:center;gap:12px">
+      <div class="spinner"></div>
+      <div style="font-size:13px;color:var(--text2);font-weight:500">Closing loan form…</div>
+    </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-size:16px;font-weight:600">Loan Form</div>
@@ -2795,24 +2799,8 @@ async function confirmAddItemsToUpcomingLoan() {
     return;
   }
 
-  // Show conflict modal if there are overlapping items
-  if (conflicts.length > 0) {
-    closeAddItemsModal();
-    showConflictModal(
-      conflicts.map(c => ({ assetNo: c.item.CHSAssetNo, model: c.item.Model, currentLoanTo: c.item.OnLoanTo, currentEnd: c.item.LoanEndDate, type: 'overlap', overlapDays: 0 })),
-      u.loanTo, u.startDate,
-      async (overrideAssetNos) => {
-        const allToAdd = [
-          ...available,
-          ...conflicts.filter(c => overrideAssetNos.has(c.item.CHSAssetNo)).map(c => c.row)
-        ];
-        await _doAddItemsToUpcoming(u, allToAdd);
-      }
-    );
-    return;
-  }
-
-  await _doAddItemsToUpcoming(u, available);
+  // Always add all items — overlapping items are included regardless of conflicts
+  await _doAddItemsToUpcoming(u, [...available, ...conflicts.map(c => c.row)]);
 }
 
 async function _doAddItemsToUpcoming(u, rows) {
@@ -3007,86 +2995,8 @@ async function submitBatchLoan() {
     renderBatchDevices(); renderLoans();
   }; // end doLoan
 
-  // If no conflicts, proceed immediately
-  if (conflicts.length === 0) {
-    await doLoan([...cleanDevices, ...alreadyOnLoan]);
-    return;
-  }
-
-  // Show conflict modal — user must review before creating upcoming loan
-  showConflictModal(conflicts, loanTo, startDate, async () => {
-    // Create upcoming loan for conflicted items — don't overwrite existing loans
-    const upcomingItems = alreadyOnLoan.map(d => {
-      const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
-      return item ? { id: item.id, CHSAssetNo: item.CHSAssetNo } : null;
-    }).filter(Boolean);
-
-    if (upcomingItems.length > 0) {
-      const batchEmail    = document.getElementById('b-email').value.trim();
-      const batchAM       = document.getElementById('b-account-manager')?.value || '';
-      const upcomingJobType = document.getElementById('b-job-type')?.value || 'Demo';
-      const upcomingId = 'upcoming_' + Date.now();
-      const newUpcoming = {
-        id: upcomingId, loanTo, location, startDate, endDate,
-        accountManager: batchAM, borrowerEmail: batchEmail,
-        jobType: upcomingJobType,
-        items: upcomingItems, status: 'upcoming',
-        notes: document.getElementById('b-notes').value
-      };
-      upcomingLoans.push(newUpcoming);
-      // Mark each equipment item with upcoming loan reference
-      upcomingItems.forEach(ui => {
-        const idx = equipment.findIndex(e => e.id === ui.id);
-        if (idx >= 0) equipment[idx]._upcomingLoanId = upcomingId;
-      });
-      await saveUpcomingLoans();
-      scheduleSave();
-
-      // Open the loan form for the upcoming loan so the user can review/edit before email sends
-      const upcomingEquipItems = upcomingItems.map(ui => equipment.find(e => e.id === ui.id)).filter(Boolean);
-      const uAmEmail = batchEmail || getAMEmail(batchAM);
-      window._pendingLoanEmail = uAmEmail
-        ? { items: upcomingEquipItems, info: { loanTo, location, startDate, endDate }, email: uAmEmail, amName: batchAM }
-        : null;
-      window._autoSendOnClose = !!uAmEmail;
-      window._pendingLoanDocPdfKey = upcomingId;
-
-      // Save the loanDoc for this upcoming loan too
-      try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM,
-          jobType: upcomingJobType,
-          notes: document.getElementById('b-notes').value,
-          items: upcomingEquipItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(upcomingId) + '.json', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loanDocPayload)
-        });
-        window._loanDocCache = window._loanDocCache || {};
-        window._loanDocCache[upcomingId] = { notes: loanDocPayload.notes, notesCell: loanDocPayload.notes };
-      } catch(e) {}
-
-      const bNotes = document.getElementById('b-notes').value;
-      generateLoanDoc(upcomingEquipItems, { loanTo, location, startDate, endDate, accountManager: batchAM, jobType: upcomingJobType },
-        null, { notesCell: '', authCell: '', batchNotes: bNotes });
-    }
-    // Clean devices (no current loan) proceed as normal
-    if (cleanDevices.length > 0) await doLoan(cleanDevices);
-    else {
-      // Batch reset when only upcoming
-      const btn = document.getElementById('btn-batch');
-      if (btn) { btn.disabled = false; btn.textContent = 'Confirm Loan'; }
-      batchDevices = [{ id: 'bd_0', value: '' }];
-      window._batchStatus = {};
-      ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
-      const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
-      const jtEl2 = document.getElementById('b-job-type'); if(jtEl2) jtEl2.value = 'Demo';
-      document.getElementById('b-start-date').value = nzDate();
-      document.getElementById('batch-feedback').style.display = 'none';
-      renderBatchDevices(); renderLoans();
-    }
-    renderTable(); updateStats();
-    const total = upcomingItems.length + cleanDevices.length;
-    showToast('success', (cleanDevices.length ? cleanDevices.length + ' loan' + (cleanDevices.length>1?'s':'') + ' confirmed' + (upcomingItems.length?' · ':'') : '') + (upcomingItems.length ? upcomingItems.length + ' upcoming loan' + (upcomingItems.length>1?'s':'') + ' scheduled for ' + formatDisplayDate(startDate) : ''));
-  });
+  // Always proceed with all devices — overlapping items are added to the loan regardless
+  await doLoan([...cleanDevices, ...alreadyOnLoan]);
 }
 
 // ── ACTIVE LOANS ───────────────────────────────────────────────────────
@@ -4542,6 +4452,8 @@ function formatDisplayDate(d) {
 }
 
 async function closeLoanDoc() {
+  const _closingOverlay = document.getElementById('loan-doc-closing-overlay');
+  if (_closingOverlay) _closingOverlay.style.display = 'flex';
   // Auto-save the full form before closing (catches any unsaved edits)
   clearTimeout(window._notesSaveTimer);
   clearTimeout(window._authSaveTimer);
@@ -4575,6 +4487,7 @@ async function closeLoanDoc() {
     }
   }
   document.getElementById('loan-doc-modal').classList.remove('open');
+  if (_closingOverlay) _closingOverlay.style.display = 'none';
   window._currentLoanDocInfo = null;
 }
 
@@ -5846,69 +5759,8 @@ function proceedFromBasket() {
       }
     });
 
-    // Show a unified modal whenever there are any conflicts (date or active)
-    if (dateConflicts.length || activeConflicts.length) {
-      // Red section — date conflicts with checkboxes
-      const dateSection = dateConflicts.length ? `
-        <div style="margin-bottom:12px">
-          <div style="padding:8px 10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius) var(--radius) 0 0;font-size:12px;font-weight:600;color:var(--red)">
-            &#10006; Date conflict — loan dates overlap (tick to add anyway)
-          </div>
-          <div style="border:1px solid var(--red-border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:0 10px">
-            ${dateConflicts.map(b => `
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border)">
-                <div>
-                  <div style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)} &mdash; ${esc(b.Model||'')}</div>
-                  <div style="font-size:12px;color:var(--red);margin-top:2px">Scheduled for <strong>${esc(b.scheduledFor)}</strong> &mdash; due back ${formatDisplayDate(b.scheduledUntil)}</div>
-                  <div style="font-size:12px;color:var(--text3);margin-top:1px">New loan starts ${formatDisplayDate(g.startDate)} — dates overlap</div>
-                </div>
-                <input type="checkbox" id="force_${b.id}" style="width:16px;height:16px;cursor:pointer;margin-left:12px;flex-shrink:0" checked>
-              </div>`).join('')}
-          </div>
-        </div>` : '';
-
-      // Amber section — actively out on loan
-      const activeSection = activeConflicts.length ? `
-        <div style="margin-bottom:12px">
-          <div style="padding:8px 10px;background:var(--amber-light);border:1px solid var(--amber-border);border-radius:var(--radius) var(--radius) 0 0;font-size:12px;font-weight:600;color:var(--amber)">
-            &#9888; Currently on loan — ${targetIsFuture ? 'will be booked as upcoming for this loan' : 'will be added to this active loan'}
-          </div>
-          <div style="border:1px solid var(--amber-border);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:0 10px">
-            ${activeConflicts.map(b => {
-              const eq = equipment.find(e => e.id === b.id);
-              const due = eq && eq.LoanEndDate ? 'Due back ' + formatDisplayDate(eq.LoanEndDate) : 'No return date set';
-              const loanedTo = eq && eq.OnLoanTo ? eq.OnLoanTo : '—';
-              return `<div style="padding:9px 0;border-bottom:1px solid var(--border)">
-                <div style="font-weight:600;font-size:13px">${esc(b.CHSAssetNo)} &mdash; ${esc(b.Model||'')}</div>
-                <div style="font-size:12px;color:var(--text2);margin-top:2px">On loan to <strong>${esc(loanedTo)}</strong></div>
-                <div style="font-size:12px;color:var(--amber);margin-top:1px">${due}</div>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>` : '';
-
-      // Green section — clean items
-      const cleanSection = clean.length ? `
-        <div style="padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:var(--radius);font-size:12px;color:#166534">
-          <strong>&#10003; ${clean.length} item${clean.length>1?'s':''} ready to add:</strong> ${clean.map(b => esc(b.CHSAssetNo)).join(', ')}
-        </div>` : '';
-
-      const hasDateConflicts = dateConflicts.length > 0;
-      showGenericModal(
-        (dateConflicts.length ? '&#10006; Date Conflict' : '') + (dateConflicts.length && activeConflicts.length ? ' &amp; ' : '') + (activeConflicts.length ? '&#9888; Items On Loan' : ''),
-        `<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Please review the items below before proceeding${hasDateConflicts ? ' — untick any date-conflicted items you do not want to add' : ''}:</div>
-        ${dateSection}${activeSection}${cleanSection}`,
-        [
-          { label: 'Add Selected', style: 'btn-primary', action: () => {
-            const forced = dateConflicts.filter(b => document.getElementById('force_' + b.id)?.checked);
-            _doBasketAddToLoan(g, [...clean, ...forced, ...activeConflicts]);
-          }},
-          { label: 'Cancel', style: '', action: () => {} }
-        ]
-      );
-      return;
-    }
-    _doBasketAddToLoan(g, clean);
+    // Always add all items — overlapping items are included regardless of conflicts
+    _doBasketAddToLoan(g, [...clean, ...dateConflicts, ...activeConflicts]);
     return;
   }
 
