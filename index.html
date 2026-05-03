@@ -1298,7 +1298,6 @@ const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation tem
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'http://demo.chsnz.co.nz';
 const DUE_REMINDER_EMAIL    = 'demo@chsnz.co.nz';         // recipient for 2-day due-back reminders
-const UPCOMING_REMINDER_EMAILS = ['peter.lin@cass.co.nz', 'jonathan@cass.co.nz']; // recipients for upcoming loan start reminders
 const SIMPRO_PROXY_URL      = 'https://script.google.com/macros/s/AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw/exec'; // paste Google Apps Script web app URL here
 
 // NZ timezone date helper
@@ -1470,7 +1469,6 @@ async function loadData() {
     setTimeout(async () => {
       await activateUpcomingLoans();
       checkOverdueNotifications();
-      checkUpcomingLoanReminders();
       checkLoanDueReminders();
       checkOrphanedLoans(); // detect any loans whose data.json save was lost
     }, 500);
@@ -2737,7 +2735,7 @@ function _showNewLoanConflictModal(conflicts, newLoanTo, newStart, onProceed) {
         </div>`).join('')}
     </div>`;
   }
-  html += '<div style="font-size:12px;color:var(--text2);padding:4px 0;margin-top:4px"><strong>These items will be scheduled as an Upcoming loan</strong> &mdash; the existing loan stays active until its end date. A reminder email will be sent to the current account manager 2 days before the new loan starts.</div>';
+  html += '<div style="font-size:12px;color:var(--text2);padding:4px 0;margin-top:4px"><strong>These items will be scheduled as an Upcoming loan</strong> &mdash; the existing loan stays active until its end date.</div>';
 
   document.getElementById('conflict-body').innerHTML = html;
   document.getElementById('conflict-confirm-btn').textContent = '';
@@ -3634,7 +3632,6 @@ function initEmailJS() {
       // the startup checks fire at 500ms but EmailJS loads at ~1000ms,
       // so they returned early and nothing was marked as sent.
       checkOverdueNotifications();
-      checkUpcomingLoanReminders();
       checkLoanDueReminders();
     } else if (attempts < 5) {
       attempts++;
@@ -6555,114 +6552,6 @@ async function sendLoanDueReminderEmail(group) {
   }
 }
 
-// Check for upcoming loans starting in 2 days → send reminder to current AM
-async function checkUpcomingLoanReminders() {
-  if (!_ejsReady) return; // don't mark as sent if EmailJS isn't ready yet — will retry after init
-  const today = nzDate();
-
-  // ── Part 1: conflict-created upcoming loans (stored in /upcomingLoans) ──────
-  for (const upcoming of upcomingLoans) {
-    if (!upcoming.startDate) continue;
-    const daysUntilStart = daysBetween(today, upcoming.startDate);
-    if (daysUntilStart !== 2) continue;
-    const notifKey = 'upcoming_reminder_' + upcoming.id;
-    if (_sentNotifications[notifKey]) continue;
-
-    if (UPCOMING_REMINDER_EMAILS.length) await sendUpcomingLoanStartNotification(upcoming);
-
-    // Also notify current AM if items are actively on another loan (transfer scenario)
-    const affectedAMs = {};
-    for (const uItem of upcoming.items) {
-      const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
-      if (!eq || !eq.OnLoanTo || eq.Returned === 'Yes') continue;
-      const amEmail = eq.BorrowerEmail || getAMEmail(eq.AccountManager) || '';
-      if (!amEmail) continue;
-      if (!affectedAMs[amEmail]) affectedAMs[amEmail] = { am: eq.AccountManager || eq.OnLoanTo, loanTo: eq.OnLoanTo, items: [] };
-      affectedAMs[amEmail].items.push(eq);
-    }
-    for (const [email, info] of Object.entries(affectedAMs)) {
-      await sendUpcomingTransferReminder(email, info.am, info.loanTo, info.items, upcoming);
-    }
-    await markNotificationSent(notifKey);
-  }
-
-  // ── Part 2: scheduled loans (regular equipment with LoanStartDate in future) ─
-  // These are batch loans created with a future start date — they live in the
-  // main equipment array, NOT in upcomingLoans, so the loop above misses them.
-  const scheduledItems = equipment.filter(e =>
-    e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today
-  );
-  const scheduledGroups = {};
-  scheduledItems.forEach(e => {
-    const key = e.OnLoanTo + '|||' + (e.LoanStartDate || '') + '|||' + (e.LoanEndDate || '');
-    if (!scheduledGroups[key]) scheduledGroups[key] = {
-      loanTo: e.OnLoanTo, location: e.Location || '',
-      startDate: e.LoanStartDate, endDate: e.LoanEndDate || '',
-      accountManager: e.AccountManager || '', items: []
-    };
-    scheduledGroups[key].items.push({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, SerialNo: e.SerialNo });
-  });
-  for (const g of Object.values(scheduledGroups)) {
-    const daysUntilStart = daysBetween(today, g.startDate);
-    if (daysUntilStart !== 2) continue;
-    const notifKey = 'upcoming_reminder_scheduled_' + g.loanTo + '|||' + g.startDate;
-    if (_sentNotifications[notifKey]) continue;
-    if (UPCOMING_REMINDER_EMAILS.length) {
-      await sendUpcomingLoanStartNotification({
-        loanTo: g.loanTo, location: g.location,
-        startDate: g.startDate, endDate: g.endDate,
-        accountManager: g.accountManager, items: g.items
-      });
-    }
-    await markNotificationSent(notifKey);
-  }
-}
-
-async function sendUpcomingLoanStartNotification(upcoming) {
-  if (!_ejsReady) return;
-  const itemsList = (upcoming.items || []).map(e =>
-    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
-  ).join('\n');
-  const subject = 'Upcoming Loan Starting in 2 Days — ' + upcoming.loanTo;
-  const message = 'This is a reminder that the following demo equipment is due to be loaned out in 2 days.\n\nCustomer: ' + upcoming.loanTo + '\nLoan Start: ' + formatDisplayDate(upcoming.startDate) + '\nLoan End: ' + formatDisplayDate(upcoming.endDate) + '\nLocation: ' + (upcoming.location || '—') + '\nAccount Manager: ' + (upcoming.accountManager || '—') + '\n\nEquipment:\n' + itemsList;
-  for (const email of UPCOMING_REMINDER_EMAILS) {
-    try {
-      await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-        to_email:       email,
-        to_name:        'CHS Team',
-        items:          itemsList,
-        due_date:       formatDisplayDate(upcoming.startDate),
-        return_link:    APP_URL + '?tab=loans',
-        extend_link:    APP_URL + '?tab=loans',
-        custom_subject: subject,
-        custom_message: message
-      });
-      console.log('Upcoming loan start notification sent to', email, 'for', upcoming.loanTo);
-    } catch(err) {
-      console.error('Upcoming loan start notification failed for', email, ':', err);
-    }
-  }
-}
-
-async function sendUpcomingTransferReminder(toEmail, toName, currentLoanTo, items, upcoming) {
-  if (!_ejsReady || !toEmail) return;
-  const itemsList = items.map(e => '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' SN: ' + e.SerialNo : '')).join('\n');
-  const newAM = upcoming.accountManager || 'the next Account Manager';
-  try {
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email:    toEmail,
-      to_name:     toName || currentLoanTo,
-      items:       itemsList,
-      due_date:    upcoming.startDate,
-      return_link: APP_URL + '?tab=loans',
-      extend_link: APP_URL + '?tab=loans',
-      // Override subject/body via template variables if template supports it
-      custom_subject: 'Action Required: Demo Equipment Booked for ' + upcoming.loanTo,
-      custom_message: 'The following equipment is booked for a new demo loan to ' + upcoming.loanTo + ' starting ' + formatDisplayDate(upcoming.startDate) + '.\n\nPlease arrange shipping directly to:\n' + upcoming.location + '\n\nNew Account Manager: ' + newAM + '\n\nEquipment:\n' + itemsList
-    });
-    console.log('Transfer reminder sent to', toEmail);
-  } catch(e) { console.error('Transfer reminder failed', e); }
-}
 
 async function saveRetiredAssets() {
   markRetiredChanged();
