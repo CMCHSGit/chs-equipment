@@ -881,7 +881,6 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="form-group"><label>Old CHS #</label><input type="text" id="m-OldCHS"></div>
       <div class="form-group"><label>Tile Type</label><input type="text" id="m-TileType"></div>
       <div class="form-group"><label>Tile UUID</label><input type="text" id="m-TileUUID" placeholder="e.g. abc12345-..."></div>
-      <div class="form-group"><label>Account Manager</label><select id="m-AccountManager"><option value=""></option></select></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -1983,7 +1982,7 @@ function esc(v) { if(!v&&v!==0)return'—'; return String(v).replace(/&/g,'&amp;
 function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).slice(2); }
 
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
-const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','AccountManager','BatterySerialNo'];
+const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','BatterySerialNo'];
 
 function openAddModal() {
   editingId=null;
@@ -5189,7 +5188,7 @@ async function saveAccountManagers() {
 function updateAMDropdowns() {
   const opts = '<option value=""></option>' + accountManagers.map(am =>
     `<option value="${esc(am.name)}">${esc(am.name)}</option>`).join('');
-  ['m-AccountManager','b-account-manager'].forEach(id => {
+  ['b-account-manager'].forEach(id => {
     const el = document.getElementById(id);
     if (el) { const cur = el.value; el.innerHTML = opts; el.value = cur; }
   });
