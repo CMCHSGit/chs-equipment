@@ -1296,7 +1296,6 @@ const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder temp
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'http://demo.chsnz.co.nz';
-const DUE_REMINDER_EMAIL    = 'demo@chsnz.co.nz';         // recipient for 2-day due-back reminders
 const SIMPRO_PROXY_URL      = 'https://script.google.com/macros/s/AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw/exec'; // paste Google Apps Script web app URL here
 
 // NZ timezone date helper
@@ -1484,7 +1483,6 @@ async function loadData() {
     setTimeout(async () => {
       await activateUpcomingLoans();
       checkOverdueNotifications();
-      checkLoanDueReminders();
       checkOrphanedLoans(); // detect any loans whose data.json save was lost
     }, 500);
     return true;
@@ -3649,7 +3647,6 @@ function initEmailJS() {
       // the startup checks fire at 500ms but EmailJS loads at ~1000ms,
       // so they returned early and nothing was marked as sent.
       checkOverdueNotifications();
-      checkLoanDueReminders();
     } else if (attempts < 5) {
       attempts++;
       setTimeout(tryInit, 1000);
@@ -6536,52 +6533,6 @@ async function activateUpcomingLoans() {
       showToast('error', 'Could not save activated loans: ' + e.message);
     }
     renderTable(); updateStats(); renderLoans();
-  }
-}
-
-// Check for active loans due in 2 days → send reminder to borrower
-async function checkLoanDueReminders() {
-  if (!_ejsReady) return;
-  const today = nzDate();
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
-  const grouped = {};
-  onLoan.forEach(e => {
-    const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: e.BorrowerEmail || '', accountManager: loanMeta[e.BatchID]?.accountManager || '', items: [] };
-    grouped[key].items.push(e);
-  });
-  for (const g of Object.values(grouped)) {
-    const daysUntilEnd = daysBetween(today, g.endDate);
-    if (daysUntilEnd !== 2) continue; // only fire exactly 2 days out
-    if (!g.email) { console.log('Due reminder: no email for', g.loanTo); continue; }
-    const notifKey = 'due_reminder_' + g.loanTo + '|||' + g.endDate;
-    if (_sentNotifications[notifKey]) continue; // already sent
-    await sendLoanDueReminderEmail(g);
-    await markNotificationSent(notifKey);
-    console.log('Due reminder sent to', g.email, 'for', g.loanTo);
-  }
-}
-
-async function sendLoanDueReminderEmail(group) {
-  if (!_ejsReady || !DUE_REMINDER_EMAIL) return;
-  const itemsList = group.items.map(e =>
-    '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '')
-  ).join('\n');
-  const returnLink = buildReturnLink(group.loanTo, group.endDate);
-  try {
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-      to_email:       DUE_REMINDER_EMAIL,
-      to_name:        'CHS Team',
-      items:          itemsList,
-      due_date:       formatDisplayDate(group.endDate),
-      return_link:    returnLink,
-      extend_link:    APP_URL + '?extend=' + loanReturnToken(group.loanTo, group.endDate),
-      custom_subject: 'Reminder: Demo Equipment Due Back in 2 Days — ' + group.loanTo,
-      custom_message: 'This is a reminder that the following demo equipment loaned to ' + group.loanTo + ' is due for return in 2 days on ' + formatDisplayDate(group.endDate) + '.\n\nAccount Manager: ' + (group.accountManager || '—') + '\n\nEquipment:\n' + itemsList
-    });
-    console.log('Due reminder email sent to', DUE_REMINDER_EMAIL);
-  } catch(err) {
-    console.error('Due reminder email failed:', err);
   }
 }
 
