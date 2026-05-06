@@ -1832,13 +1832,18 @@ function submitCount() {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
-  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID };
   // Mark as counted + return if on loan
   Object.assign(equipment[idx], {
     Counted: countedValue,
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null
   });
   historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
+  // Close Simpro job if all items in this batch are now returned
+  if (prev.batchId) {
+    const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
+    if (!stillActive) closeSimproJob(window._simproJobCache?.[prev.batchId]);
+  }
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   if (scanMode === 'count') renderCountOverview();
@@ -3411,6 +3416,8 @@ async function confirmBatchReturn() {
       try {
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
       } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
+      const jobId = window._simproJobCache?.[batchId];
+      closeSimproJob(jobId);
     }
   }
   renderTable(); updateStats();
@@ -5071,6 +5078,15 @@ async function createSimproJob(existingJobId) {
   } else {
     showToast('success', 'Simpro job updated');
   }
+}
+
+function closeSimproJob(jobId) {
+  if (!SIMPRO_PROXY_URL || !jobId || isNaN(Number(jobId))) return;
+  const body = JSON.stringify({ jobId: Number(jobId), close: true });
+  fetch(SIMPRO_PROXY_URL, {
+    method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body, mode: 'no-cors'
+  }).catch(e => console.warn('Simpro close failed:', e));
 }
 
 function exportLoanRTF() {
