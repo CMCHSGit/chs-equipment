@@ -3413,11 +3413,19 @@ async function confirmBatchReturn() {
   for (const batchId of batchIdsInvolved) {
     const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
     if (!stillActive) {
+      // Read jobId from Firebase before deleting the loanDoc (cache may be stale after refresh)
+      let simproJobId = window._simproJobCache?.[batchId];
+      if (!simproJobId) {
+        try {
+          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+          const d = await r.json();
+          simproJobId = d?.simproJobId;
+        } catch(e) {}
+      }
+      closeSimproJob(simproJobId);
       try {
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
       } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
-      const jobId = window._simproJobCache?.[batchId];
-      closeSimproJob(jobId);
     }
   }
   renderTable(); updateStats();
