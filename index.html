@@ -6511,6 +6511,7 @@ async function activateUpcomingLoans() {
   if (!toActivate.length) return;
   let changed = false;
   for (const upcoming of toActivate) {
+    let thisLoanActivated = false;
     for (const uItem of upcoming.items) {
       const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (idx < 0) continue;
@@ -6546,9 +6547,14 @@ async function activateUpcomingLoans() {
         } : (prev._transferNote || null)
       });
       changed = true;
+      thisLoanActivated = true;
     }
-    // Remove from upcoming list
-    await deleteUpcomingLoan(upcoming.id);
+    // Only remove from upcoming list if at least one item was actually activated.
+    // If no items were found (e.g. equipment IDs don't match yet), keep the entry
+    // so it doesn't silently disappear on every refresh.
+    if (thisLoanActivated) {
+      await deleteUpcomingLoan(upcoming.id);
+    }
   }
   if (changed) {
     try {
