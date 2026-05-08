@@ -12,7 +12,7 @@ The tracker gives the CHS team a live view of every piece of demo equipment — 
 
 ## Logging In
 
-The app is protected by a login password. A separate **admin password** (`notouchy`) is required for destructive actions such as removing items from loans, retiring equipment, or converting loan records.
+The app is protected by a login password. A separate **admin password** is required for destructive actions such as removing items from loans, retiring equipment, or converting loan records.
 
 ---
 
