@@ -1477,6 +1477,14 @@ async function saveBin(data) {
             ourHistory.forEach(h => { if (h.id && !seenIds.has(h.id)) mergedHistory.push(h); });
             mergedHistory.sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
+            // Merge audit log: union by id, newest first, keep latest 300
+            const freshAudit = Array.isArray(fresh.auditLog) ? fresh.auditLog : [];
+            const seenAuditIds = new Set(freshAudit.map(e => e.id));
+            const mergedAudit = [...freshAudit];
+            auditLog.forEach(e => { if (e.id && !seenAuditIds.has(e.id)) mergedAudit.push(e); });
+            mergedAudit.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+            auditLog = mergedAudit.slice(0, 300);
+
             data = { equipment: merged, history: mergedHistory };
             equipment  = merged;
             historyLog = mergedHistory;
@@ -1490,7 +1498,7 @@ async function saveBin(data) {
   } catch(e) { /* version check unavailable — proceed to avoid blocking the save */ }
 
   const newVersion = Date.now().toString();
-  const payload = Object.assign({}, data, { _v: newVersion });
+  const payload = Object.assign({}, data, { _v: newVersion, auditLog: auditLog.slice(0, 300) });
   const r = await fetchWithTimeout(FB_URL + '/data.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1521,6 +1529,7 @@ async function loadData() {
     _dataVersion = data._v || null; // record version token for stale-save detection
     equipment  = Array.isArray(data.equipment)  ? data.equipment  : [];
     historyLog = Array.isArray(data.history)     ? data.history    : [];
+    auditLog   = Array.isArray(data.auditLog)    ? data.auditLog   : [];
     setSync('ok', 'Live — auto-saving');
     renderTable(); renderHistory();
     setScanMode('batch');
@@ -1529,7 +1538,6 @@ async function loadData() {
     await loadUpcomingLoans();
     await loadLoanDocNotes();
     await loadLoanMeta();
-    loadAuditLog().catch(() => {});
     // Migrate AccountManager from items → loanMeta, then strip from items
     let _amMigrated = false, _amStripped = false;
     equipment.forEach(e => {
@@ -1561,25 +1569,11 @@ async function loadData() {
 }
 
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
-async function loadAuditLog() {
-  try {
-    const r = await fetch(FB_URL + '/auditLog.json');
-    if (!r.ok) return;
-    const data = await r.json();
-    if (!data || typeof data !== 'object') return;
-    auditLog = Object.values(data).sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).slice(0, 500);
-  } catch(e) {}
-}
-
 function writeAudit(type, summary, detail) {
   const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {} };
   auditLog.unshift(entry);
-  if (auditLog.length > 500) auditLog.length = 500;
-  fetch(FB_URL + '/auditLog.json', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [entry.id]: entry })
-  }).catch(e => console.warn('Audit log write failed:', e));
+  if (auditLog.length > 300) auditLog.length = 300;
+  scheduleSave(); // persists via /data.json on next debounced save
 }
 
 function _auditBadge(type) {
