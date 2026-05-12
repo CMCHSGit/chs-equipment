@@ -409,6 +409,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         Add Asset
       </button>
+      <button class="mobile-nav-item" onclick="showAuditLog();closeMobileMenu()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Audit Log
+      </button>
       <button class="mobile-nav-item" onclick="doLogout()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         Lock / Sign out
@@ -1312,6 +1316,19 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<div class="modal-overlay" id="audit-log-modal">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title">Audit Log</div>
+      <button class="modal-close" onclick="closeAuditLog()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div id="audit-log-body" style="max-height:65vh;overflow-y:auto;padding:0 2px"></div>
+    <div class="modal-footer" style="justify-content:flex-end">
+      <button class="btn" onclick="closeAuditLog()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="orphan-modal">
   <div class="modal" style="max-width:620px">
     <div class="modal-header">
@@ -1484,7 +1501,7 @@ async function saveBin(data) {
 }
 
 // ── STATE ──────────────────────────────────────────────────────────────
-let equipment = [], historyLog = [], sortCol = 'CHSAssetNo', sortDir = 1;
+let equipment = [], historyLog = [], auditLog = [], sortCol = 'CHSAssetNo', sortDir = 1;
 let upcomingLoans = []; // [{id,loanTo,location,startDate,endDate,accountManager,borrowerEmail,items:[{id,CHSAssetNo}]}]
 let loanMeta = {};     // { [batchId]: { accountManager } } — AM stored per loan, not per item
 let scanMode = 'loan', currentItem = null, editingId = null, sessionItems = [];
@@ -1512,6 +1529,7 @@ async function loadData() {
     await loadUpcomingLoans();
     await loadLoanDocNotes();
     await loadLoanMeta();
+    loadAuditLog().catch(() => {});
     // Migrate AccountManager from items → loanMeta, then strip from items
     let _amMigrated = false, _amStripped = false;
     equipment.forEach(e => {
@@ -1540,6 +1558,87 @@ async function loadData() {
     showToast('error', 'Could not load data: ' + e.message);
     return false;
   }
+}
+
+// ── AUDIT LOG ─────────────────────────────────────────────────────────
+async function loadAuditLog() {
+  try {
+    const r = await fetch(FB_URL + '/auditLog.json');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data || typeof data !== 'object') return;
+    auditLog = Object.values(data).sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).slice(0, 500);
+  } catch(e) {}
+}
+
+function writeAudit(type, summary, detail) {
+  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {} };
+  auditLog.unshift(entry);
+  if (auditLog.length > 500) auditLog.length = 500;
+  fetch(FB_URL + '/auditLog.json', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ [entry.id]: entry })
+  }).catch(e => console.warn('Audit log write failed:', e));
+}
+
+function _auditBadge(type) {
+  const styles = {
+    loan_created:     'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
+    loan_deleted:     'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    scheduled_deleted:'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    loan_extended:    'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    items_returned:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
+    item_removed:     'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
+    items_added:      'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    orphan_recovered: 'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
+    orphan_deleted:   'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    items_transferred:'background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd',
+  };
+  const labels = {
+    loan_created: 'Loan Created', loan_deleted: 'Loan Deleted',
+    scheduled_deleted: 'Scheduled Deleted', loan_extended: 'Extended',
+    items_returned: 'Returned', item_removed: 'Item Removed',
+    items_added: 'Items Added', orphan_recovered: 'Orphan Recovered',
+    orphan_deleted: 'Orphan Deleted', items_transferred: 'Transferred',
+  };
+  const s = styles[type] || 'background:var(--surface2);color:var(--text2);border:1px solid var(--border)';
+  const l = labels[type] || type;
+  return '<span style="' + s + ';padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap">' + l + '</span>';
+}
+
+function _auditFormatTs(ts) {
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch(e) { return ts || ''; }
+}
+
+function showAuditLog() {
+  const entries = auditLog.slice(0, 300);
+  let html = '';
+  if (!entries.length) {
+    html = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No audit events recorded yet.</div>';
+  } else {
+    html = entries.map(e =>
+      '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="flex-shrink:0;margin-top:1px">' + _auditBadge(e.type) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:13px;font-weight:500;color:var(--text)">' + esc(e.summary) + '</div>' +
+      (e.detail && e.detail.items && e.detail.items.length
+        ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:\'DM Mono\',monospace">' + e.detail.items.map(a => esc(a)).join(', ') + '</div>'
+        : '') +
+      '</div>' +
+      '<div style="flex-shrink:0;font-size:11px;color:var(--text3);white-space:nowrap;margin-top:2px">' + _auditFormatTs(e.ts) + '</div>' +
+      '</div>'
+    ).join('');
+  }
+  document.getElementById('audit-log-body').innerHTML = html;
+  document.getElementById('audit-log-modal').classList.add('open');
+}
+
+function closeAuditLog() {
+  document.getElementById('audit-log-modal').classList.remove('open');
 }
 
 // Debounced save — waits 800ms after last change then saves
@@ -2415,7 +2514,7 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','generic-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','generic-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
@@ -2785,6 +2884,7 @@ async function confirmRecoverOrphan() {
   }
 
   renderTable(); updateStats(); renderLoans();
+  writeAudit('orphan_recovered', items.length + ' item' + (items.length !== 1 ? 's' : '') + ' recovered for loan to ' + doc.loanTo, { loanTo: doc.loanTo, batchId, items: items.map(i => i.CHSAssetNo) });
   showToast('success', items.length + ' item' + (items.length > 1 ? 's' : '') + ' recovered for loan to ' + doc.loanTo);
 
   // Remove from candidates list
@@ -2842,6 +2942,7 @@ async function deleteOrphanedLoan() {
   try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
 
   renderTable(); updateStats(); renderLoans();
+  writeAudit('orphan_deleted', 'Orphaned loan deleted (batch ' + batchId + ') — ' + items.length + ' item' + (items.length !== 1 ? 's' : '') + ' cleared', { batchId, loanTo: doc.loanTo, items: items.map(i => i.CHSAssetNo) });
   showToast('info', 'Orphaned loan deleted — ' + items.length + ' item' + (items.length > 1 ? 's' : '') + ' cleared');
 
   _orphanCandidates.splice(_orphanRecoverIndex, 1);
@@ -3185,6 +3286,9 @@ async function submitBatchLoan() {
     const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
+    writeAudit('loan_created',
+      devicesToLoanAll.length + ' item' + (devicesToLoanAll.length !== 1 ? 's' : '') + ' loaned to ' + loanTo + (location ? ' — ' + location : ''),
+      { loanTo, location, startDate, endDate, batchId, items: devicesToLoanAll.map(e => e.CHSAssetNo) });
     clearBasket(); // clear basket now that loan is confirmed
     renderBatchDevices(); renderLoans();
   }; // end doLoan
@@ -3566,6 +3670,8 @@ function selectAllBatchReturn(val) {
 async function confirmBatchReturn() {
   const toReturn = Object.entries(batchReturnChecked).filter(([k,v])=>v).map(([k])=>k);
   if (!toReturn.length) { showToast('error','No items selected'); return; }
+  const _auditLoanTo = currentBatchGroup?.loanTo || '';
+  const _auditAssets = toReturn.map(id => equipment.find(e => e.id === id)?.CHSAssetNo).filter(Boolean);
   // Collect batchIds before clearing, so we can delete loanDocs afterward
   const batchIdsInvolved = new Set();
   toReturn.forEach(id => {
@@ -3604,6 +3710,9 @@ async function confirmBatchReturn() {
   renderTable(); updateStats();
   closeBatchReturn();
   renderLoans();
+  writeAudit('items_returned',
+    toReturn.length + ' item' + (toReturn.length !== 1 ? 's' : '') + ' returned' + (_auditLoanTo ? ' from ' + _auditLoanTo : ''),
+    { loanTo: _auditLoanTo, items: _auditAssets });
   showToast('success', `${toReturn.length} item${toReturn.length>1?'s':''} returned`);
 }
 
@@ -4158,10 +4267,16 @@ async function confirmExtendLoan() {
     await saveBin({ equipment, history: historyLog });
     setSync('ok', 'Saved');
   } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
+  const _extLoanTo = currentExtendGroup.loanTo;
+  const _extOldDate = currentExtendGroup.endDate;
+  const _extItems = currentExtendGroup.items.map(i => i.CHSAssetNo);
   closeExtendModal();
   renderLoans();
   renderTable();
-  showToast('success', 'Loan extended to ' + newDate + ' for ' + currentExtendGroup.loanTo);
+  writeAudit('loan_extended',
+    'Loan for ' + _extLoanTo + ' extended from ' + formatDisplayDate(_extOldDate) + ' to ' + formatDisplayDate(newDate),
+    { loanTo: _extLoanTo, oldDate: _extOldDate, newDate, items: _extItems });
+  showToast('success', 'Loan extended to ' + newDate + ' for ' + _extLoanTo);
 }
 
 // Handle extend action from detail panel
@@ -6237,6 +6352,9 @@ async function _doAddItemsToLoan(g, validRows) {
     _mergedSavedRows = [..._savedRows, ..._newItemRows];
   }
 
+  writeAudit('items_added',
+    added.length + ' item' + (added.length !== 1 ? 's' : '') + ' added to loan for ' + g.loanTo,
+    { loanTo: g.loanTo, items: added.map(e => e.CHSAssetNo) });
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
   switchTab('loans');
 
@@ -6259,6 +6377,7 @@ function removeDeviceFromLoan(id, assetNo) {
   if (!confirm('Remove ' + assetNo + ' from this loan?\nNo history entry will be created.')) return;
   const idx = equipment.findIndex(e => e.id === id);
   if (idx < 0) { showToast('error', 'Device not found'); return; }
+  const _removedFromLoanTo = equipment[idx].OnLoanTo || '';
   // Clear loan fields without creating history
   Object.assign(equipment[idx], {
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '',
@@ -6268,6 +6387,7 @@ function removeDeviceFromLoan(id, assetNo) {
   setSync('saving', 'Saving...');
   saveBin({ equipment, history: historyLog }).then(() => setSync('ok', 'Saved')).catch(e => setSync('err', 'Save failed'));
   renderTable(); updateStats(); renderLoans();
+  writeAudit('item_removed', assetNo + ' removed from loan' + (_removedFromLoanTo ? ' to ' + _removedFromLoanTo : ''), { assetNo, loanTo: _removedFromLoanTo });
   showToast('info', assetNo + ' removed from loan');
   // If loan doc is open, refresh it
   if (document.getElementById('loan-doc-modal').classList.contains('open') && window._currentLoanDocInfo) {
@@ -6529,6 +6649,7 @@ async function deleteLoanByKey(key) {
   for (const batchId of batchIds) {
     try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
   }
+  writeAudit('loan_deleted', 'Loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' item' + (g.items.length !== 1 ? 's' : '') + ' marked as returned', { loanTo: g.loanTo, items: g.items.map(i => i.CHSAssetNo) });
   showToast('info', 'Loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' marked as returned');
 }
 
@@ -6551,6 +6672,7 @@ async function deleteScheduledLoanByKey(key) {
   for (const batchId of batchIds) {
     try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
   }
+  writeAudit('scheduled_deleted', 'Scheduled loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' item' + (g.items.length !== 1 ? 's' : '') + ' cleared', { loanTo: g.loanTo, items: g.items.map(i => i.CHSAssetNo) });
   showToast('info', 'Scheduled loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' cleared');
 }
 
@@ -6700,6 +6822,9 @@ async function activateUpcomingLoans() {
           loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
           notes: 'Transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ')'
         });
+        writeAudit('items_transferred',
+          prev.CHSAssetNo + ' transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo,
+          { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] });
       }
       // Activate: update equipment — but keep a _transferNote so the item still appears
       // as a ghost on the old loan card with a "transferred" indicator
