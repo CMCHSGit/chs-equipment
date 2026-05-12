@@ -6450,6 +6450,8 @@ async function convertScheduledToUpcoming(key) {
 
 async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
   const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) return;
+  const pw = prompt('Enter admin password to remove ' + assetNo + ' from this upcoming loan:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm('Remove ' + assetNo + ' from the upcoming loan for ' + u.loanTo + '?')) return;
