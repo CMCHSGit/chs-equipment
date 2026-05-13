@@ -3329,6 +3329,26 @@ function buildGhostDeviceRow(e) {
     '</div>';
 }
 
+function buildPendingItemsHtml(pendingItems, batchId) {
+  if (!pendingItems?.length) return '';
+  const rows = pendingItems.map(uItem => {
+    const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+    if (!eq) return '';
+    const currentLoan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
+    const dueDate = currentLoan && eq.LoanEndDate ? ' · due back ' + formatDisplayDate(eq.LoanEndDate) : '';
+    return '<div class="loan-device">' +
+      '<div class="loan-device-info">' +
+      '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
+      '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') + '</div>' +
+      (currentLoan ? '<div style="font-size:11px;color:#e67e22;margin-top:2px">&#x26A0; Currently on loan to <strong>' + esc(currentLoan) + '</strong>' + dueDate + '</div>' : '') +
+      '</div>' +
+      '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + esc(batchId) + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
+      'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from upcoming loan">Remove</button>' +
+      '</div>';
+  }).join('');
+  return '<div style="margin:8px 0 4px;padding:4px 8px;background:#f5f3ff;border-radius:4px;font-size:11px;font-weight:600;color:#6d28d9">&#x23F3; Awaiting return before pickup (' + pendingItems.length + ' item' + (pendingItems.length !== 1 ? 's' : '') + ')</div>' + rows;
+}
+
 function renderLoans() {
   _dirty.loans = false;
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
@@ -3407,6 +3427,17 @@ function renderLoans() {
     }
   });
 
+  // Merge upcomingLoans entries that share the same batchId as an active loan group.
+  // This happens when a booking was created with some items already on loan elsewhere —
+  // those items go into upcomingLoans with id=batchId, while available items are direct.
+  const _mergedUpcomingIds = new Set();
+  groups.forEach(g => {
+    const batchId = g.items[0]?.BatchID;
+    if (!batchId) return;
+    const matchingU = upcomingLoans.find(u => u.id === batchId);
+    if (matchingU) { g._pendingItems = matchingU.items; _mergedUpcomingIds.add(matchingU.id); }
+  });
+
   // Store groups by key for reliable lookup
   window._loanGroupMap = {};
   groups.forEach((g, gi) => {
@@ -3435,6 +3466,12 @@ function renderLoans() {
   if (sortBy === 'alpha')   filteredScheduled.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
   if (sortBy === 'expiry')  filteredScheduled.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
   if (sortBy === 'start')   filteredScheduled.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
+  filteredScheduled.forEach(g => {
+    const batchId = g.items[0]?.BatchID;
+    if (!batchId) return;
+    const matchingU = upcomingLoans.find(u => u.id === batchId);
+    if (matchingU) { g._pendingItems = matchingU.items; _mergedUpcomingIds.add(matchingU.id); }
+  });
   const scheduledCards = filteredScheduled.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
@@ -3456,6 +3493,7 @@ function renderLoans() {
         ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
         ' · ' + totalDevices + ' device' + (totalDevices !== 1 ? 's' : '') +
+        (g._pendingItems?.length ? ' <span style="color:#6d28d9;font-size:11px">(+' + g._pendingItems.length + ' pending pickup)</span>' : '') +
         (() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
       '</div>' +
@@ -3478,12 +3516,14 @@ function renderLoans() {
       '</div>' +
       '<div class="loan-card-body" id="' + _slcId + '" style="' + _bodyOpen + '">' +
         g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('') +
+        buildPendingItemsHtml(g._pendingItems, g.items[0]?.BatchID || '') +
       '</div>' +
       '</div>';
   }).join('');
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
-  // Apply same search/sort to upcoming loans
+  // Apply same search/sort to upcoming loans; skip those merged into active/scheduled cards
   let filteredUpcoming = upcomingLoans.filter(u => {
+    if (_mergedUpcomingIds.has(u.id)) return false;
     const matchQ = !q || u.loanTo.toLowerCase().includes(q) || (u.location||'').toLowerCase().includes(q);
     const matchAM = !amFilter || (u.accountManager || '') === amFilter;
     return matchQ && matchAM;
@@ -3564,7 +3604,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${getLoanAM(g.items[0]?.BatchID) ? `<span style="color:var(--accent);font-weight:500">${esc(getLoanAM(g.items[0]?.BatchID))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
+          <div class="loan-card-meta">${getLoanAM(g.items[0]?.BatchID) ? `<span style="color:var(--accent);font-weight:500">${esc(getLoanAM(g.items[0]?.BatchID))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
@@ -3587,6 +3627,7 @@ function renderLoans() {
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
         ${g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('')}
         ${g._ghostItems?.length ? g._ghostItems.map(e => buildGhostDeviceRow(e)).join('') : ''}
+        ${buildPendingItemsHtml(g._pendingItems, g.items[0]?.BatchID || '')}
       </div>
     </div>`;
   }).join('');
