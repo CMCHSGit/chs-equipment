@@ -6495,6 +6495,7 @@ function removeDeviceFromLoan(id, assetNo) {
   const idx = equipment.findIndex(e => e.id === id);
   if (idx < 0) { showToast('error', 'Device not found'); return; }
   const _removedFromLoanTo = equipment[idx].OnLoanTo || '';
+  const _removedFromBatchId = equipment[idx].BatchID || '';
   // Clear loan fields without creating history
   Object.assign(equipment[idx], {
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '',
@@ -6506,6 +6507,25 @@ function removeDeviceFromLoan(id, assetNo) {
   renderTable(); updateStats(); renderLoans();
   writeAudit('item_removed', assetNo + ' removed from loan' + (_removedFromLoanTo ? ' to ' + _removedFromLoanTo : ''), { assetNo, loanTo: _removedFromLoanTo });
   showToast('info', assetNo + ' removed from loan');
+  // Remove item row from saved loan doc in Firebase
+  if (_removedFromBatchId) {
+    (async () => {
+      try {
+        const _dr = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json');
+        if (_dr.ok) {
+          const _dd = await _dr.json();
+          if (_dd && Array.isArray(_dd.savedRows)) {
+            const _lower = assetNo.toLowerCase();
+            const _filtered = _dd.savedRows.filter(row => (row[0] || '').trim().toLowerCase() !== _lower);
+            await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json', {
+              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ savedRows: _filtered })
+            });
+          }
+        }
+      } catch(_e) { console.warn('Could not update loan doc after item removal', _e); }
+    })();
+  }
   // If loan doc is open, refresh it
   if (document.getElementById('loan-doc-modal').classList.contains('open') && window._currentLoanDocInfo) {
     const info = window._currentLoanDocInfo.loanInfo;
