@@ -6314,6 +6314,12 @@ async function _doAddItemsToLoan(g, validRows) {
     historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
     added.push(equipment[idx]);
   });
+  if (added.length) {
+    writeAudit('items_added', added.length + ' item' + (added.length !== 1 ? 's' : '') + ' added to loan — ' + g.loanTo, {
+      loanTo: g.loanTo, location: g.location, batchId,
+      items: added.map(e => e.CHSAssetNo)
+    });
+  }
   await saveBin({ equipment, history: historyLog });
   renderTable(); updateStats();
   closeAddItemsModal();
