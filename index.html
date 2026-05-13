@@ -5321,6 +5321,35 @@ function openBatchReturnByGroup(g) {
   document.getElementById('batch-return-modal').classList.add('open');
 }
 
+async function _pushSimproAfterRemoval(batchId, loanDoc, updatedRows) {
+  if (!SIMPRO_PROXY_URL) return;
+  window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
+  const _rawJobId = window._simproJobCache[batchId] || loanDoc.simproJobId || null;
+  const _isPending = _rawJobId === 'pending' || (typeof _rawJobId === 'object');
+  if (!_rawJobId || _isPending || isNaN(Number(_rawJobId))) return;
+  const _jobId = Number(_rawJobId);
+  function _toISO(d) {
+    if (!d) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+    if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) { const [dd,mm,yyyy]=d.split('/'); return yyyy+'-'+mm.padStart(2,'0')+'-'+dd.padStart(2,'0'); }
+    return d;
+  }
+  const _loanItems = updatedRows.map(row => ({ CHSAssetNo: row[0]||'', Description: row[1]||'', SerialNo: row[2]||'' })).filter(i => i.CHSAssetNo);
+  try {
+    await fetch(SIMPRO_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
+      body: JSON.stringify({
+        loanTo: loanDoc.loanTo||'', location: loanDoc.location||'',
+        notes: loanDoc.notesCell||'', shippingDetails: loanDoc.authCell||'',
+        startDate: _toISO(loanDoc.startDate||''), endDate: _toISO(loanDoc.endDate||''),
+        accountManager: loanDoc.accountManager||'', contactNumber: loanDoc.contactNumber||'',
+        jobType: loanDoc.jobType||'Demo', items: _loanItems, jobId: _jobId, pdfKey: batchId
+      })
+    });
+    showToast('success', 'Simpro job updated');
+  } catch(_e) { console.warn('Simpro update after item removal failed:', _e); }
+}
+
 async function createSimproJob(existingJobId) {
   if (!SIMPRO_PROXY_URL) return;
   const info = window._currentLoanDocInfo?.loanInfo;
@@ -6507,20 +6536,28 @@ function removeDeviceFromLoan(id, assetNo) {
   renderTable(); updateStats(); renderLoans();
   writeAudit('item_removed', assetNo + ' removed from loan' + (_removedFromLoanTo ? ' to ' + _removedFromLoanTo : ''), { assetNo, loanTo: _removedFromLoanTo });
   showToast('info', assetNo + ' removed from loan');
-  // Remove item row from saved loan doc in Firebase
+  // Remove item row from saved loan doc in Firebase, then sync Simpro
   if (_removedFromBatchId) {
     (async () => {
       try {
         const _dr = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json');
         if (_dr.ok) {
           const _dd = await _dr.json();
-          if (_dd && Array.isArray(_dd.savedRows)) {
-            const _lower = assetNo.toLowerCase();
-            const _filtered = _dd.savedRows.filter(row => (row[0] || '').trim().toLowerCase() !== _lower);
-            await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json', {
-              method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ savedRows: _filtered })
-            });
+          if (_dd) {
+            let _updatedRows;
+            if (Array.isArray(_dd.savedRows)) {
+              const _lower = assetNo.toLowerCase();
+              _updatedRows = _dd.savedRows.filter(row => (row[0] || '').trim().toLowerCase() !== _lower);
+              await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json', {
+                method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ savedRows: _updatedRows })
+              });
+            } else {
+              _updatedRows = equipment
+                .filter(e => e.BatchID === _removedFromBatchId && e.Returned !== 'Yes')
+                .map(e => [e.CHSAssetNo||'', e.Description||e.Model||'', e.SerialNo||'', '', '', '', '']);
+            }
+            await _pushSimproAfterRemoval(_removedFromBatchId, _dd, _updatedRows);
           }
         }
       } catch(_e) { console.warn('Could not update loan doc after item removal', _e); }
