@@ -281,6 +281,11 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .loan-card-meta{font-size:12px;color:var(--text2);margin-top:2px}
 .loan-card-badge{display:flex;gap:6px;align-items:center}
 .loan-card-body{border-top:1px solid var(--border);padding:0}
+.loan-update-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text2);white-space:nowrap;transition:background .15s;line-height:1.4}
+.loan-update-btn:hover{background:var(--border)}
+.loan-update-btn.loan-update-new{background:#fef2f2;border-color:#fecaca;color:#dc2626}
+.loan-update-btn.loan-update-new:hover{background:#fee2e2}
+.loan-update-dot{width:6px;height:6px;background:#dc2626;border-radius:50%;flex-shrink:0}
 .loan-device{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);font-size:13px}
 .loan-device:last-child{border-bottom:none}
 .loan-device-info{flex:1}
@@ -1316,6 +1321,19 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<div class="modal-overlay" id="loan-history-modal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title" id="loan-history-title">Loan updates</div>
+      <button class="modal-close" onclick="closeLoanHistory()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div id="loan-history-body" style="max-height:60vh;overflow-y:auto;padding:0 2px"></div>
+    <div class="modal-footer" style="justify-content:flex-end">
+      <button class="btn" onclick="closeLoanHistory()">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="audit-log-modal">
   <div class="modal" style="max-width:680px">
     <div class="modal-header">
@@ -1633,6 +1651,80 @@ function showAuditLog() {
 
 function closeAuditLog() {
   document.getElementById('audit-log-modal').classList.remove('open');
+}
+
+const _LOAN_UPDATE_TYPES = ['items_added', 'item_removed', 'items_returned', 'loan_extended', 'items_transferred'];
+
+function _relativeTime(ts) {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+function getLoanAuditHistory(batchId, loanTo) {
+  return auditLog.filter(e => {
+    if (!_LOAN_UPDATE_TYPES.includes(e.type)) return false;
+    if (batchId && e.detail?.batchId === batchId) return true;
+    return e.detail?.loanTo === loanTo;
+  });
+}
+
+function _loanSeenKey(batchId, loanTo) {
+  return 'loanSeen_' + (batchId || encodeURIComponent(loanTo || ''));
+}
+
+function markLoanSeen(batchId, loanTo) {
+  try { localStorage.setItem(_loanSeenKey(batchId, loanTo), nzNow()); } catch(e) {}
+}
+
+function buildLoanUpdateBadge(batchId, loanTo) {
+  const history = getLoanAuditHistory(batchId, loanTo);
+  if (!history.length) return '';
+  const latest = history[0];
+  const seenTs = (() => { try { return localStorage.getItem(_loanSeenKey(batchId, loanTo)) || ''; } catch(e) { return ''; } })();
+  const isNew = !seenTs || latest.ts > seenTs;
+  return '<button class="loan-update-btn' + (isNew ? ' loan-update-new' : '') + '" ' +
+    'onclick="event.stopPropagation();showLoanHistory(\'' + esc(batchId || '') + '\',\'' + esc(loanTo || '') + '\')" ' +
+    'title="Last updated: ' + _auditFormatTs(latest.ts) + '">' +
+    (isNew ? '<span class="loan-update-dot"></span>' : '') +
+    '<svg style="width:11px;height:11px;flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
+    ' ' + _relativeTime(latest.ts) +
+    '</button>';
+}
+
+function showLoanHistory(batchId, loanTo) {
+  markLoanSeen(batchId, loanTo);
+  renderLoans();
+  const history = getLoanAuditHistory(batchId, loanTo);
+  document.getElementById('loan-history-title').textContent = 'Loan updates — ' + (loanTo || 'Unknown');
+  let html = '';
+  if (!history.length) {
+    html = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No changes recorded for this loan.</div>';
+  } else {
+    html = history.map(e =>
+      '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
+      '<div style="flex-shrink:0;margin-top:1px">' + _auditBadge(e.type) + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:13px;font-weight:500;color:var(--text)">' + esc(e.summary) + '</div>' +
+      (e.detail?.items?.length ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:\'DM Mono\',monospace">' + e.detail.items.map(a => esc(a)).join(', ') + '</div>' : '') +
+      (e.detail?.assetNo && !e.detail?.items ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:\'DM Mono\',monospace">' + esc(e.detail.assetNo) + '</div>' : '') +
+      '</div>' +
+      '<div style="flex-shrink:0;font-size:11px;color:var(--text3);white-space:nowrap;margin-top:2px">' + _auditFormatTs(e.ts) + '</div>' +
+      '</div>'
+    ).join('');
+  }
+  document.getElementById('loan-history-body').innerHTML = html;
+  document.getElementById('loan-history-modal').classList.add('open');
+}
+
+function closeLoanHistory() {
+  document.getElementById('loan-history-modal').classList.remove('open');
 }
 
 // Debounced save — waits 800ms after last change then saves
@@ -2508,7 +2600,7 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','generic-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
@@ -3498,6 +3590,7 @@ function renderLoans() {
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
+        buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo) +
         (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
@@ -3572,6 +3665,7 @@ function renderLoans() {
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
+        buildLoanUpdateBadge(u.id, u.loanTo) +
         (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
@@ -3607,6 +3701,7 @@ function renderLoans() {
           <div class="loan-card-meta">${getLoanAM(g.items[0]?.BatchID) ? `<span style="color:var(--accent);font-weight:500">${esc(getLoanAM(g.items[0]?.BatchID))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
+          ${buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo)}
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
           <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey('${key}')" title="View loan form">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
