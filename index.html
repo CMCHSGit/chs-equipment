@@ -3193,6 +3193,11 @@ async function _doAddItemsToUpcoming(u, rows) {
   await saveUpcomingLoans();
   closeAddItemsModal();
   renderLoans(); renderTable();
+  if (rows.length) {
+    writeAudit('items_added', rows.length + ' item' + (rows.length !== 1 ? 's' : '') + ' added to upcoming loan — ' + u.loanTo, {
+      loanTo: u.loanTo, batchId: u.id, items: rows.map(r => r.value).filter(Boolean)
+    });
+  }
   showToast('success', rows.length + ' item' + (rows.length > 1 ? 's' : '') + ' added to upcoming loan for ' + u.loanTo);
 }
 
@@ -6089,6 +6094,12 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
     await saveUpcomingLoans();
   }
 
+  if (added > 0) {
+    const addedAssets = [...directItems, ...upcomingItems].map(b => b.CHSAssetNo).filter(Boolean);
+    writeAudit('items_added', added + ' item' + (added !== 1 ? 's' : '') + ' added to loan — ' + g.loanTo, {
+      loanTo: g.loanTo, batchId, items: addedAssets
+    });
+  }
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   clearBasket();
 
@@ -6461,9 +6472,6 @@ async function _doAddItemsToLoan(g, validRows) {
     _mergedSavedRows = [..._savedRows, ..._newItemRows];
   }
 
-  writeAudit('items_added',
-    added.length + ' item' + (added.length !== 1 ? 's' : '') + ' added to loan for ' + g.loanTo,
-    { loanTo: g.loanTo, items: added.map(e => e.CHSAssetNo) });
   showToast('success', validRows.length + ' item' + (validRows.length > 1 ? 's' : '') + ' added to loan for ' + g.loanTo);
   switchTab('loans');
 
