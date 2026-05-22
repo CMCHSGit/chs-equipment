@@ -6776,9 +6776,9 @@ async function confirmReassignAM() {
   });
 
   if (newAM) {
-      const _amKey = g.items[0]?.BatchID || _reassignPdfKey;
-      if (_amKey) { loanMeta[_amKey] = { ...(loanMeta[_amKey] || {}), accountManager: newAM }; await saveLoanMeta(); }
-    }
+    const _amKey = g.items[0]?.BatchID || _reassignPdfKey;
+    if (_amKey) { loanMeta[_amKey] = { ...(loanMeta[_amKey] || {}), accountManager: newAM }; await saveLoanMeta(); }
+  }
   await patchLoanDoc(_reassignPdfKey);
   scheduleSave(); renderLoans(); renderTable();
   closeReassignAMModal();
