@@ -4202,8 +4202,7 @@ function checkOverdueNotifications() {
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    const _loandocKey = 'loandoc_' + encodeURIComponent(e.OnLoanTo + '|||' + e.LoanEndDate);
-    const _batchAM = loanMeta[e.BatchID]?.accountManager || loanMeta[_loandocKey]?.accountManager || window._loanDocCache?.[_loandocKey]?.accountManager || window._loanDocCache?.[e.BatchID]?.accountManager || '';
+    const _batchAM = loanMeta[e.BatchID]?.accountManager || '';
     const amEmail = getAMEmail(_batchAM) || '';
     if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: amEmail, accountManager: _batchAM, items: [] };
     grouped[key].items.push(e);
@@ -6777,9 +6776,10 @@ async function confirmReassignAM() {
   });
 
   if (newAM) {
+    // Write to loanMeta under BatchID (what getLoanAM reads) AND under pdfKey as fallback
     const _amKey = g.items[0]?.BatchID || _reassignPdfKey;
     if (_amKey) { loanMeta[_amKey] = { ...(loanMeta[_amKey] || {}), accountManager: newAM }; await saveLoanMeta(); }
-    // Also update _loanDocCache so renderLoans reflects the change immediately
+    // Update _loanDocCache immediately so renderLoans shows it without a reload
     if (_reassignPdfKey) {
       window._loanDocCache = window._loanDocCache || {};
       window._loanDocCache[_reassignPdfKey] = { ...(window._loanDocCache[_reassignPdfKey] || {}), accountManager: newAM };
@@ -6906,10 +6906,15 @@ async function loadLoanDocNotes() {
     for (const [batchId, doc] of Object.entries(allDocs)) {
       if (!doc) continue;
       window._loanDocCache[batchId] = {
-        notes:       doc.notes       || '',
-        notesCell:   doc.notesCell   || doc.notes || '',
-        simproJobId: doc.simproJobId || ''
+        notes:          doc.notes          || '',
+        notesCell:      doc.notesCell      || doc.notes || '',
+        simproJobId:    doc.simproJobId    || '',
+        accountManager: doc.accountManager || ''
       };
+      // Sync accountManager from loanDoc into loanMeta so getLoanAM() and renderLoans() can read it
+      if (doc.accountManager && !loanMeta[batchId]?.accountManager) {
+        loanMeta[batchId] = { ...(loanMeta[batchId] || {}), accountManager: doc.accountManager };
+      }
     }
   } catch(e) { console.warn('Could not load loan doc notes', e); }
 }
