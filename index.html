@@ -1560,8 +1560,8 @@ async function loadData() {
     hideLoading();
     await loadSentNotifications();
     await loadUpcomingLoans();
-    await loadLoanDocNotes();
     await loadLoanMeta();
+    await loadLoanDocNotes();
     // Migrate AccountManager from items → loanMeta, then strip from items
     let _amMigrated = false, _amStripped = false;
     equipment.forEach(e => {
@@ -5652,7 +5652,8 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
   const dispatched = !!r.dispatched;
   const today = nzDate();
   const startPassed = startDate && startDate <= today;
-  const notTestedFlag = startPassed && !tested
+  const startRecent = startDate && daysBetween(startDate, today) <= 7;
+  const notTestedFlag = startPassed && startRecent && !tested
     ? '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>'
     : '';
   // Only show buttons on Starting Soon cards OR if start date passed and not yet dispatched
