@@ -3706,7 +3706,11 @@ function renderLoans() {
   document.getElementById('loans-list').innerHTML = upcomingSection + groups.map((g, gi) => {
     const overdue = g.endDate && g.endDate < today;
     const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
-    return `<div class="loan-card">
+    const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
+    const _rActive = getLoanReadiness(_rKeyActive);
+    const _startDate = g.items[0]?.LoanStartDate || '';
+    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested;
+    return `<div class="loan-card" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
