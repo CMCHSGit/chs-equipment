@@ -104,6 +104,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .badge-booked{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
 .badge-upcoming{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
 .badge-upcoming-sm{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;white-space:nowrap}
+.badge-not-tested{background:var(--red-light);color:var(--red);border:1px solid var(--red-border)}
+.btn-readiness{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1.5px solid;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap}
+.btn-readiness.unticked{background:#fff;color:var(--text2);border-color:var(--border2)}
+.btn-readiness.unticked:hover{border-color:var(--accent);color:var(--accent)}
+.btn-readiness.ticked-tested{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
+.btn-readiness.ticked-dispatched{background:#eff4ff;color:var(--accent);border-color:#bfdbfe}
 
 /* TABLE */
 .table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:64px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
@@ -3597,6 +3603,7 @@ function renderLoans() {
       '<div class="loan-card-badge">' +
         buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo) +
         (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
+        (isSoon ? buildReadinessButtons(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), true, g.startDate) : '') +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
@@ -3708,6 +3715,7 @@ function renderLoans() {
         <div class="loan-card-badge">
           ${buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo)}
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
+          ${buildReadinessButtons(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), false, g.items[0]?.LoanStartDate || '')}
           <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey('${key}')" title="View loan form">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
@@ -4202,14 +4210,7 @@ function checkOverdueNotifications() {
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    const _loandocKeyDecoded  = 'loandoc_' + e.OnLoanTo + '|||' + e.LoanEndDate;
-    const _loandocKeyEncoded  = 'loandoc_' + encodeURIComponent(e.OnLoanTo + '|||' + e.LoanEndDate);
-    const _batchAM = loanMeta[e.BatchID]?.accountManager
-      || loanMeta[_loandocKeyEncoded]?.accountManager
-      || loanMeta[_loandocKeyDecoded]?.accountManager
-      || window._loanDocCache?.[_loandocKeyEncoded]?.accountManager
-      || window._loanDocCache?.[_loandocKeyDecoded]?.accountManager
-      || '';
+    const _batchAM = loanMeta[e.BatchID]?.accountManager || '';
     const amEmail = getAMEmail(_batchAM) || '';
     if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: amEmail, accountManager: _batchAM, items: [] };
     grouped[key].items.push(e);
@@ -5631,6 +5632,44 @@ function printLoanDoc() {
 function getLoanAM(batchId) {
   return (batchId && loanMeta[batchId]?.accountManager) || '';
 }
+function getLoanReadiness(key) {
+  return (key && loanMeta[key]) ? loanMeta[key] : {};
+}
+function _readinessKey(batchId, loanTo, endDate) {
+  // Prefer BatchID; fall back to encoded loandoc key
+  return batchId || ('loandoc_' + encodeURIComponent((loanTo||'') + '|||' + (endDate||'')));
+}
+function buildReadinessButtons(rKey, isSoon, startDate) {
+  const r = getLoanReadiness(rKey);
+  const tested     = !!r.tested;
+  const dispatched = !!r.dispatched;
+  const today = nzDate();
+  const startPassed = startDate && startDate <= today;
+  const notTestedFlag = startPassed && !tested
+    ? '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>'
+    : '';
+  // Only show buttons on Starting Soon cards OR if start date passed and not yet dispatched
+  if (!isSoon && !startPassed) return notTestedFlag;
+  const testedBtn = `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
+    (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.testedAt.slice(5,10) + '</span>' : '') : '&#x25CB; Test') +
+    '</button>';
+  const dispatchedBtn = `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
+    (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.dispatchedAt.slice(5,10) + '</span>' : '') : '&#x1F69A; Dispatch') +
+    '</button>';
+  return notTestedFlag + testedBtn + dispatchedBtn;
+}
+async function toggleReadiness(rKey, field) {
+  if (!rKey) return;
+  const r = getLoanReadiness(rKey);
+  const newVal = !r[field];
+  loanMeta[rKey] = {
+    ...r,
+    [field]: newVal,
+    [field + 'At']: newVal ? nzDate() : ''
+  };
+  await saveLoanMeta();
+  renderLoans();
+}
 async function loadLoanMeta() {
   try {
     const r = await fetch(FB_URL + '/loanMeta.json');
@@ -6738,7 +6777,7 @@ async function confirmReassignAM() {
       await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, ...(newAM ? { accountManager: newAM } : {}) })
+        body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping })
       });
     } catch(e) {}
   }
@@ -6782,20 +6821,7 @@ async function confirmReassignAM() {
     if (newEmail)     equipment[idx].BorrowerEmail = newEmail;
   });
 
-  if (newAM) {
-    // Write under BatchID, encoded loandoc key, and decoded loandoc key — covers all lookup paths
-    const _amKeys = [
-      g.items[0]?.BatchID,
-      _reassignPdfKey,
-      _reassignPdfKey ? decodeURIComponent(_reassignPdfKey) : null
-    ].filter(Boolean);
-    _amKeys.forEach(k => {
-      loanMeta[k] = { ...(loanMeta[k] || {}), accountManager: newAM };
-      window._loanDocCache = window._loanDocCache || {};
-      window._loanDocCache[k] = { ...(window._loanDocCache[k] || {}), accountManager: newAM };
-    });
-    await saveLoanMeta();
-  }
+  if (newAM && _reassignPdfKey) { loanMeta[_reassignPdfKey] = { ...(loanMeta[_reassignPdfKey] || {}), accountManager: newAM }; await saveLoanMeta(); }
   await patchLoanDoc(_reassignPdfKey);
   scheduleSave(); renderLoans(); renderTable();
   closeReassignAMModal();
@@ -6916,30 +6942,11 @@ async function loadLoanDocNotes() {
     window._loanDocCache = window._loanDocCache || {};
     for (const [batchId, doc] of Object.entries(allDocs)) {
       if (!doc) continue;
-      const cacheEntry = {
-        notes:          doc.notes          || '',
-        notesCell:      doc.notesCell      || doc.notes || '',
-        simproJobId:    doc.simproJobId    || '',
-        accountManager: doc.accountManager || ''
+      window._loanDocCache[batchId] = {
+        notes:       doc.notes       || '',
+        notesCell:   doc.notesCell   || doc.notes || '',
+        simproJobId: doc.simproJobId || ''
       };
-      // Firebase returns keys decoded — store under both decoded (as-is) and
-      // encoded forms so lookups using encodeURIComponent() also hit the cache.
-      window._loanDocCache[batchId] = cacheEntry;
-      const encodedKey = doc.loanTo && doc.endDate
-        ? 'loandoc_' + encodeURIComponent(doc.loanTo + '|||' + doc.endDate)
-        : null;
-      if (encodedKey && encodedKey !== batchId) {
-        window._loanDocCache[encodedKey] = cacheEntry;
-      }
-      // Sync accountManager into loanMeta under both keys so getLoanAM() works
-      if (doc.accountManager) {
-        if (!loanMeta[batchId]?.accountManager) {
-          loanMeta[batchId] = { ...(loanMeta[batchId] || {}), accountManager: doc.accountManager };
-        }
-        if (encodedKey && encodedKey !== batchId && !loanMeta[encodedKey]?.accountManager) {
-          loanMeta[encodedKey] = { ...(loanMeta[encodedKey] || {}), accountManager: doc.accountManager };
-        }
-      }
     }
   } catch(e) { console.warn('Could not load loan doc notes', e); }
 }
