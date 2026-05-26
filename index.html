@@ -105,6 +105,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .badge-upcoming{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
 .badge-upcoming-sm{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;white-space:nowrap}
 .badge-not-tested{background:var(--red-light);color:var(--red);border:1px solid var(--red-border)}
+/* KIT SUGGESTION MODAL */
+.kit-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
+.kit-modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.18);width:100%;max-width:460px;overflow:hidden}
+.kit-modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.kit-modal-title{font-size:15px;font-weight:600;flex:1}
+.kit-modal-body{padding:16px 20px;max-height:60vh;overflow-y:auto}
+.kit-modal-intro{font-size:13px;color:var(--text2);margin-bottom:12px}
+.kit-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:6px;cursor:pointer;transition:background .1s}
+.kit-item:hover{background:var(--surface2)}
+.kit-item.unavailable{opacity:.45;cursor:not-allowed}
+.kit-item input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px;flex-shrink:0}
+.kit-item-info{flex:1;min-width:0}
+.kit-item-model{font-size:13px;font-weight:500}
+.kit-item-desc{font-size:12px;color:var(--text2)}
+.kit-item-asset{font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)}
+.kit-item-badge{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--red-light);color:var(--red);border:1px solid var(--red-border);white-space:nowrap}
+.kit-item-badge.avail{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
+.kit-modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 .btn-readiness{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1.5px solid;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap}
 .btn-readiness.unticked{background:#fff;color:var(--text2);border-color:var(--border2)}
 .btn-readiness.unticked:hover{border-color:var(--accent);color:var(--accent)}
@@ -5660,6 +5678,94 @@ function getGroupAM(g) {
   const endDate = g.endDate || g.items?.[0]?.LoanEndDate || '';
   return getLoanAM(batchId, loanTo, endDate) || g.accountManager || '';
 }
+// ── KIT SUGGESTIONS ──────────────────────────────────────────────────
+const DEMO_KITS = {
+  TEX20: { label: 'TEX20 Ultrasound Crate', triggers: ['100166'],
+    accessories: [
+      { assetNo: '100393', model: 'SC6-1s',          desc: 'Curved probe' },
+      { assetNo: '100168', model: 'SP5-1s',          desc: 'Cardiac probe' },
+      { assetNo: '100392', model: 'L14-3Ws',         desc: 'Linear probe' },
+      { assetNo: '100169', model: 'L12-3VNs',        desc: 'Linear probe (enavi)' },
+      { assetNo: '100191', model: 'ECG Module',      desc: 'TEX20 ECG Module' },
+    ] },
+  TE9: { label: 'TE9 Ultrasound Crate', triggers: ['100526'],
+    accessories: [
+      { assetNo: '100528', model: 'SC5-1Ns',         desc: 'Curved probe' },
+      { assetNo: '100530', model: 'SP5-1S',          desc: 'Cardiac probe' },
+      { assetNo: '100531', model: 'L12-3RCs',        desc: 'Linear with buttons' },
+      { assetNo: '100529', model: 'L20-5s',          desc: 'High frequency linear' },
+      { assetNo: '100444', model: 'L14-6Ns',         desc: 'Linear probe' },
+    ] },
+  TE5: { label: 'TE5 Ultrasound Case', triggers: ['100380'],
+    accessories: [
+      { assetNo: '100444', model: 'L14-6Ns',         desc: 'Linear probe' },
+      { assetNo: '100347', model: 'TE5/7 Rollstand', desc: 'TE7 Rollstand UMT-400' },
+    ] },
+  MX5: { label: 'MX5 Ultrasound Case', triggers: ['100539'],
+    accessories: [
+      { assetNo: '100397', model: 'L18-6m',          desc: 'High Frequency Linear' },
+      { assetNo: '100540', model: 'C6-1m',           desc: 'Curved probe' },
+      { assetNo: '100396', model: 'P4-2m',           desc: 'Cardiac probe' },
+    ] }
+};
+
+const _kitTriggerMap = {};
+Object.entries(DEMO_KITS).forEach(([key, kit]) => {
+  kit.triggers.forEach(t => { _kitTriggerMap[t.trim()] = key; });
+});
+
+function checkKitSuggestion(addedItem) {
+  const assetNo = (addedItem.CHSAssetNo || '').trim();
+  const kitKey = _kitTriggerMap[assetNo];
+  if (!kitKey) return;
+  const kit = DEMO_KITS[kitKey];
+  const suggestions = kit.accessories.map(acc => {
+    const eq = equipment.find(e => (e.CHSAssetNo || '').trim() === acc.assetNo);
+    const inBasket = _basketItems.some(b => (b.CHSAssetNo || '').trim() === acc.assetNo);
+    const onLoan   = eq && eq.OnLoanTo && eq.Returned !== 'Yes';
+    return { ...acc, eq, inBasket, onLoan, available: !!eq && !onLoan && !inBasket };
+  }).filter(s => !s.inBasket);
+  if (!suggestions.length) return;
+  document.getElementById('kit-modal-title').textContent = '📦 ' + kit.label;
+  document.getElementById('kit-modal-intro').textContent =
+    "This kit usually includes the following accessories. Select what you'd like to add:";
+  document.getElementById('kit-modal-items').innerHTML = suggestions.map(s => {
+    const unavail = s.onLoan || !s.eq;
+    const badge = !s.eq
+      ? '<span class="kit-item-badge">Not in stock</span>'
+      : s.onLoan
+        ? '<span class="kit-item-badge">On loan</span>'
+        : '<span class="kit-item-badge avail">Available</span>';
+    return '<label class="kit-item ' + (unavail ? 'unavailable' : '') + '">'
+      + '<input type="checkbox" value="' + s.assetNo + '"'
+      + (s.available ? ' checked' : '') + (unavail ? ' disabled' : '') + '>'
+      + '<div class="kit-item-info">'
+      + '<div class="kit-item-model">' + esc(s.model) + '</div>'
+      + '<div class="kit-item-desc">' + esc(s.desc) + '</div>'
+      + (s.eq ? '<div class="kit-item-asset">' + esc(s.eq.CHSAssetNo) + '</div>' : '')
+      + '</div>' + badge + '</label>';
+  }).join('');
+  document.getElementById('kit-modal').style.display = 'flex';
+}
+
+function addSelectedKitItems() {
+  const checks = document.querySelectorAll('#kit-modal-items input[type=checkbox]:checked');
+  checks.forEach(cb => {
+    const eq = equipment.find(e => (e.CHSAssetNo || '').trim() === cb.value);
+    if (eq && !_basketItems.find(b => b.id === eq.id)) {
+      _basketItems.push({ id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model,
+        Description: eq.Description, SerialNo: eq.SerialNo, locked: false });
+    }
+  });
+  closeKitModal();
+  renderBasket();
+  showToast('success', 'Kit accessories added to loan basket');
+}
+
+function closeKitModal() {
+  document.getElementById('kit-modal').style.display = 'none';
+}
+
 function getLoanReadiness(key) {
   return (key && loanMeta[key]) ? loanMeta[key] : {};
 }
@@ -6073,9 +6179,11 @@ function issueLoanFromSelection() {
   if (_selectedIds.size === 0) return;
   const selectedItems = equipment.filter(e => _selectedIds.has(e.id));
   // Add to basket (skip duplicates)
+  const newlyAdded = [];
   selectedItems.forEach(item => {
     if (!_basketItems.find(b => b.id === item.id)) {
       _basketItems.push({ id: item.id, CHSAssetNo: item.CHSAssetNo, Model: item.Model, Description: item.Description, SerialNo: item.SerialNo, locked: false });
+      newlyAdded.push(item);
     }
   });
   // Clear search so database is fully browsable
@@ -6083,6 +6191,8 @@ function issueLoanFromSelection() {
   if (search) { search.value = ''; renderTable(); }
   clearSelection();
   renderBasket();
+  // Trigger kit suggestion if a kit device was added
+  newlyAdded.forEach(item => checkKitSuggestion(item));
 }
 
 function renderBasket() {
@@ -7810,5 +7920,24 @@ function startAutoSync() {
   }, 60 * 1000); // check every minute
 })();
 </script>
+  <!-- KIT SUGGESTION MODAL -->
+  <div id="kit-modal" class="kit-modal-overlay" style="display:none" onclick="if(event.target===this)closeKitModal()">
+    <div class="kit-modal">
+      <div class="kit-modal-header">
+        <span style="font-size:20px">📦</span>
+        <span class="kit-modal-title" id="kit-modal-title">Kit Suggestion</span>
+        <button class="icon-btn" onclick="closeKitModal()" style="margin-left:auto">✕</button>
+      </div>
+      <div class="kit-modal-body">
+        <p class="kit-modal-intro" id="kit-modal-intro"></p>
+        <div id="kit-modal-items"></div>
+      </div>
+      <div class="kit-modal-footer">
+        <button class="btn btn-secondary" onclick="closeKitModal()">Skip</button>
+        <button class="btn btn-primary" onclick="addSelectedKitItems()">＋ Add Selected</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
