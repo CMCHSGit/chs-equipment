@@ -5835,8 +5835,8 @@ function checkKitSuggestion(addedItem) {
       + '<input type="checkbox" value="' + (s.assetNo||'') + '"'
       + (s.available ? ' checked' : '') + (unavail ? ' disabled' : '') + '>'
       + '<div class="kit-item-info">'
-      + '<div class="kit-item-model">' + esc(s.model||'') + '</div>'
-      + '<div class="kit-item-desc">' + esc(s.desc||'') + '</div>'
+      + '<div class="kit-item-model">' + esc(s.eq ? s.eq.Model : (s.model||'')) + '</div>'
+      + '<div class="kit-item-desc">' + esc(s.eq ? (s.eq.Description || s.eq.Notes || s.desc || '') : (s.desc||'')) + '</div>'
       + (s.eq ? '<div class="kit-item-asset">' + esc(s.eq.CHSAssetNo) + '</div>' : '')
       + '</div>' + badge + '</label>';
   }).join('');
@@ -5864,24 +5864,47 @@ function renderKitGroupsSettings() {
       + '</div>'
       + '<div class="kit-group-body" id="kg-body-' + k + '">'
       + '<div id="kg-accs-' + k + '">'
-      + accs.map((a, i) =>
-          '<div class="kit-acc-row">'
-          + '<span class="kit-acc-asset">' + esc(a.assetNo||'—') + '</span>'
-          + '<span class="kit-acc-model">' + esc(a.model||'') + '</span>'
-          + '<span class="kit-acc-desc">' + esc(a.desc||'') + '</span>'
-          + '<button class="btn btn-sm" style="color:var(--red);border-color:var(--red-border);flex-shrink:0" onclick="removeKitAccessory(\'' + k + '\',' + i + ')">✕</button>'
-          + '</div>'
-        ).join('')
+      + accs.map((a, i) => {
+          // Always show live values from equipment database, fall back to stored values
+          const liveEq = equipment.find(e => (e.CHSAssetNo||'').trim() === (a.assetNo||'').trim());
+          const displayModel = liveEq ? liveEq.Model : (a.model || '');
+          const displayDesc  = liveEq ? (liveEq.Description || liveEq.Notes || '') : (a.desc || '');
+          return '<div class="kit-acc-row">'
+            + '<span class="kit-acc-asset">' + esc(a.assetNo||'—') + '</span>'
+            + '<span class="kit-acc-model">' + esc(displayModel) + '</span>'
+            + '<span class="kit-acc-desc">' + esc(displayDesc) + '</span>'
+            + '<button class="btn btn-sm" style="color:var(--red);border-color:var(--red-border);flex-shrink:0" onclick="removeKitAccessory(\'' + k + '\',' + i + ')">✕</button>'
+            + '</div>';
+        }).join('')
       + '</div>'
       + '<div class="kit-add-row">'
-      + '<input id="kg-new-asset-' + k + '" placeholder="Asset No." maxlength="20">'
-      + '<input id="kg-new-model-' + k + '" placeholder="Model name">'
-      + '<input id="kg-new-desc-' + k  + '" placeholder="Description (optional)">'
+      + '<input id="kg-new-asset-' + k + '" placeholder="Asset No." maxlength="20" oninput="kitAssetLookup(this,\'' + k + '\')">'
+      + '<input id="kg-new-model-' + k + '" placeholder="Model name (auto-filled)">'
+      + '<input id="kg-new-desc-'  + k + '" placeholder="Description (auto-filled)">'
       + '<button class="btn btn-primary btn-sm" onclick="addKitAccessory(\'' + k + '\')">＋ Add</button>'
       + '</div>'
       + '</div>'
       + '</div>';
   }).join('');
+}
+
+function kitAssetLookup(inputEl, k) {
+  const assetNo = (inputEl.value || '').trim();
+  const modelEl = document.getElementById('kg-new-model-' + k);
+  const descEl  = document.getElementById('kg-new-desc-'  + k);
+  if (!modelEl || !descEl) return;
+  const eq = assetNo ? equipment.find(e => (e.CHSAssetNo||'').trim() === assetNo) : null;
+  if (eq) {
+    modelEl.value = eq.Model || '';
+    descEl.value  = eq.Description || eq.Notes || '';
+    modelEl.style.borderColor = 'var(--green)';
+    descEl.style.borderColor  = 'var(--green)';
+  } else {
+    modelEl.value = '';
+    descEl.value  = '';
+    modelEl.style.borderColor = '';
+    descEl.style.borderColor  = '';
+  }
 }
 
 function toggleKitCard(k) {
@@ -5894,9 +5917,11 @@ async function addKitAccessory(k) {
   const modelEl = document.getElementById('kg-new-model-' + k);
   const descEl  = document.getElementById('kg-new-desc-' + k);
   const assetNo = (assetEl?.value || '').trim();
-  const model   = (modelEl?.value || '').trim();
-  const desc    = (descEl?.value  || '').trim();
-  if (!assetNo || !model) { showToast('error', 'Asset No. and Model are required'); return; }
+  // Prefer live database values; fall back to whatever's typed
+  const liveEq  = assetNo ? equipment.find(e => (e.CHSAssetNo||'').trim() === assetNo) : null;
+  const model   = (liveEq ? liveEq.Model : (modelEl?.value || '')).trim();
+  const desc    = (liveEq ? (liveEq.Description || liveEq.Notes || '') : (descEl?.value || '')).trim();
+  if (!assetNo || !model) { showToast('error', 'Asset No. not found in database'); return; }
   if (!_kitGroups[k]) return;
   _kitGroups[k].accessories = _kitGroups[k].accessories || [];
   _kitGroups[k].accessories.push({ assetNo, model, desc });
