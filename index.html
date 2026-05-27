@@ -123,6 +123,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .kit-add-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 .kit-add-row input{flex:1;min-width:80px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-size:12px;font-family:inherit}
 
+/* ADMIN PASSWORD MODAL */
+.pw-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
+.pw-modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.22);width:100%;max-width:380px;padding:24px}
+.pw-modal-title{font-size:14px;font-weight:600;margin-bottom:4px}
+.pw-modal-msg{font-size:13px;color:var(--text2);margin-bottom:14px}
+.pw-modal-input{width:100%;padding:8px 12px;border:1.5px solid var(--border2);border-radius:var(--radius);font-size:14px;font-family:inherit;outline:none;margin-bottom:4px}
+.pw-modal-input:focus{border-color:var(--accent)}
+.pw-modal-err{font-size:12px;color:var(--red);min-height:16px;margin-bottom:10px}
+.pw-modal-footer{display:flex;gap:8px;justify-content:flex-end}
+
 /* KIT SUGGESTION MODAL */
 .kit-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:flex;align-items:center;justify-content:center;padding:16px}
 .kit-modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.18);width:100%;max-width:460px;overflow:hidden}
@@ -2360,8 +2370,8 @@ function openAddModal() {
   document.getElementById('item-modal').classList.add('open');
 }
 
-function promptAddAsset() {
-  const pw = prompt('Enter admin password to add a new asset:');
+async function promptAddAsset() {
+  const pw = await adminPrompt('Enter admin password to add a new asset:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   openAddModal();
@@ -2399,8 +2409,8 @@ async function saveItem() {
   }
 }
 
-function deleteItem(id, assetNo) {
-  const pw = prompt(`Enter admin password to delete ${assetNo}:`);
+async function deleteItem(id, assetNo) {
+  const pw = await adminPrompt(`Enter admin password to delete ${assetNo}:`);
   if (pw === null) return; // cancelled
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm(`Permanently delete ${assetNo}? This cannot be undone.`)) return;
@@ -3042,7 +3052,7 @@ async function deleteOrphanedLoan() {
   if (!candidate) { closeOrphanModal(); return; }
   const { batchId, items, doc } = candidate;
 
-  const pw = prompt('Enter admin password to delete this orphaned loan (Batch: ' + batchId + '):');
+  const pw = await adminPrompt('Enter admin password to delete this orphaned loan (Batch: ' + batchId + '):');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
 
@@ -5739,6 +5749,31 @@ Object.entries(DEMO_KITS).forEach(([key, kit]) => {
   kit.triggers.forEach(t => { _kitTriggerMap[t.trim()] = key; });
 });
 
+// ── ADMIN PASSWORD MODAL ──────────────────────────────────────────────
+let _pwModalResolve = null;
+
+function adminPrompt(message) {
+  return new Promise(resolve => {
+    _pwModalResolve = resolve;
+    document.getElementById('pw-modal-msg').textContent   = message;
+    document.getElementById('pw-modal-input').value       = '';
+    document.getElementById('pw-modal-err').textContent   = '';
+    document.getElementById('pw-modal').style.display     = 'flex';
+    setTimeout(() => document.getElementById('pw-modal-input').focus(), 50);
+  });
+}
+
+function _pwModalConfirm() {
+  const val = document.getElementById('pw-modal-input').value;
+  document.getElementById('pw-modal').style.display = 'none';
+  if (_pwModalResolve) { _pwModalResolve(val); _pwModalResolve = null; }
+}
+
+function _pwModalCancel() {
+  document.getElementById('pw-modal').style.display = 'none';
+  if (_pwModalResolve) { _pwModalResolve(null); _pwModalResolve = null; }
+}
+
 // ── KIT GROUPS (Firebase-backed) ──────────────────────────────────────
 let _kitGroups = {}; // live data: { kitKey: { label, triggers:[], accessories:[] } }
 
@@ -6247,14 +6282,14 @@ function retireFromSelection() {
   }
 }
 
-function deleteFromSelection() {
+async function deleteFromSelection() {
   if (_selectedIds.size === 0) return;
   const ids = [..._selectedIds];
   if (ids.length === 1) {
     const item = equipment.find(e => e.id === ids[0]);
     if (item) { clearSelection(); deleteItem(item.id, item.CHSAssetNo); }
   } else {
-    const pw = prompt(`Enter admin password to delete ${ids.length} items:`);
+    const pw = await adminPrompt(`Enter admin password to delete ${ids.length} items:`);
     if (pw === null) return;
     if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
     if (!confirm(`Permanently delete ${ids.length} items? This cannot be undone.`)) return;
@@ -6334,7 +6369,7 @@ async function restoreFromRetiredSelection() {
 async function deleteFromRetiredSelection() {
   if (_retiredSelectedIds.size === 0) return;
   const ids = [..._retiredSelectedIds];
-  const pw = prompt(`Enter admin password to permanently delete ${ids.length} item${ids.length>1?'s':''}:`);
+  const pw = await adminPrompt(`Enter admin password to permanently delete ${ids.length} item${ids.length>1?'s':''}:`);
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm(`Permanently delete ${ids.length} item${ids.length>1?'s':''}? This cannot be undone.`)) return;
@@ -6922,8 +6957,8 @@ async function _doAddItemsToLoan(g, validRows) {
 }
 
 // ── REMOVE DEVICE FROM LOAN ───────────────────────────────────────────
-function removeDeviceFromLoan(id, assetNo) {
-  const pw = prompt('Enter admin password to remove ' + assetNo + ' from this loan:');
+async function removeDeviceFromLoan(id, assetNo) {
+  const pw = await adminPrompt('Enter admin password to remove ' + assetNo + ' from this loan:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm('Remove ' + assetNo + ' from this loan?\nNo history entry will be created.')) return;
@@ -6983,7 +7018,7 @@ function removeDeviceFromLoan(id, assetNo) {
 }
 
 async function convertScheduledToUpcoming(key) {
-  const pw = prompt('Enter admin password to convert this scheduled loan to upcoming:');
+  const pw = await adminPrompt('Enter admin password to convert this scheduled loan to upcoming:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   const g = getLoanGroupByKey(key);
@@ -7031,7 +7066,7 @@ async function convertScheduledToUpcoming(key) {
 async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
   const u = upcomingLoans.find(x => x.id === upcomingId);
   if (!u) return;
-  const pw = prompt('Enter admin password to remove ' + assetNo + ' from this upcoming loan:');
+  const pw = await adminPrompt('Enter admin password to remove ' + assetNo + ' from this upcoming loan:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm('Remove ' + assetNo + ' from the upcoming loan for ' + u.loanTo + '?')) return;
@@ -7226,7 +7261,7 @@ async function deleteUpcomingLoanPrompt(id) {
 async function deleteLoanByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
-  const pw = prompt('Enter admin password to delete this loan for ' + g.loanTo + ':');
+  const pw = await adminPrompt('Enter admin password to delete this loan for ' + g.loanTo + ':');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   const deviceList = g.items.map(i => i.CHSAssetNo).join(', ');
@@ -7250,7 +7285,7 @@ async function deleteLoanByKey(key) {
 async function deleteScheduledLoanByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
-  const pw = prompt('Enter admin password to delete this scheduled loan for ' + g.loanTo + ':');
+  const pw = await adminPrompt('Enter admin password to delete this scheduled loan for ' + g.loanTo + ':');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   const deviceList = g.items.map(i => i.CHSAssetNo).join(', ');
@@ -7490,8 +7525,8 @@ async function saveRetiredAssets() {
   } catch(e) { showToast('error', 'Could not save retired assets'); }
 }
 
-function openRetireModal(id) {
-  const pw = prompt('Enter admin password to retire this asset:');
+async function openRetireModal(id) {
+  const pw = await adminPrompt('Enter admin password to retire this asset:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   _retireItemId = id;
@@ -7509,7 +7544,7 @@ function closeRetireModal() {
 }
 
 async function confirmRetire() {
-  const pw = prompt('Enter admin password to retire this asset:');
+  const pw = await adminPrompt('Enter admin password to retire this asset:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   const reason = document.getElementById('retire-reason').value;
@@ -7643,7 +7678,7 @@ async function restoreRetiredItem(id) {
 }
 
 async function deleteRetiredItem(id, assetNo) {
-  const pw = prompt('Enter admin password to permanently delete ' + assetNo + ':');
+  const pw = await adminPrompt('Enter admin password to permanently delete ' + assetNo + ':');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm('Permanently delete ' + assetNo + '? This cannot be undone.')) return;
@@ -7663,7 +7698,7 @@ function filterDB(status) {
 
 // ── PASSWORD PROTECTED RESTORE ─────────────────────────────────────────
 async function promptRestoreRetired(id) {
-  const pw = prompt('Enter admin password to restore this asset:');
+  const pw = await adminPrompt('Enter admin password to restore this asset:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   await restoreRetiredItem(id);
@@ -8156,6 +8191,20 @@ function startAutoSync() {
       </div>
     </div>
 
+
+  <!-- ADMIN PASSWORD MODAL -->
+  <div id="pw-modal" class="pw-modal-overlay" style="display:none">
+    <div class="pw-modal">
+      <div class="pw-modal-title" id="pw-modal-title">Admin Required</div>
+      <div class="pw-modal-msg" id="pw-modal-msg"></div>
+      <input class="pw-modal-input" type="password" id="pw-modal-input" placeholder="Enter password" autocomplete="off" onkeydown="if(event.key==='Enter')_pwModalConfirm();if(event.key==='Escape')_pwModalCancel()">
+      <div class="pw-modal-err" id="pw-modal-err"></div>
+      <div class="pw-modal-footer">
+        <button class="btn btn-secondary" onclick="_pwModalCancel()">Cancel</button>
+        <button class="btn btn-primary" onclick="_pwModalConfirm()">Confirm</button>
+      </div>
+    </div>
+  </div>
 
   <!-- KIT SUGGESTION MODAL -->
   <div id="kit-modal" class="kit-modal-overlay" style="display:none" onclick="if(event.target===this)closeKitModal()">
