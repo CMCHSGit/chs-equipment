@@ -1020,7 +1020,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <button class="modal-close" onclick="closeQR()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div id="qr-video-wrap"><video id="qr-video" autoplay playsinline muted></video><div class="qr-overlay"><div class="qr-frame"></div></div></div>
-    <p style="font-size:13px;color:var(--text2);margin-top:12px;text-align:center">Point camera at QR code containing the CHS Asset Number</p>
+    <p style="font-size:13px;color:var(--text2);margin-top:12px;text-align:center">Point camera at QR code — allow camera access if prompted</p>
     <div class="modal-footer"><button class="btn" onclick="closeQR()">Cancel</button></div>
   </div>
 </div>
@@ -2484,24 +2484,34 @@ async function handleNativeQR(e) {
 }
 
 async function openQR() {
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  if (isMobile) {
-    document.getElementById('qr-native').click();
-    return;
-  }
   document.getElementById('qr-modal').classList.add('open');
   try {
-    qrStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    const v = document.getElementById('qr-video'); v.srcObject = qrStream; await v.play();
+    // Request rear camera — on iOS Safari, exact constraints work better than facingMode alone
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    };
+    qrStream = await navigator.mediaDevices.getUserMedia(constraints);
+    const v = document.getElementById('qr-video');
+    v.srcObject = qrStream;
+    // iOS Safari requires playsinline and a user-gesture play()
+    v.setAttribute('playsinline', true);
+    await v.play();
     const c = document.createElement('canvas');
     qrInt = setInterval(() => {
       if (v.readyState !== v.HAVE_ENOUGH_DATA) return;
-      c.width=v.videoWidth; c.height=v.videoHeight;
-      c.getContext('2d').drawImage(v,0,0);
-      const img = c.getContext('2d').getImageData(0,0,c.width,c.height);
-      const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+      c.width  = v.videoWidth;
+      c.height = v.videoHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(v, 0, 0);
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      // Try both inversion modes — some QR codes on white backgrounds need dontInvert
+      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
       if (code && code.data) {
-        const val = code.data.trim().replace(/[^\x20-\x7E]/g,'');
+        const val = code.data.trim().replace(/[^\x20-\x7E]/g, '');
         if (val.length > 0) {
           closeQR();
           document.getElementById('scan-input').value = val;
@@ -2509,8 +2519,16 @@ async function openQR() {
           setTimeout(() => lookupAsset(val), 200);
         }
       }
-    }, 250);
-  } catch(e) { showToast('error','Camera not available: '+e.message); closeQR(); }
+    }, 300);
+  } catch(e) {
+    closeQR();
+    // If camera blocked, fall back to file picker
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      showToast('error', 'Camera permission denied — check Settings > Safari > Camera');
+    } else {
+      document.getElementById('qr-native').click();
+    }
+  }
 }
 function closeQR() {
   clearInterval(qrInt);
