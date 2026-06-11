@@ -6064,20 +6064,25 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
   const today = nzDate();
   const startPassed = startDate && startDate <= today;
   const startRecent = startDate && daysBetween(startDate, today) <= 7;
+  const showButtons = isSoon || (startPassed && startRecent);
 
-  // If no test required: show neutral badge instead of red flag, hide Test button
-  const notTestedFlag = startPassed && startRecent && !tested && !noTestReq
-    ? '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>'
-    : (noTestReq ? '<span class="status-badge badge-no-test-req">&#x2014; No Test Req.</span>' : '');
+  // Status badge — only one shown at a time
+  let statusBadge = '';
+  if (noTestReq) {
+    // Clickable badge acts as the toggle-off button — no separate Skip button shown
+    statusBadge = `<button class="btn-readiness ticked-notest" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Click to re-enable testing">&#x2014; No Test Req.</button>`;
+  } else if (startPassed && startRecent && !tested) {
+    statusBadge = '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>';
+  }
 
-  // Only show buttons on Starting Soon cards OR within 7 days of start
-  if (!isSoon && !(startPassed && startRecent)) return notTestedFlag;
+  if (!showButtons) return statusBadge;
 
-  const noTestBtn = `<button class="btn-readiness ${noTestReq ? 'ticked-notest' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="${noTestReq ? 'Click to re-enable testing' : 'Mark as no test required'}">` +
-    (noTestReq ? '&#x2014; No Test Req.' : '&#x2014; Skip') +
-    '</button>';
+  // Skip button — hidden when tested or noTestReq already set
+  const skipBtn = (!tested && !noTestReq)
+    ? `<button class="btn-readiness unticked" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Mark as no test required">&#x2014; Skip</button>`
+    : '';
 
-  // Hide Test button when no test required
+  // Test button — hidden when noTestReq set
   const testedBtn = noTestReq ? '' :
     `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
     (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.testedAt.slice(5,10) + '</span>' : '') : '&#x25CB; Test') +
@@ -6087,7 +6092,7 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
     (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.dispatchedAt.slice(5,10) + '</span>' : '') : '&#x1F69A; Dispatch') +
     '</button>';
 
-  return notTestedFlag + noTestBtn + testedBtn + dispatchedBtn;
+  return statusBadge + skipBtn + testedBtn + dispatchedBtn;
 }
 async function toggleReadiness(rKey, field) {
   if (!rKey) return;
