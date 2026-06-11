@@ -156,6 +156,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .btn-readiness.unticked:hover{border-color:var(--accent);color:var(--accent)}
 .btn-readiness.ticked-tested{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
 .btn-readiness.ticked-dispatched{background:#eff4ff;color:var(--accent);border-color:#bfdbfe}
+.btn-readiness.ticked-notest{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
+.badge-no-test-req{background:var(--surface2);color:var(--text2);border:1px solid var(--border2)}
 
 /* TABLE */
 .table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:64px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
@@ -503,7 +505,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <button class="scan-tab" id="stab-count" onclick="setScanMode('count')">Count / Audit</button>
         </div>
         <div class="scan-input-wrap">
-          <input class="scan-input" id="scan-input" type="text" inputmode="numeric" placeholder="Scan or type CHS Asset Number…" autocomplete="off">
+          <input class="scan-input" id="scan-input" type="text" placeholder="Scan or type CHS Asset Number…" autocomplete="off">
           <button class="scan-cam-btn" onclick="openQR()" title="Use camera for QR code">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           </button>
@@ -1020,7 +1022,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <button class="modal-close" onclick="closeQR()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div id="qr-video-wrap"><video id="qr-video" autoplay playsinline muted></video><div class="qr-overlay"><div class="qr-frame"></div></div></div>
-    <p style="font-size:13px;color:var(--text2);margin-top:12px;text-align:center">Point camera at QR code — allow camera access if prompted</p>
+    <p style="font-size:13px;color:var(--text2);margin-top:12px;text-align:center">Point camera at QR code containing the CHS Asset Number</p>
     <div class="modal-footer"><button class="btn" onclick="closeQR()">Cancel</button></div>
   </div>
 </div>
@@ -2484,34 +2486,24 @@ async function handleNativeQR(e) {
 }
 
 async function openQR() {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (isMobile) {
+    document.getElementById('qr-native').click();
+    return;
+  }
   document.getElementById('qr-modal').classList.add('open');
   try {
-    // Request rear camera — on iOS Safari, exact constraints work better than facingMode alone
-    const constraints = {
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1280 },
-        height: { ideal: 720 }
-      }
-    };
-    qrStream = await navigator.mediaDevices.getUserMedia(constraints);
-    const v = document.getElementById('qr-video');
-    v.srcObject = qrStream;
-    // iOS Safari requires playsinline and a user-gesture play()
-    v.setAttribute('playsinline', true);
-    await v.play();
+    qrStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v = document.getElementById('qr-video'); v.srcObject = qrStream; await v.play();
     const c = document.createElement('canvas');
     qrInt = setInterval(() => {
       if (v.readyState !== v.HAVE_ENOUGH_DATA) return;
-      c.width  = v.videoWidth;
-      c.height = v.videoHeight;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(v, 0, 0);
-      const img = ctx.getImageData(0, 0, c.width, c.height);
-      // Try both inversion modes — some QR codes on white backgrounds need dontInvert
-      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+      c.width=v.videoWidth; c.height=v.videoHeight;
+      c.getContext('2d').drawImage(v,0,0);
+      const img = c.getContext('2d').getImageData(0,0,c.width,c.height);
+      const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
       if (code && code.data) {
-        const val = code.data.trim().replace(/[^\x20-\x7E]/g, '');
+        const val = code.data.trim().replace(/[^\x20-\x7E]/g,'');
         if (val.length > 0) {
           closeQR();
           document.getElementById('scan-input').value = val;
@@ -2519,16 +2511,8 @@ async function openQR() {
           setTimeout(() => lookupAsset(val), 200);
         }
       }
-    }, 300);
-  } catch(e) {
-    closeQR();
-    // If camera blocked, fall back to file picker
-    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
-      showToast('error', 'Camera permission denied — check Settings > Safari > Camera');
-    } else {
-      document.getElementById('qr-native').click();
-    }
-  }
+    }, 250);
+  } catch(e) { showToast('error','Camera not available: '+e.message); closeQR(); }
 }
 function closeQR() {
   clearInterval(qrInt);
@@ -3780,7 +3764,7 @@ function renderLoans() {
     const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
     const _rActive = getLoanReadiness(_rKeyActive);
     const _startDate = g.items[0]?.LoanStartDate || '';
-    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested;
+    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested && !_rActive.noTestRequired;
     return `<div class="loan-card" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
@@ -6074,23 +6058,36 @@ function _readinessKey(batchId, loanTo, endDate) {
 }
 function buildReadinessButtons(rKey, isSoon, startDate) {
   const r = getLoanReadiness(rKey);
-  const tested     = !!r.tested;
-  const dispatched = !!r.dispatched;
+  const tested        = !!r.tested;
+  const dispatched    = !!r.dispatched;
+  const noTestReq     = !!r.noTestRequired;
   const today = nzDate();
   const startPassed = startDate && startDate <= today;
   const startRecent = startDate && daysBetween(startDate, today) <= 7;
-  const notTestedFlag = startPassed && startRecent && !tested
+
+  // If no test required: show neutral badge instead of red flag, hide Test button
+  const notTestedFlag = startPassed && startRecent && !tested && !noTestReq
     ? '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>'
-    : '';
-  // Only show buttons on Starting Soon cards OR if start date passed and not yet dispatched
-  if (!isSoon && !startPassed) return notTestedFlag;
-  const testedBtn = `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
+    : (noTestReq ? '<span class="status-badge badge-no-test-req">&#x2014; No Test Req.</span>' : '');
+
+  // Only show buttons on Starting Soon cards OR within 7 days of start
+  if (!isSoon && !(startPassed && startRecent)) return notTestedFlag;
+
+  const noTestBtn = `<button class="btn-readiness ${noTestReq ? 'ticked-notest' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="${noTestReq ? 'Click to re-enable testing' : 'Mark as no test required'}">` +
+    (noTestReq ? '&#x2014; No Test Req.' : '&#x2014; Skip') +
+    '</button>';
+
+  // Hide Test button when no test required
+  const testedBtn = noTestReq ? '' :
+    `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
     (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.testedAt.slice(5,10) + '</span>' : '') : '&#x25CB; Test') +
     '</button>';
+
   const dispatchedBtn = `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
     (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.dispatchedAt.slice(5,10) + '</span>' : '') : '&#x1F69A; Dispatch') +
     '</button>';
-  return notTestedFlag + testedBtn + dispatchedBtn;
+
+  return notTestedFlag + noTestBtn + testedBtn + dispatchedBtn;
 }
 async function toggleReadiness(rKey, field) {
   if (!rKey) return;
