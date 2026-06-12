@@ -523,7 +523,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
           <button class="scan-tab" id="stab-count" onclick="setScanMode('count')">Count / Audit</button>
         </div>
         <div class="scan-input-wrap">
-          <input class="scan-input" id="scan-input" type="text" inputmode="numeric" placeholder="Scan or type CHS Asset Number…" autocomplete="off">
+          <input class="scan-input" id="scan-input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="Scan or type CHS Asset Number…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
           <button class="scan-cam-btn" onclick="openQR()" title="Use camera for QR code">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
           </button>
