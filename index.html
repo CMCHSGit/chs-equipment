@@ -174,6 +174,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .btn-readiness.unticked:hover{border-color:var(--accent);color:var(--accent)}
 .btn-readiness.ticked-tested{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
 .btn-readiness.ticked-dispatched{background:#eff4ff;color:var(--accent);border-color:#bfdbfe}
+.btn-readiness.ticked-notest{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
+.badge-no-test-req{background:var(--surface2);color:var(--text2);border:1px solid var(--border2)}
 
 /* TABLE */
 .table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:64px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
@@ -2752,24 +2754,31 @@ async function handleNativeQR(e) {
 }
 
 async function openQR() {
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  if (isMobile) {
-    document.getElementById('qr-native').click();
-    return;
-  }
   document.getElementById('qr-modal').classList.add('open');
   try {
-    qrStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
-    const v = document.getElementById('qr-video'); v.srcObject = qrStream; await v.play();
+    const constraints = {
+      video: {
+        facingMode: { ideal: 'environment' },
+        width:  { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    };
+    qrStream = await navigator.mediaDevices.getUserMedia(constraints);
+    const v = document.getElementById('qr-video');
+    v.srcObject = qrStream;
+    v.setAttribute('playsinline', true);
+    await v.play();
     const c = document.createElement('canvas');
     qrInt = setInterval(() => {
       if (v.readyState !== v.HAVE_ENOUGH_DATA) return;
-      c.width=v.videoWidth; c.height=v.videoHeight;
-      c.getContext('2d').drawImage(v,0,0);
-      const img = c.getContext('2d').getImageData(0,0,c.width,c.height);
-      const code = jsQR(img.data,img.width,img.height,{inversionAttempts:'dontInvert'});
+      c.width  = v.videoWidth;
+      c.height = v.videoHeight;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(v, 0, 0);
+      const img = ctx.getImageData(0, 0, c.width, c.height);
+      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
       if (code && code.data) {
-        const val = code.data.trim().replace(/[^\x20-\x7E]/g,'');
+        const val = code.data.trim().replace(/[^\x20-\x7E]/g, '');
         if (val.length > 0) {
           closeQR();
           document.getElementById('scan-input').value = val;
@@ -2777,8 +2786,15 @@ async function openQR() {
           setTimeout(() => lookupAsset(val), 200);
         }
       }
-    }, 250);
-  } catch(e) { showToast('error','Camera not available: '+e.message); closeQR(); }
+    }, 300);
+  } catch(e) {
+    closeQR();
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      showToast('error', 'Camera permission denied — check Settings > Safari > Camera');
+    } else {
+      document.getElementById('qr-native').click();
+    }
+  }
 }
 function closeQR() {
   clearInterval(qrInt);
@@ -4030,7 +4046,7 @@ function renderLoans() {
     const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
     const _rActive = getLoanReadiness(_rKeyActive);
     const _startDate = g.items[0]?.LoanStartDate || '';
-    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested;
+    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested && !_rActive.noTestRequired;
     return `<div class="loan-card" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
@@ -6324,23 +6340,40 @@ function _readinessKey(batchId, loanTo, endDate) {
 }
 function buildReadinessButtons(rKey, isSoon, startDate) {
   const r = getLoanReadiness(rKey);
-  const tested     = !!r.tested;
-  const dispatched = !!r.dispatched;
+  const tested        = !!r.tested;
+  const dispatched    = !!r.dispatched;
+  const noTestReq     = !!r.noTestRequired;
   const today = nzDate();
   const startPassed = startDate && startDate <= today;
   const startRecent = startDate && daysBetween(startDate, today) <= 7;
-  const notTestedFlag = startPassed && startRecent && !tested
-    ? '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>'
+  const showButtons = isSoon || (startPassed && startRecent);
+
+  // One status badge shown at a time
+  let statusBadge = '';
+  if (noTestReq) {
+    statusBadge = `<button class="btn-readiness ticked-notest" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Click to re-enable testing">&#x2014; No Test Req.</button>`;
+  } else if (startPassed && startRecent && !tested) {
+    statusBadge = '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>';
+  }
+
+  if (!showButtons) return statusBadge;
+
+  // Skip button — hidden when tested or noTestReq already set
+  const skipBtn = (!tested && !noTestReq)
+    ? `<button class="btn-readiness unticked" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Mark as no test required">&#x2014; Skip</button>`
     : '';
-  // Only show buttons on Starting Soon cards OR if start date passed and not yet dispatched
-  if (!isSoon && !startPassed) return notTestedFlag;
-  const testedBtn = `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
+
+  // Test button — hidden when noTestReq set
+  const testedBtn = noTestReq ? '' :
+    `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
     (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.testedAt.slice(5,10) + '</span>' : '') : '&#x25CB; Test') +
     '</button>';
+
   const dispatchedBtn = `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
     (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.dispatchedAt.slice(5,10) + '</span>' : '') : '&#x1F69A; Dispatch') +
     '</button>';
-  return notTestedFlag + testedBtn + dispatchedBtn;
+
+  return statusBadge + skipBtn + testedBtn + dispatchedBtn;
 }
 async function toggleReadiness(rKey, field) {
   if (!rKey) return;
