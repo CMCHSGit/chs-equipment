@@ -123,6 +123,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .kit-add-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 .kit-add-row input{flex:1;min-width:80px;padding:5px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-size:12px;font-family:inherit}
 
+/* MULTI-ADD ASSET MODAL */
+.ma-modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.18);width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.ma-modal-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ma-modal-body{overflow-y:auto;padding:16px 20px;flex:1}
+.ma-modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:space-between;align-items:center;flex-shrink:0}
+.ma-asset-slot{border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;position:relative;background:var(--surface)}
+.ma-asset-slot:last-of-type{margin-bottom:0}
+.ma-slot-num{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.ma-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ma-grid .full{grid-column:1/-1}
+.ma-input{width:100%;padding:7px 10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-size:13px;font-family:inherit;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.ma-input:focus{border-color:var(--accent)}
+.ma-label{font-size:11px;font-weight:500;color:var(--text2);margin-bottom:3px;display:block}
+.ma-kit-section{border:1px solid var(--border2);border-radius:var(--radius);padding:12px 14px;margin-top:14px;background:var(--surface2)}
+.ma-kit-title{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ma-kit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+@media(max-width:600px){.ma-grid,.ma-kit-grid{grid-template-columns:1fr}}
+
 /* ADMIN PASSWORD MODAL */
 .pw-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
 .pw-modal{background:var(--surface);border-radius:var(--radius-lg);box-shadow:0 8px 32px rgba(0,0,0,.22);width:100%;max-width:380px;padding:24px}
@@ -156,8 +174,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .btn-readiness.unticked:hover{border-color:var(--accent);color:var(--accent)}
 .btn-readiness.ticked-tested{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
 .btn-readiness.ticked-dispatched{background:#eff4ff;color:var(--accent);border-color:#bfdbfe}
-.btn-readiness.ticked-notest{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
-.badge-no-test-req{background:var(--surface2);color:var(--text2);border:1px solid var(--border2)}
 
 /* TABLE */
 .table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:64px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
@@ -960,6 +976,54 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </div>
 
 <!-- ADD/EDIT MODAL -->
+<!-- MULTI-ADD ASSET MODAL -->
+<div class="modal-overlay" id="ma-modal" style="align-items:flex-start;padding-top:40px">
+  <div class="ma-modal">
+    <div class="ma-modal-header">
+      <span style="font-size:18px">＋</span>
+      <span style="font-size:15px;font-weight:600;flex:1">Add Assets</span>
+      <button class="modal-close" onclick="closeMaModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="ma-modal-body">
+      <div id="ma-slots"></div>
+      <button class="btn" onclick="maAddSlot()" style="width:100%;margin-top:10px;border-style:dashed">＋ Add Another Asset</button>
+
+      <!-- Kit group section -->
+      <div class="ma-kit-section" style="margin-top:16px">
+        <div class="ma-kit-title">
+          <input type="checkbox" id="ma-kit-enable" onchange="maToggleKit()" style="width:15px;height:15px;accent-color:var(--accent)">
+          <label for="ma-kit-enable" style="cursor:pointer">📦 Build a kit group from these assets</label>
+        </div>
+        <div id="ma-kit-options" style="display:none">
+          <div class="ma-kit-grid">
+            <div>
+              <label class="ma-label">Kit Group Name</label>
+              <input class="ma-input" id="ma-kit-name" placeholder="e.g. TE9 Ultrasound Crate">
+            </div>
+            <div>
+              <label class="ma-label">Trigger Asset (main device)</label>
+              <select class="ma-input" id="ma-kit-trigger"></select>
+            </div>
+            <div>
+              <label class="ma-label">Add to existing kit instead?</label>
+              <select class="ma-input" id="ma-kit-existing" onchange="maToggleExistingKit()">
+                <option value="">— Create new kit group —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ma-modal-footer">
+      <span id="ma-slot-count" style="font-size:12px;color:var(--text2)">1 asset</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closeMaModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="maSaveAll()">Save All</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="item-modal">
   <div class="modal">
     <div class="modal-header">
@@ -2372,7 +2436,209 @@ function openAddModal() {
   document.getElementById('item-modal').classList.add('open');
 }
 
+// ── MULTI-ADD ASSET MODAL ─────────────────────────────────────────────
+let _maSlots = 0;
+
 async function promptAddAsset() {
+  const pw = await adminPrompt('Enter admin password to add new assets:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  openMaModal();
+}
+
+function openMaModal() {
+  _maSlots = 0;
+  document.getElementById('ma-slots').innerHTML = '';
+  document.getElementById('ma-kit-enable').checked = false;
+  document.getElementById('ma-kit-options').style.display = 'none';
+  document.getElementById('ma-kit-name').value = '';
+  // Populate existing kit dropdown
+  const existSel = document.getElementById('ma-kit-existing');
+  existSel.innerHTML = '<option value="">— Create new kit group —</option>';
+  Object.entries(_kitGroups || {}).forEach(([k, kit]) => {
+    const opt = document.createElement('option');
+    opt.value = k; opt.textContent = kit.label || k;
+    existSel.appendChild(opt);
+  });
+  maAddSlot();
+  document.getElementById('ma-modal').classList.add('open');
+}
+
+function closeMaModal() {
+  document.getElementById('ma-modal').classList.remove('open');
+}
+
+function maAddSlot() {
+  const idx = _maSlots++;
+  const slot = document.createElement('div');
+  slot.className = 'ma-asset-slot';
+  slot.id = 'ma-slot-' + idx;
+  slot.innerHTML =
+    '<div class="ma-slot-num">'
+    + '<span>Asset ' + (idx + 1) + '</span>'
+    + (idx > 0 ? '<button class="btn btn-sm" style="color:var(--red);border-color:var(--red-border);padding:2px 8px" onclick="maRemoveSlot(' + idx + ')">Remove</button>' : '')
+    + '</div>'
+    + '<div class="ma-grid">'
+    + '<div><label class="ma-label">CHS Asset No. <span style="color:var(--red)">*</span></label><input class="ma-input" id="ma-assetno-' + idx + '" inputmode="numeric" oninput="maUpdateKit()"></div>'
+    + '<div><label class="ma-label">Model</label><input class="ma-input" id="ma-model-' + idx + '"></div>'
+    + '<div class="full"><label class="ma-label">Description</label><input class="ma-input" id="ma-desc-' + idx + '"></div>'
+    + '<div><label class="ma-label">Serial Number</label><input class="ma-input" id="ma-serial-' + idx + '"></div>'
+    + '<div><label class="ma-label">Battery Serial No.</label><input class="ma-input" id="ma-battserial-' + idx + '" placeholder="—"></div>'
+    + '<div><label class="ma-label">Part Number</label><input class="ma-input" id="ma-partno-' + idx + '"></div>'
+    + '<div><label class="ma-label">Mfg Date</label><input class="ma-input" type="date" id="ma-mfgdate-' + idx + '"></div>'
+    + '<div><label class="ma-label">Purchase Date</label><input class="ma-input" type="date" id="ma-purchdate-' + idx + '"></div>'
+    + '<div><label class="ma-label">US$ Price</label><input class="ma-input" type="number" step="0.01" id="ma-usprice-' + idx + '"></div>'
+    + '<div><label class="ma-label">NZ$ Price</label><input class="ma-input" type="number" step="0.01" id="ma-nzprice-' + idx + '"></div>'
+    + '<div><label class="ma-label">Shelf Location</label><input class="ma-input" id="ma-shelf-' + idx + '"></div>'
+    + '<div><label class="ma-label">Device ID</label><input class="ma-input" id="ma-deviceid-' + idx + '"></div>'
+    + '<div class="full"><label class="ma-label">Notes</label><input class="ma-input" id="ma-notes-' + idx + '"></div>'
+    + '</div>';
+  document.getElementById('ma-slots').appendChild(slot);
+  maUpdateCount();
+  maUpdateKit();
+  // Focus first input of new slot
+  const firstInput = slot.querySelector('input');
+  if (firstInput) setTimeout(() => firstInput.focus(), 50);
+}
+
+function maRemoveSlot(idx) {
+  const slot = document.getElementById('ma-slot-' + idx);
+  if (slot) slot.remove();
+  maUpdateCount();
+  maUpdateKit();
+}
+
+function maUpdateCount() {
+  const slots = document.querySelectorAll('.ma-asset-slot');
+  const n = slots.length;
+  document.getElementById('ma-slot-count').textContent = n + ' asset' + (n !== 1 ? 's' : '');
+}
+
+function maToggleKit() {
+  const on = document.getElementById('ma-kit-enable').checked;
+  document.getElementById('ma-kit-options').style.display = on ? 'block' : 'none';
+  if (on) maUpdateKit();
+}
+
+function maToggleExistingKit() {
+  const val = document.getElementById('ma-kit-existing').value;
+  document.getElementById('ma-kit-name').disabled = !!val;
+  document.getElementById('ma-kit-name').style.opacity = val ? '.4' : '1';
+}
+
+function maUpdateKit() {
+  if (!document.getElementById('ma-kit-enable').checked) return;
+  // Rebuild trigger dropdown from current asset numbers
+  const triggerSel = document.getElementById('ma-kit-trigger');
+  const prev = triggerSel.value;
+  triggerSel.innerHTML = '<option value="">— Select trigger device —</option>';
+  document.querySelectorAll('.ma-asset-slot').forEach(slot => {
+    const idx = slot.id.replace('ma-slot-', '');
+    const assetEl = document.getElementById('ma-assetno-' + idx);
+    const modelEl = document.getElementById('ma-model-' + idx);
+    if (!assetEl) return;
+    const assetNo = assetEl.value.trim();
+    const model   = modelEl ? modelEl.value.trim() : '';
+    if (assetNo) {
+      const opt = document.createElement('option');
+      opt.value = assetNo;
+      opt.textContent = assetNo + (model ? ' — ' + model : '');
+      if (assetNo === prev) opt.selected = true;
+      triggerSel.appendChild(opt);
+    }
+  });
+}
+
+async function maSaveAll() {
+  const slots = document.querySelectorAll('.ma-asset-slot');
+  if (!slots.length) { showToast('error', 'Add at least one asset'); return; }
+
+  const newItems = [];
+  let hasError = false;
+
+  slots.forEach(slot => {
+    const idx = slot.id.replace('ma-slot-', '');
+    const assetNo = (document.getElementById('ma-assetno-' + idx)?.value || '').trim();
+    if (!assetNo) { showToast('error', 'CHS Asset No. is required for each asset'); hasError = true; return; }
+    if (equipment.find(e => e.CHSAssetNo === assetNo)) {
+      showToast('error', 'Asset ' + assetNo + ' already exists'); hasError = true; return;
+    }
+    newItems.push({
+      id:              uid(),
+      CHSAssetNo:      assetNo,
+      Model:           (document.getElementById('ma-model-'     + idx)?.value || '').trim(),
+      Description:     (document.getElementById('ma-desc-'      + idx)?.value || '').trim(),
+      SerialNo:        (document.getElementById('ma-serial-'    + idx)?.value || '').trim(),
+      BatterySerialNo: (document.getElementById('ma-battserial-'+ idx)?.value || '').trim(),
+      PartNo:          (document.getElementById('ma-partno-'    + idx)?.value || '').trim(),
+      MfgDate:         (document.getElementById('ma-mfgdate-'   + idx)?.value || '').trim(),
+      PurchaseDate:    (document.getElementById('ma-purchdate-' + idx)?.value || '').trim(),
+      USPrice:         (document.getElementById('ma-usprice-'   + idx)?.value || '').trim(),
+      NZPrice:         (document.getElementById('ma-nzprice-'   + idx)?.value || '').trim(),
+      ShelfLocation:   (document.getElementById('ma-shelf-'     + idx)?.value || '').trim(),
+      DeviceID:        (document.getElementById('ma-deviceid-'  + idx)?.value || '').trim(),
+      Notes:           (document.getElementById('ma-notes-'     + idx)?.value || '').trim(),
+    });
+  });
+
+  if (hasError || !newItems.length) return;
+
+  // Handle kit group creation
+  const kitEnabled = document.getElementById('ma-kit-enable').checked;
+  if (kitEnabled) {
+    const triggerAsset = document.getElementById('ma-kit-trigger').value;
+    const existingKey  = document.getElementById('ma-kit-existing').value;
+    const kitName      = document.getElementById('ma-kit-name').value.trim();
+    if (!triggerAsset) { showToast('error', 'Select a trigger device for the kit'); return; }
+
+    if (existingKey && _kitGroups[existingKey]) {
+      // Append non-trigger assets as accessories to existing kit
+      newItems.forEach(item => {
+        if (item.CHSAssetNo !== triggerAsset) {
+          _kitGroups[existingKey].accessories = _kitGroups[existingKey].accessories || [];
+          if (!_kitGroups[existingKey].accessories.find(a => a.assetNo === item.CHSAssetNo)) {
+            _kitGroups[existingKey].accessories.push({
+              assetNo: item.CHSAssetNo, model: item.Model, desc: item.Description
+            });
+          }
+        }
+      });
+      await saveKitGroups();
+      showToast('success', 'Accessories added to existing kit group');
+    } else {
+      if (!kitName) { showToast('error', 'Enter a kit group name'); return; }
+      const newKey = 'kit_' + Date.now();
+      _kitGroups[newKey] = {
+        label:       kitName,
+        triggers:    [triggerAsset],
+        accessories: newItems
+          .filter(item => item.CHSAssetNo !== triggerAsset)
+          .map(item => ({ assetNo: item.CHSAssetNo, model: item.Model, desc: item.Description }))
+      };
+      await saveKitGroups();
+      showToast('success', 'New kit group "' + kitName + '" created');
+    }
+  }
+
+  // Save all new equipment items
+  newItems.forEach(item => equipment.unshift(item));
+  closeMaModal();
+  renderTable(); updateStats();
+  markDirty('loans', 'history', 'calendar');
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+    showToast('success', newItems.length + ' asset' + (newItems.length !== 1 ? 's' : '') + ' added');
+  } catch(e) {
+    setSync('err', 'Save failed');
+    showToast('error', 'Save failed: ' + e.message);
+  }
+}
+
+
+// (original single-add now replaced by multi-add above)
+async function promptAddAsset_UNUSED() {
   const pw = await adminPrompt('Enter admin password to add a new asset:');
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
@@ -3764,7 +4030,7 @@ function renderLoans() {
     const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
     const _rActive = getLoanReadiness(_rKeyActive);
     const _startDate = g.items[0]?.LoanStartDate || '';
-    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested && !_rActive.noTestRequired;
+    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested;
     return `<div class="loan-card" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
@@ -6058,41 +6324,23 @@ function _readinessKey(batchId, loanTo, endDate) {
 }
 function buildReadinessButtons(rKey, isSoon, startDate) {
   const r = getLoanReadiness(rKey);
-  const tested        = !!r.tested;
-  const dispatched    = !!r.dispatched;
-  const noTestReq     = !!r.noTestRequired;
+  const tested     = !!r.tested;
+  const dispatched = !!r.dispatched;
   const today = nzDate();
   const startPassed = startDate && startDate <= today;
   const startRecent = startDate && daysBetween(startDate, today) <= 7;
-  const showButtons = isSoon || (startPassed && startRecent);
-
-  // Status badge — only one shown at a time
-  let statusBadge = '';
-  if (noTestReq) {
-    // Clickable badge acts as the toggle-off button — no separate Skip button shown
-    statusBadge = `<button class="btn-readiness ticked-notest" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Click to re-enable testing">&#x2014; No Test Req.</button>`;
-  } else if (startPassed && startRecent && !tested) {
-    statusBadge = '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>';
-  }
-
-  if (!showButtons) return statusBadge;
-
-  // Skip button — hidden when tested or noTestReq already set
-  const skipBtn = (!tested && !noTestReq)
-    ? `<button class="btn-readiness unticked" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Mark as no test required">&#x2014; Skip</button>`
+  const notTestedFlag = startPassed && startRecent && !tested
+    ? '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>'
     : '';
-
-  // Test button — hidden when noTestReq set
-  const testedBtn = noTestReq ? '' :
-    `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
+  // Only show buttons on Starting Soon cards OR if start date passed and not yet dispatched
+  if (!isSoon && !startPassed) return notTestedFlag;
+  const testedBtn = `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
     (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.testedAt.slice(5,10) + '</span>' : '') : '&#x25CB; Test') +
     '</button>';
-
   const dispatchedBtn = `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
     (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.dispatchedAt.slice(5,10) + '</span>' : '') : '&#x1F69A; Dispatch') +
     '</button>';
-
-  return statusBadge + skipBtn + testedBtn + dispatchedBtn;
+  return notTestedFlag + testedBtn + dispatchedBtn;
 }
 async function toggleReadiness(rKey, field) {
   if (!rKey) return;
