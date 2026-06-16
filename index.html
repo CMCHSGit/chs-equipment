@@ -1760,6 +1760,9 @@ function _auditBadge(type) {
     orphan_recovered: 'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
     orphan_deleted:   'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     items_transferred:'background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd',
+    simpro_created:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
+    simpro_updated:   'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    simpro_closed:    'background:var(--surface2);color:var(--text2);border:1px solid var(--border)',
   };
   const labels = {
     loan_created: 'Loan Created', loan_deleted: 'Loan Deleted',
@@ -1767,6 +1770,7 @@ function _auditBadge(type) {
     items_returned: 'Returned', item_removed: 'Item Removed',
     items_added: 'Items Added', orphan_recovered: 'Orphan Recovered',
     orphan_deleted: 'Orphan Deleted', items_transferred: 'Transferred',
+    simpro_created: 'Simpro Created', simpro_updated: 'Simpro Updated', simpro_closed: 'Simpro Closed',
   };
   const s = styles[type] || 'background:var(--surface2);color:var(--text2);border:1px solid var(--border)';
   const l = labels[type] || type;
@@ -1807,7 +1811,7 @@ function closeAuditLog() {
   document.getElementById('audit-log-modal').classList.remove('open');
 }
 
-const _LOAN_UPDATE_TYPES = ['items_added', 'item_removed', 'items_returned', 'loan_extended', 'items_transferred'];
+const _LOAN_UPDATE_TYPES = ['items_added', 'item_removed', 'items_returned', 'loan_extended', 'items_transferred', 'simpro_created', 'simpro_updated', 'simpro_closed'];
 
 function _relativeTime(ts) {
   if (!ts) return '';
@@ -2230,7 +2234,7 @@ function submitCount() {
   // Close Simpro job if all items in this batch are now returned
   if (prev.batchId) {
     const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
-    if (!stillActive) closeSimproJob(window._simproJobCache?.[prev.batchId]);
+    if (!stillActive) closeSimproJob(window._simproJobCache?.[prev.batchId], prev.loanTo);
   }
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
@@ -4186,7 +4190,7 @@ async function confirmBatchReturn() {
           simproJobId = d?.simproJobId;
         } catch(e) {}
       }
-      closeSimproJob(simproJobId);
+      closeSimproJob(simproJobId, _auditLoanTo);
       try {
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
       } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
@@ -5731,6 +5735,7 @@ async function _pushSimproAfterRemoval(batchId, loanDoc, updatedRows) {
       })
     });
     showToast('success', 'Simpro job updated');
+    writeAudit('simpro_updated', 'Simpro job #' + _jobId + ' updated — item removed from ' + (loanDoc.loanTo || ''), { loanTo: loanDoc.loanTo || '', jobId: _jobId, pdfKey: batchId });
   } catch(_e) { console.warn('Simpro update after item removal failed:', _e); }
 }
 
@@ -5880,6 +5885,7 @@ async function createSimproJob(existingJobId) {
             window._simproCreating = null;
             clearInterval(poll);
             showToast('success', 'Simpro job created — ID: ' + storedId);
+            writeAudit('simpro_created', 'Simpro job #' + storedId + ' created — ' + loanTo, { loanTo, jobId: storedId, pdfKey });
           }
         } catch(e) {}
         if (attempts >= 5) {
@@ -5891,19 +5897,22 @@ async function createSimproJob(existingJobId) {
     } else {
       // No pdfKey — can't poll Firebase, but job was still sent for creation
       showToast('success', 'Simpro job created');
+      writeAudit('simpro_created', 'Simpro job created — ' + loanTo, { loanTo });
     }
   } else {
     showToast('success', 'Simpro job updated');
+    writeAudit('simpro_updated', 'Simpro job #' + Number(jobId) + ' updated — ' + loanTo, { loanTo, jobId: Number(jobId), pdfKey });
   }
 }
 
-function closeSimproJob(jobId) {
+function closeSimproJob(jobId, loanTo) {
   if (!SIMPRO_PROXY_URL || !jobId || isNaN(Number(jobId))) return;
   const body = JSON.stringify({ jobId: Number(jobId), close: true });
   fetch(SIMPRO_PROXY_URL, {
     method: 'POST', headers: { 'Content-Type': 'text/plain' },
     body, mode: 'no-cors'
   }).catch(e => console.warn('Simpro close failed:', e));
+  writeAudit('simpro_closed', 'Simpro job #' + Number(jobId) + ' closed' + (loanTo ? ' — ' + loanTo : ''), { loanTo: loanTo || '', jobId: Number(jobId) });
 }
 
 function exportLoanRTF() {
