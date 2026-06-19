@@ -5023,6 +5023,13 @@ async function viewUpcomingLoanDoc(upcomingId) {
   const items = u.items.map(uItem =>
     equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo) || uItem
   ).filter(Boolean);
+  // Annotate items still on loan elsewhere so the Notes column shows their status
+  items.forEach(eq => {
+    const _loan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
+    if (_loan) {
+      eq._pendingNote = 'Awaiting return from ' + _loan + (eq.LoanEndDate ? ' (due ' + formatDisplayDate(eq.LoanEndDate) + ')' : '');
+    }
+  });
   // Try to load saved loanDoc from Firebase
   let savedRows = null, savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
   try {
@@ -5056,9 +5063,12 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   const spare = 3;
   let rows, blank;
   if (savedRows && savedRows.length > 0) {
-    rows = savedRows.map(r => '<tr>' + r.map(cell =>
-      '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">' + (cell || '') + '</td>'
-    ).join('') + '</tr>').join('');
+    rows = savedRows.map(r => {
+      const cols = r.length > 4 ? [r[0]||'', r[1]||'', r[2]||'', ''] : r;
+      return '<tr>' + cols.map(cell =>
+        '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">' + (cell || '') + '</td>'
+      ).join('') + '</tr>';
+    }).join('');
     blank = '';
   } else {
     rows = loanItems.map(e => `
@@ -5066,12 +5076,9 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.CHSAssetNo||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.Description||e.Model||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
-      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit"></td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e._pendingNote||''}</td>
     </tr>`).join('');
-    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(7) + '</tr>').join('');
+    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(4) + '</tr>').join('');
   }
 
   document.getElementById('loan-doc-content').innerHTML = `
@@ -5115,10 +5122,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:12%;background:#f5f5f5">CHS Asset #</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:22%;background:#f5f5f5">Description</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:15%;background:#f5f5f5">Serial/Part #</th>
-            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched CHS</th>
-            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Customer Received</th>
-            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:13%;background:#f5f5f5">Dispatched Customer</th>
-            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;background:#f5f5f5">CHS Received</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;background:#f5f5f5">Notes/Additional Info</th>
           </tr>
         </thead>
         <tbody>${rows}${blank}</tbody>
@@ -5570,6 +5574,21 @@ async function viewLoanDocByKey(key) {
   const am = getLoanAM(items[0]?.BatchID);
   // Load any previously saved doc rows from Firebase
   const batchId = items[0]?.BatchID;
+  // Include pending items from upcomingLoans (awaiting return or now available)
+  const _matchingUpcoming = batchId ? upcomingLoans.find(u => u.id === batchId) : null;
+  if (_matchingUpcoming?.items?.length) {
+    const _activeNos = new Set(items.map(e => (e.CHSAssetNo || '').trim().toLowerCase()));
+    _matchingUpcoming.items.forEach(uItem => {
+      const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+      if (!eq?.CHSAssetNo || _activeNos.has(eq.CHSAssetNo.trim().toLowerCase())) return;
+      const _loan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
+      const _note = _loan
+        ? 'Awaiting return from ' + _loan + (eq.LoanEndDate ? ' (due ' + formatDisplayDate(eq.LoanEndDate) + ')' : '')
+        : 'Now available for pickup';
+      items.push(Object.assign({}, eq, { _pendingNote: _note }));
+      _activeNos.add(eq.CHSAssetNo.trim().toLowerCase());
+    });
+  }
   let savedRows = null, savedExtra = {};
   if (batchId) {
     try {
@@ -5585,7 +5604,7 @@ async function viewLoanDocByKey(key) {
             e.CHSAssetNo || '',
             e.Description || e.Model || '',
             e.SerialNo || e.PartNo || '',
-            '', '', '', ''
+            e._pendingNote || ''
           ]);
           savedRows = [...savedRows, ...newRows];
         }
@@ -6989,7 +7008,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
         if (_savedRows && _savedRows.length > 0) {
           const _newItemRows = itemsToAdd.map(b => {
             const eq = equipment.find(e => e.id === b.id);
-            return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', '', '', '', ''];
+            return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', ''];
           });
           _mergedSavedRows = [..._savedRows, ..._newItemRows];
         }
@@ -7309,7 +7328,7 @@ async function _doAddItemsToLoan(g, validRows) {
   let _mergedSavedRows = null;
   if (_savedRows && _savedRows.length > 0) {
     const _newItemRows = added.map(e => [
-      e.CHSAssetNo || '', e.Description || e.Model || '', e.SerialNo || e.PartNo || '', '', '', '', ''
+      e.CHSAssetNo || '', e.Description || e.Model || '', e.SerialNo || e.PartNo || '', ''
     ]);
     _mergedSavedRows = [..._savedRows, ..._newItemRows];
   }
