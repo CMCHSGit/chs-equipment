@@ -3807,18 +3807,20 @@ function buildPendingItemsHtml(pendingItems, batchId) {
     const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
     if (!eq) return '';
     const currentLoan = (eq.OnLoanTo && eq.Returned !== 'Yes') ? eq.OnLoanTo : null;
-    const dueDate = currentLoan && eq.LoanEndDate ? ' · due back ' + formatDisplayDate(eq.LoanEndDate) : '';
+    if (!currentLoan) return ''; // already returned — don't show as pending
+    const dueDate = eq.LoanEndDate ? ' · due back ' + formatDisplayDate(eq.LoanEndDate) : '';
     return '<div class="loan-device">' +
       '<div class="loan-device-info">' +
       '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
       '<div class="loan-device-desc">' + esc(eq.Model) + (eq.SerialNo ? ' · ' + eq.SerialNo : '') + '</div>' +
-      (currentLoan ? '<div style="font-size:11px;color:#e67e22;margin-top:2px">&#x26A0; Currently on loan to <strong>' + esc(currentLoan) + '</strong>' + dueDate + '</div>' : '') +
+      '<div style="font-size:11px;color:#e67e22;margin-top:2px">&#x26A0; Currently on loan to <strong>' + esc(currentLoan) + '</strong>' + dueDate + '</div>' +
       '</div>' +
       '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + esc(batchId) + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
       'style="flex-shrink:0;color:var(--red);border-color:var(--red-border);font-size:11px;padding:3px 8px" title="Remove from upcoming loan">Remove</button>' +
       '</div>';
-  }).join('');
-  return '<div style="margin:8px 0 4px;padding:4px 8px;background:#f5f3ff;border-radius:4px;font-size:11px;font-weight:600;color:#6d28d9">&#x23F3; Awaiting return before pickup (' + pendingItems.length + ' item' + (pendingItems.length !== 1 ? 's' : '') + ')</div>' + rows;
+  }).filter(Boolean);
+  if (!rows.length) return '';
+  return '<div style="margin:8px 0 4px;padding:4px 8px;background:#f5f3ff;border-radius:4px;font-size:11px;font-weight:600;color:#6d28d9">&#x23F3; Awaiting return before pickup (' + rows.length + ' item' + (rows.length !== 1 ? 's' : '') + ')</div>' + rows.join('');
 }
 
 function renderLoans() {
