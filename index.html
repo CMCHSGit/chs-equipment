@@ -3779,9 +3779,7 @@ function buildLoanDeviceRow(e, loanNotes) {
   return '<div class="loan-device" style="cursor:pointer" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
     '<div class="loan-device-info">' +
     '<div class="loan-device-assetno" style="color:var(--accent)">' + esc(e.CHSAssetNo) + '</div>' +
-    '<div class="loan-device-desc">' + esc(e.Model) + '</div>' +
-    (e.Description ? '<div style="font-size:11px;color:var(--text3)">' + esc(e.Description) + '</div>' : '') +
-    (e.SerialNo ? '<div style="font-size:11px;color:var(--text3)">S/N: ' + e.SerialNo + '</div>' : '') +
+    '<div class="loan-device-desc">' + esc(e.Model) + (e.Description ? ' &middot; ' + esc(e.Description) : '') + (e.SerialNo ? ' &middot; ' + e.SerialNo : '') + '</div>' +
     upcomingBadge +
     '</div>' +
     (e.TileUUID ? tileBtn(e.TileUUID) : '') +
@@ -3796,9 +3794,7 @@ function buildGhostDeviceRow(e) {
   return '<div class="loan-device" style="cursor:pointer;opacity:0.6;background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(109,40,217,0.04) 6px,rgba(109,40,217,0.04) 12px)" onclick="openDetailByAssetNo(\'' + esc(e.CHSAssetNo) + '\')" title="View in database">' +
     '<div class="loan-device-info">' +
     '<div class="loan-device-assetno" style="color:var(--accent)">' + esc(e.CHSAssetNo) + '</div>' +
-    '<div class="loan-device-desc">' + esc(e.Model) + '</div>' +
-    (e.Description ? '<div style="font-size:11px;color:var(--text3)">' + esc(e.Description) + '</div>' : '') +
-    (e.SerialNo ? '<div style="font-size:11px;color:var(--text3)">S/N: ' + e.SerialNo + '</div>' : '') +
+    '<div class="loan-device-desc">' + esc(e.Model) + (e.Description ? ' &middot; ' + esc(e.Description) : '') + (e.SerialNo ? ' &middot; ' + e.SerialNo : '') + '</div>' +
     '<div style="font-size:11px;color:#6d28d9;margin-top:2px">&#x21AA; Transferred to <strong>' + esc(tn.toLoanTo) + '</strong> on ' + formatDisplayDate(tn.transferredOn) + '</div>' +
     '</div>' +
     '<span style="font-size:11px;color:#6d28d9;padding:2px 8px;background:rgba(109,40,217,0.08);border:1px solid rgba(109,40,217,0.2);border-radius:20px;white-space:nowrap;flex-shrink:0">Transferred out</span>' +
@@ -3818,9 +3814,7 @@ function buildPendingItemsHtml(pendingItems, batchId) {
     return { html: '<div class="loan-device">' +
       '<div class="loan-device-info">' +
       '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
-      '<div class="loan-device-desc">' + esc(eq.Model) + '</div>' +
-      (eq.Description ? '<div style="font-size:11px;color:var(--text3)">' + esc(eq.Description) + '</div>' : '') +
-      (eq.SerialNo ? '<div style="font-size:11px;color:var(--text3)">S/N: ' + eq.SerialNo + '</div>' : '') +
+      '<div class="loan-device-desc">' + esc(eq.Model) + (eq.Description ? ' &middot; ' + esc(eq.Description) : '') + (eq.SerialNo ? ' &middot; ' + eq.SerialNo : '') + '</div>' +
       statusHtml +
       '</div>' +
       '<button class="btn btn-sm" onclick="event.stopPropagation();removeItemFromUpcomingLoan(\'' + esc(batchId) + '\',\'' + esc(eq.CHSAssetNo) + '\')" ' +
@@ -4039,9 +4033,7 @@ function renderLoans() {
       return '<div class="loan-device">' +
         '<div class="loan-device-info">' +
         '<div class="loan-device-assetno" style="color:#6d28d9">' + esc(eq.CHSAssetNo) + '</div>' +
-        '<div class="loan-device-desc">' + esc(eq.Model) + '</div>' +
-        (eq.Description ? '<div style="font-size:11px;color:var(--text3)">' + esc(eq.Description) + '</div>' : '') +
-        (eq.SerialNo ? '<div style="font-size:11px;color:var(--text3)">S/N: ' + eq.SerialNo + '</div>' : '') +
+        '<div class="loan-device-desc">' + esc(eq.Model) + (eq.Description ? ' &middot; ' + esc(eq.Description) : '') + (eq.SerialNo ? ' &middot; ' + eq.SerialNo : '') + '</div>' +
         (currentLoan ? '<div style="font-size:11px;color:#e67e22;margin-top:2px">&#x26A0; Currently on loan to <strong>' + esc(currentLoan) + '</strong>' + dueDate + '</div>' : '') +
         furtherHtml +
         '</div>' +
@@ -4157,9 +4149,7 @@ function renderBatchReturnItems() {
       <div class="br-checkbox">${batchReturnChecked[e.id]?'✓':''}</div>
       <div style="flex:1">
         <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:500">${esc(e.CHSAssetNo)}</div>
-        <div style="font-size:12px;color:var(--text2)">${esc(e.Model)}</div>
-        ${e.Description?`<div style="font-size:11px;color:var(--text3)">${esc(e.Description)}</div>`:''}
-        ${e.SerialNo?`<div style="font-size:11px;color:var(--text3)">S/N: ${e.SerialNo}</div>`:''}
+        <div style="font-size:12px;color:var(--text2)">${esc(e.Model)}${e.Description?' &middot; '+esc(e.Description):''}${e.SerialNo?' &middot; '+e.SerialNo:''}</div>
       </div>
       <div style="font-size:11px;color:var(--text3)">${batchReturnChecked[e.id]?'<span style="color:var(--green)">Returning</span>':'On loan'}</div>
     </div>`).join('');
