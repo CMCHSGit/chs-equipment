@@ -3671,7 +3671,7 @@ async function submitBatchLoan() {
       const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
       if (!item) continue;
       const currentlyOut = item.OnLoanTo && item.Returned !== 'Yes' && item.OnLoanTo !== loanTo;
-      if (targetIsFuture && currentlyOut) {
+      if (currentlyOut) {
         upcomingDevices.push(item);
       } else {
         directDevices.push(item);
