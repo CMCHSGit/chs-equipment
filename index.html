@@ -1505,12 +1505,22 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 </div>
 
 <div class="modal-overlay" id="audit-log-modal">
-  <div class="modal" style="max-width:680px">
+  <div class="modal" style="max-width:720px">
     <div class="modal-header">
       <div class="modal-title">Audit Log</div>
       <button class="modal-close" onclick="closeAuditLog()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
-    <div id="audit-log-body" style="max-height:65vh;overflow-y:auto;padding:0 2px"></div>
+    <div style="padding:10px 0 8px;display:flex;gap:8px;flex-wrap:wrap">
+      <input id="audit-search" type="text" placeholder="Search…" oninput="renderAuditLog()" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
+      <select id="audit-filter-cat" onchange="renderAuditLog()" style="padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
+        <option value="">All categories</option>
+        <option value="loans">Loans</option>
+        <option value="database">Database</option>
+        <option value="simpro">Simpro</option>
+      </select>
+    </div>
+    <div id="audit-log-count" style="font-size:12px;color:var(--text2);margin-bottom:4px"></div>
+    <div id="audit-log-body" style="max-height:60vh;overflow-y:auto;padding:0 2px"></div>
     <div class="modal-footer" style="justify-content:flex-end">
       <button class="btn" onclick="closeAuditLog()">Close</button>
     </div>
@@ -1908,6 +1918,10 @@ function _auditBadge(type) {
     simpro_created:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
     simpro_updated:   'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
     simpro_closed:    'background:var(--surface2);color:var(--text2);border:1px solid var(--border)',
+    asset_added:      'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
+    asset_edited:     'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    asset_deleted:    'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    asset_retired:    'background:#fdf4ff;color:#7c3aed;border:1px solid #e9d5ff',
   };
   const labels = {
     loan_created: 'Loan Created', loan_deleted: 'Loan Deleted',
@@ -1916,6 +1930,8 @@ function _auditBadge(type) {
     items_added: 'Items Added', orphan_recovered: 'Orphan Recovered',
     orphan_deleted: 'Orphan Deleted', items_transferred: 'Transferred',
     simpro_created: 'Simpro Created', simpro_updated: 'Simpro Updated', simpro_closed: 'Simpro Closed',
+    asset_added: 'Asset Added', asset_edited: 'Asset Edited',
+    asset_deleted: 'Asset Deleted', asset_retired: 'Asset Retired',
   };
   const s = styles[type] || 'background:var(--surface2);color:var(--text2);border:1px solid var(--border)';
   const l = labels[type] || type;
@@ -1929,11 +1945,43 @@ function _auditFormatTs(ts) {
   } catch(e) { return ts || ''; }
 }
 
+const _AUDIT_CAT = {
+  loans:    ['loan_created','loan_deleted','loan_extended','items_returned','item_removed','items_added','items_transferred','scheduled_deleted','orphan_recovered','orphan_deleted'],
+  database: ['asset_added','asset_edited','asset_deleted','asset_retired'],
+  simpro:   ['simpro_created','simpro_updated','simpro_closed'],
+};
+
 function showAuditLog() {
-  const entries = auditLog.slice(0, 300);
+  const searchEl = document.getElementById('audit-search');
+  const filterEl = document.getElementById('audit-filter-cat');
+  if (searchEl) searchEl.value = '';
+  if (filterEl) filterEl.value = '';
+  document.getElementById('audit-log-modal').classList.add('open');
+  renderAuditLog();
+}
+
+function renderAuditLog() {
+  const q   = (document.getElementById('audit-search')?.value || '').toLowerCase().trim();
+  const cat = document.getElementById('audit-filter-cat')?.value || '';
+  const allowedTypes = cat ? _AUDIT_CAT[cat] : null;
+
+  const entries = auditLog.filter(e => {
+    if (allowedTypes && !allowedTypes.includes(e.type)) return false;
+    if (q && !(
+      (e.summary || '').toLowerCase().includes(q) ||
+      (e.operator || '').toLowerCase().includes(q) ||
+      (e.detail?.items || []).some(i => i.toLowerCase().includes(q)) ||
+      (e.detail?.assetNo || '').toLowerCase().includes(q)
+    )) return false;
+    return true;
+  });
+
+  const countEl = document.getElementById('audit-log-count');
+  if (countEl) countEl.textContent = entries.length + ' event' + (entries.length !== 1 ? 's' : '');
+
   let html = '';
   if (!entries.length) {
-    html = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No audit events recorded yet.</div>';
+    html = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">No matching events.</div>';
   } else {
     html = entries.map(e =>
       '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">' +
@@ -1950,7 +1998,6 @@ function showAuditLog() {
     ).join('');
   }
   document.getElementById('audit-log-body').innerHTML = html;
-  document.getElementById('audit-log-modal').classList.add('open');
 }
 
 function closeAuditLog() {
@@ -2814,6 +2861,10 @@ async function maSaveAll() {
     await saveBin({ equipment, history: historyLog });
     setSync('ok', 'Saved');
     showToast('success', newItems.length + ' asset' + (newItems.length !== 1 ? 's' : '') + ' added');
+    writeAudit('asset_added',
+      newItems.length + ' asset' + (newItems.length !== 1 ? 's' : '') + ' added to database',
+      { items: newItems.map(i => i.CHSAssetNo + (i.Model ? ' — ' + i.Model : '')) }
+    );
   } catch(e) {
     setSync('err', 'Save failed');
     showToast('error', 'Save failed: ' + e.message);
@@ -2848,13 +2899,23 @@ async function saveItem() {
   } else {
     equipment.unshift(obj);
   }
+  const isEdit = !!editingId;
+  const savedAssetNo = obj.CHSAssetNo;
+  const savedModel   = obj.Model;
   closeModal(); renderTable(); updateStats();
   markDirty('loans', 'history', 'calendar');
   setSync('saving', 'Saving...');
   try {
     await saveBin({ equipment, history: historyLog });
     setSync('ok', 'Saved');
-    showToast('success', editingId ? 'Item updated' : 'Item added');
+    showToast('success', isEdit ? 'Item updated' : 'Item added');
+    writeAudit(
+      isEdit ? 'asset_edited' : 'asset_added',
+      isEdit
+        ? savedAssetNo + (savedModel ? ' — ' + savedModel : '') + ' updated in database'
+        : savedAssetNo + (savedModel ? ' — ' + savedModel : '') + ' added to database',
+      { assetNo: savedAssetNo, model: savedModel }
+    );
   } catch(e) {
     setSync('err', 'Save failed');
     showToast('error', 'Save failed: ' + e.message);
@@ -2866,9 +2927,14 @@ async function deleteItem(id, assetNo) {
   if (pw === null) return; // cancelled
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm(`Permanently delete ${assetNo}? This cannot be undone.`)) return;
+  const item = equipment.find(e => e.id === id);
   equipment = equipment.filter(e=>e.id!==id);
   scheduleSave(); renderTable(); updateStats();
   showToast('info', `${assetNo} deleted`);
+  writeAudit('asset_deleted',
+    assetNo + (item && item.Model ? ' — ' + item.Model : '') + ' permanently deleted from database',
+    { assetNo, model: item && item.Model }
+  );
 }
 
 // ── ITEM HISTORY ───────────────────────────────────────────────────────
@@ -6834,9 +6900,14 @@ async function deleteFromSelection() {
     if (pw === null) return;
     if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
     if (!confirm(`Permanently delete ${ids.length} items? This cannot be undone.`)) return;
+    const deletedItems = equipment.filter(e => ids.includes(e.id));
     ids.forEach(id => { equipment = equipment.filter(e => e.id !== id); });
     scheduleSave(); clearSelection(); renderTable(); updateStats();
     showToast('info', `${ids.length} items deleted`);
+    writeAudit('asset_deleted',
+      ids.length + ' assets permanently deleted from database',
+      { items: deletedItems.map(i => i.CHSAssetNo + (i.Model ? ' — ' + i.Model : '')) }
+    );
   }
 }
 
@@ -8101,6 +8172,10 @@ async function confirmRetire() {
   renderTable(); updateStats();
   closeRetireModal();
   showToast('success', (item.CHSAssetNo || 'Item') + ' moved to Sold / Retired');
+  writeAudit('asset_retired',
+    (item.CHSAssetNo || 'Item') + (item.Model ? ' — ' + item.Model : '') + ' retired (' + reason + ')',
+    { assetNo: item.CHSAssetNo, model: item.Model, reason, notes }
+  );
   if (document.getElementById('panel-retired').classList.contains('active')) renderRetired();
 }
 
@@ -8778,7 +8853,7 @@ function startAutoSync() {
   <div id="user-select-overlay" class="user-select-overlay" style="display:none">
     <div class="user-select-card">
       <div class="user-select-title">👋 Who are you?</div>
-      <div class="user-select-sub">Select your name so your actions are tracked in the audit log.</div>
+      <div class="user-select-sub">Select your name to continue.</div>
       <div class="user-select-list" id="user-select-list"></div>
       <div class="user-select-footer" id="user-select-footer"></div>
     </div>
