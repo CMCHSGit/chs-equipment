@@ -1675,11 +1675,14 @@ function showUserSelectModal(allowClose) {
       const color = _opColor(am.name);
       const initials = _opInitials(am.name);
       const selected = am.name === currentOperator ? ' style="border-color:var(--accent);background:var(--accent-light)"' : '';
-      return `<button class="user-select-item" onclick="setOperator(${JSON.stringify(am.name)})"${selected}>
+      return `<button class="user-select-item" data-name="${esc(am.name)}"${selected}>
         <div class="user-select-av" style="background:${color}">${initials}</div>
         <span class="user-select-name">${esc(am.name)}</span>
       </button>`;
     }).join('');
+    list.querySelectorAll('.user-select-item').forEach(btn => {
+      btn.addEventListener('click', () => setOperator(btn.dataset.name));
+    });
   }
   footer.innerHTML = allowClose
     ? '<button class="btn btn-secondary" onclick="closeUserSelect()">Cancel</button>'
