@@ -430,6 +430,7 @@ tr.row-selected .col-sticky{background:var(--accent-light)!important}
 .detail-status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500;margin-bottom:16px}
 tr.clickable-row{cursor:pointer}
 tr.clickable-row:hover td{background:var(--accent-light)!important}
+.user-avatar-wrap{position:relative}.user-avatar-btn{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;transition:opacity .15s;flex-shrink:0;letter-spacing:.5px;font-family:'DM Sans',sans-serif}.user-avatar-btn:hover{opacity:.85}.user-avatar-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:220px;z-index:200;overflow:hidden;display:none}.user-avatar-dropdown.open{display:block}.user-av-dd-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.user-av-dd-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}.user-av-dd-info{min-width:0}.user-av-dd-name{font-size:13px;font-weight:600;color:var(--text)}.user-av-dd-sub{font-size:11px;color:var(--text2);margin-top:1px}.user-av-dd-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text);border:none;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif}.user-av-dd-item:hover{background:var(--surface2)}.user-select-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px}.user-select-card{background:var(--surface);border-radius:var(--radius-lg);padding:32px;max-width:420px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.18)}.user-select-title{font-size:20px;font-weight:700;color:var(--text);margin:0 0 6px}.user-select-sub{font-size:14px;color:var(--text2);margin:0 0 20px}.user-select-list{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto}.user-select-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif}.user-select-item:hover,.user-select-item:focus{border-color:var(--accent);background:var(--accent-light);outline:none}.user-select-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}.user-select-name{font-size:14px;font-weight:500;color:var(--text)}.user-select-footer{margin-top:20px;display:flex;justify-content:flex-end}
 </style>
 </head>
 <body>
@@ -471,6 +472,22 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       </div>
       <button class="btn btn-sm desktop-only" onclick="promptAddAsset()" style="font-size:11px;padding:4px 8px">+ Add Asset</button>
       <button class="btn btn-sm desktop-only" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Lock</button>
+      <div class="user-avatar-wrap desktop-only" id="user-avatar-wrap">
+        <button class="user-avatar-btn" id="user-avatar-btn" onclick="toggleUserDropdown()" title="Switch user" style="display:none"></button>
+        <div class="user-avatar-dropdown" id="user-avatar-dropdown">
+          <div class="user-av-dd-head">
+            <div class="user-av-dd-av" id="user-av-dd-av"></div>
+            <div class="user-av-dd-info">
+              <div class="user-av-dd-name" id="user-av-dd-name"></div>
+              <div class="user-av-dd-sub">Logged in as</div>
+            </div>
+          </div>
+          <button class="user-av-dd-item" onclick="showUserSelectModal(true);document.getElementById('user-avatar-dropdown').classList.remove('open')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Switch user
+          </button>
+        </div>
+      </div>
       <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
       <button class="hamburger-btn mobile-only" onclick="event.stopPropagation();toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
         <span></span><span></span><span></span>
@@ -845,7 +862,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </button>
       </div>
       <div class="table-wrap"><div class="table-scroll"><table>
-        <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>Loan Date</th><th>End Date</th><th>Notes</th><th>Loan Form</th></tr></thead>
+        <thead><tr><th>Date / Time</th><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>Loan Date</th><th>End Date</th><th>Notes</th><th>By</th><th>Loan Form</th></tr></thead>
         <tbody id="hist-tbody"></tbody>
       </table></div></div>
       <div id="hist-card-list" class="mobile-card-list"></div>
@@ -1550,7 +1567,11 @@ async function doLogin() {
     sessionStorage.setItem('chs_auth','1');
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    loadData().then(() => setTimeout(handleReturnLink, 1200));
+    initOperator();
+    loadData().then(() => {
+      setTimeout(handleReturnLink, 1200);
+      if (!currentOperator) showUserSelectModal(false);
+    });
   } else {
     document.getElementById('login-err').style.display = 'block';
     document.getElementById('login-pw').value = '';
@@ -1566,8 +1587,129 @@ async function checkAuth() {
   if (sessionStorage.getItem('chs_auth') === '1') {
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
-    loadData().then(() => setTimeout(handleReturnLink, 1200));
+    initOperator();
+    loadData().then(() => {
+      setTimeout(handleReturnLink, 1200);
+      if (!currentOperator) showUserSelectModal(false);
+    });
   }
+}
+
+// ── OPERATOR (CURRENT USER) ───────────────────────────────────────────
+let currentOperator = null;
+let _userSelectRequired = false;
+
+function _opInitials(name) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function _opColor(name) {
+  const palette = ['#2563eb','#7c3aed','#db2777','#dc2626','#d97706','#059669','#0891b2','#4f46e5'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
+  return palette[Math.abs(h) % palette.length];
+}
+
+function initOperator() {
+  try { currentOperator = localStorage.getItem('chs_operator') || null; } catch(e) {}
+  renderOperatorAvatar();
+}
+
+function setOperator(name) {
+  currentOperator = name;
+  try { localStorage.setItem('chs_operator', name); } catch(e) {}
+  renderOperatorAvatar();
+  renderSettingsUser();
+  closeUserSelect();
+}
+
+function renderOperatorAvatar() {
+  const btn = document.getElementById('user-avatar-btn');
+  const ddAv = document.getElementById('user-av-dd-av');
+  const ddName = document.getElementById('user-av-dd-name');
+  if (!btn) return;
+  if (currentOperator) {
+    const initials = _opInitials(currentOperator);
+    const color = _opColor(currentOperator);
+    btn.style.display = 'flex';
+    btn.style.background = color;
+    btn.textContent = initials;
+    if (ddAv) { ddAv.style.background = color; ddAv.textContent = initials; }
+    if (ddName) ddName.textContent = currentOperator;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+function renderSettingsUser() {
+  const el = document.getElementById('settings-user-display');
+  if (!el) return;
+  if (currentOperator) {
+    const color = _opColor(currentOperator);
+    const initials = _opInitials(currentOperator);
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)">
+      <div style="width:32px;height:32px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${initials}</div>
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(currentOperator)}</div>
+        <div style="font-size:12px;color:var(--text2)">Currently signed in</div>
+      </div>
+    </div>`;
+  } else {
+    el.innerHTML = '<div style="font-size:13px;color:var(--text3);font-style:italic">No user selected</div>';
+  }
+}
+
+function showUserSelectModal(allowClose) {
+  _userSelectRequired = !allowClose;
+  const overlay = document.getElementById('user-select-overlay');
+  const list = document.getElementById('user-select-list');
+  const footer = document.getElementById('user-select-footer');
+  if (!list || !overlay) return;
+  const people = accountManagers.length ? accountManagers : [];
+  if (!people.length) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">No users configured. Add people under Account Managers first.</div>';
+  } else {
+    list.innerHTML = people.map(am => {
+      const color = _opColor(am.name);
+      const initials = _opInitials(am.name);
+      const selected = am.name === currentOperator ? ' style="border-color:var(--accent);background:var(--accent-light)"' : '';
+      return `<button class="user-select-item" onclick="setOperator(${JSON.stringify(am.name)})"${selected}>
+        <div class="user-select-av" style="background:${color}">${initials}</div>
+        <span class="user-select-name">${esc(am.name)}</span>
+      </button>`;
+    }).join('');
+  }
+  footer.innerHTML = allowClose
+    ? '<button class="btn btn-secondary" onclick="closeUserSelect()">Cancel</button>'
+    : '';
+  overlay.style.display = 'flex';
+}
+
+function closeUserSelect() {
+  const overlay = document.getElementById('user-select-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+function toggleUserDropdown() {
+  const dd = document.getElementById('user-avatar-dropdown');
+  if (!dd) return;
+  const isOpen = dd.classList.toggle('open');
+  if (isOpen) {
+    const wrap = document.getElementById('user-avatar-wrap');
+    const close = (e) => {
+      if (!wrap || !wrap.contains(e.target)) {
+        dd.classList.remove('open');
+        document.removeEventListener('click', close);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', close), 0);
+  }
+}
+
+function logHistory(entry) {
+  historyLog.unshift(Object.assign({ operator: currentOperator }, entry));
 }
 
 // ── FIREBASE CONFIG (passwords loaded at runtime) ─────────────────────
@@ -1742,7 +1884,7 @@ async function loadData() {
 
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
 function writeAudit(type, summary, detail) {
-  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {} };
+  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {}, operator: currentOperator };
   auditLog.unshift(entry);
   if (auditLog.length > 300) auditLog.length = 300;
   scheduleSave(); // persists via /data.json on next debounced save
@@ -1798,6 +1940,7 @@ function showAuditLog() {
       (e.detail && e.detail.items && e.detail.items.length
         ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:\'DM Mono\',monospace">' + e.detail.items.map(a => esc(a)).join(', ') + '</div>'
         : '') +
+      (e.operator ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">by ' + esc(e.operator) + '</div>' : '') +
       '</div>' +
       '<div style="flex-shrink:0;font-size:11px;color:var(--text3);white-space:nowrap;margin-top:2px">' + _auditFormatTs(e.ts) + '</div>' +
       '</div>'
@@ -1947,7 +2090,7 @@ function switchTab(n) {
   if (n === 'loans')    { if (_dirty.loans)    { renderLoans();    _dirty.loans    = false; } }
   if (n === 'calendar') { if (_dirty.calendar) { renderCalendar(); _dirty.calendar = false; } }
   if (n === 'retired')  { clearRetiredSelection(); if (_dirty.retired) { renderRetired(); _dirty.retired = false; } }
-  if (n === 'settings') { renderKitGroupsSettings(); }
+  if (n === 'settings') { renderKitGroupsSettings(); renderSettingsUser(); }
 }
 
 // ── COUNT OVERVIEW ────────────────────────────────────────────────────
@@ -2171,7 +2314,7 @@ function submitLoan() {
     BorrowerEmail: borrowerEmail
   });
   const singleLoanKey = 'loan_' + uid();
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value, _pdfKey: singleLoanKey });
+  logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value, _pdfKey: singleLoanKey });
   setTimeout(async () => {
     const docEl = document.getElementById('printable-loan-doc');
     if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[singleLoanKey] = docEl.innerHTML; }
@@ -2207,7 +2350,7 @@ async function submitReturn() {
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
   const batchId = equipment[idx].BatchID || null;
   Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
+  logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Returned', loanTo: prev.loanTo, location: prev.loc });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   // Delete loanDoc if the whole batch is now returned
@@ -2230,7 +2373,7 @@ function submitCount() {
     Counted: countedValue,
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null
   });
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
+  logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
   // Close Simpro job if all items in this batch are now returned
   if (prev.batchId) {
     const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
@@ -2248,7 +2391,7 @@ function submitCountKeepLoan() {
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
   // Mark as counted but leave loan intact
   equipment[idx].Counted = countedValue;
-  historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: countedValue + ' (kept on loan)' });
+  logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: countedValue + ' (kept on loan)' });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   if (scanMode === 'count') renderCountOverview();
@@ -2303,9 +2446,10 @@ function renderHistory() {
         <td><span class="status-badge ${aC[h.action]||''}">${aL[h.action]||h.action}</span></td>
         <td>${esc(h.loanTo)}</td><td>${esc(h.location)}</td><td style="font-size:12px">${formatDisplayDate(h.loanStart)}</td><td style="font-size:12px">${formatDisplayDate(h.loanEnd)}</td>
         <td style="font-size:12px;color:var(--text2)">${esc(h.notes)}</td>
+        <td style="font-size:12px;color:var(--text2)">${esc(h.operator||'')}</td>
         <td>${h.action==='Loan' && h._pdfKey ? `<button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')" style="font-size:11px;padding:3px 8px">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>` : ''}</td></tr>`).join('')
-    : `<tr><td colspan="8" class="table-empty">No history yet</td></tr>`;
+    : `<tr><td colspan="11" class="table-empty">No history yet</td></tr>`;
 
   // ── MOBILE HISTORY CARDS ──────────────────────────────────────
   const histCardList = document.getElementById('hist-card-list');
@@ -2326,6 +2470,9 @@ function renderHistory() {
       const notesLine = h.notes
         ? `<div class="hist-card-notes">${esc(h.notes)}</div>`
         : '';
+      const operatorLine = h.operator
+        ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">by ${esc(h.operator)}</div>`
+        : '';
       const pdfBtn = (h.action === 'Loan' && h._pdfKey)
         ? `<div class="hist-card-pdf"><button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> View PDF
@@ -2338,7 +2485,7 @@ function renderHistory() {
         </div>
         <div class="hist-card-model">${esc(h.model)}</div>
         <div class="hist-card-row">${actionBadge}</div>
-        ${loanLine}${dateLine}${notesLine}${pdfBtn}
+        ${loanLine}${dateLine}${notesLine}${operatorLine}${pdfBtn}
       </div>`;
     }).join('')
     : '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No history yet</div>';
@@ -3325,7 +3472,7 @@ async function confirmRecoverOrphan() {
     // Add a recovery history entry if not already logged
     const alreadyLogged = historyLog.some(h => h.batchId === batchId && h.chsAssetNo === equipment[idx].CHSAssetNo && h.action === 'Loan');
     if (!alreadyLogged) {
-      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo,
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo,
         model: equipment[idx].Model, action: 'Loan', loanTo: doc.loanTo,
         location: doc.location, loanStart: doc.startDate, loanEnd: doc.endDate,
         notes: 'Recovered from orphaned loan', batchId, _pdfKey: batchId });
@@ -3682,7 +3829,7 @@ async function submitBatchLoan() {
       const idx = equipment.findIndex(e => e.id === item.id);
       if (idx < 0) continue;
       Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', BatchID: batchId, BorrowerEmail: batchEmail });
-      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
     }
 
     if (upcomingDevices.length) {
@@ -3697,7 +3844,7 @@ async function submitBatchLoan() {
       };
       upcomingLoans.push(uLoan);
       upcomingDevices.forEach(item => {
-        historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes: (notes ? notes + ' — ' : '') + 'Booked as upcoming (currently on loan to ' + item.OnLoanTo + ')', batchId, _pdfKey: batchId });
+        logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes: (notes ? notes + ' — ' : '') + 'Booked as upcoming (currently on loan to ' + item.OnLoanTo + ')', batchId, _pdfKey: batchId });
       });
       await saveUpcomingLoans();
     }
@@ -4178,7 +4325,7 @@ async function confirmBatchReturn() {
     if (equipment[idx].BatchID) batchIdsInvolved.add(equipment[idx].BatchID);
     const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
     Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   });
   setSync('saving', 'Saving...');
   try {
@@ -6784,7 +6931,7 @@ function countFromSelection() {
     if (equipment[idx].OnLoanTo && equipment[idx].Returned !== 'Yes') {
       Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
     }
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
   });
   scheduleSave(); renderTable(); updateStats(); clearSelection();
   showToast('success', selectedItems.length + ' item' + (selectedItems.length>1?'s':'') + ' counted');
@@ -6798,7 +6945,7 @@ function returnFromSelection() {
   selectedItems.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx < 0) return;
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Return', loanTo: item.OnLoanTo, location: item.Location, notes: 'Returned ' + formatDisplayDate(nzDate()) });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Return', loanTo: item.OnLoanTo, location: item.Location, notes: 'Returned ' + formatDisplayDate(nzDate()) });
     Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', _transferNote: null });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
@@ -6919,7 +7066,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       Returned: 'No', BatchID: batchId,
       BorrowerEmail: g.items[0]?.BorrowerEmail || ''
     });
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
     added++;
   });
 
@@ -6949,7 +7096,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       if (!uLoan.items.some(i => i.CHSAssetNo === eq.CHSAssetNo)) {
         uLoan.items.push({ id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, SerialNo: eq.SerialNo });
       }
-      historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: eq.CHSAssetNo, model: eq.Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Booked as upcoming (currently on loan to ' + eq.OnLoanTo + ')' });
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: eq.CHSAssetNo, model: eq.Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Booked as upcoming (currently on loan to ' + eq.OnLoanTo + ')' });
       added++;
     });
     await saveUpcomingLoans();
@@ -7278,7 +7425,7 @@ async function _doAddItemsToLoan(g, validRows) {
       Returned: 'No', BatchID: batchId,
       BorrowerEmail: g.items[0]?.BorrowerEmail || ''
     });
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
     added.push(equipment[idx]);
   });
   if (added.length) {
@@ -7661,7 +7808,7 @@ async function deleteLoanByKey(key) {
   g.items.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Loan deleted by admin' });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Loan deleted by admin' });
     Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
@@ -7685,7 +7832,7 @@ async function deleteScheduledLoanByKey(key) {
   g.items.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
-    historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Scheduled loan deleted by admin' });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: 'Scheduled loan deleted by admin' });
     Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
@@ -7854,7 +8001,7 @@ async function activateUpcomingLoans() {
       const prevEndDate = prev.LoanEndDate || '';
       // Log transfer history
       if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
-        historyLog.unshift({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
+        logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
           action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
           loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
           notes: 'Transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ')'
@@ -8573,6 +8720,14 @@ function startAutoSync() {
         <h2 class="panel-title">⚙ Settings</h2>
       </div>
 
+      <!-- CURRENT USER -->
+      <div class="settings-section">
+        <div class="settings-section-title">👤 Current User</div>
+        <div class="settings-section-sub">Select who you are. Saved locally so you don't need to re-select each time. Your name is recorded in the audit log for every change you make.</div>
+        <div id="settings-user-display" style="margin-bottom:12px"></div>
+        <button class="btn btn-primary" onclick="showUserSelectModal(true)">Change User</button>
+      </div>
+
       <!-- KIT GROUPS -->
       <div class="settings-section">
         <div class="settings-section-title">📦 Kit Groups</div>
@@ -8613,6 +8768,16 @@ function startAutoSync() {
         <button class="btn btn-secondary" onclick="closeKitModal()">Skip</button>
         <button class="btn btn-primary" onclick="addSelectedKitItems()">＋ Add Selected</button>
       </div>
+    </div>
+  </div>
+
+  <!-- USER SELECT MODAL -->
+  <div id="user-select-overlay" class="user-select-overlay" style="display:none">
+    <div class="user-select-card">
+      <div class="user-select-title">👋 Who are you?</div>
+      <div class="user-select-sub">Select your name so your actions are tracked in the audit log.</div>
+      <div class="user-select-list" id="user-select-list"></div>
+      <div class="user-select-footer" id="user-select-footer"></div>
     </div>
   </div>
 
