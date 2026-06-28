@@ -1896,8 +1896,8 @@ async function loadData() {
 }
 
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
-function writeAudit(type, summary, detail) {
-  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {}, operator: currentOperator };
+function writeAudit(type, summary, detail, op) {
+  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {}, operator: arguments.length >= 4 ? op : currentOperator };
   auditLog.unshift(entry);
   if (auditLog.length > 300) auditLog.length = 300;
   scheduleSave(); // persists via /data.json on next debounced save
@@ -8078,11 +8078,13 @@ async function activateUpcomingLoans() {
         logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
           action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
           loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
-          notes: 'Transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ')'
+          notes: 'Auto-transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
+          operator: null
         });
         writeAudit('items_transferred',
-          prev.CHSAssetNo + ' transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo,
-          { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] });
+          prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + ' — upcoming loan started ' + upcoming.startDate,
+          { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] },
+          'System (auto)');
       }
       // Activate: update equipment — but keep a _transferNote so the item still appears
       // as a ghost on the old loan card with a "transferred" indicator
