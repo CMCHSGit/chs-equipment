@@ -1824,7 +1824,10 @@ async function saveBin(data) {
   } catch(e) { /* version check unavailable — proceed to avoid blocking the save */ }
 
   const newVersion = Date.now().toString();
-  const payload = Object.assign({}, data, { _v: newVersion, auditLog: auditLog.slice(0, 300), loanMeta });
+  // Sanitize loanMeta keys before saving — Firebase forbids . # $ [ ] / in keys
+  const _safeMeta = {};
+  Object.entries(loanMeta).forEach(([k, v]) => { _safeMeta[k.replace(/[.#$[\]/]/g, '_')] = v; });
+  const payload = Object.assign({}, data, { _v: newVersion, auditLog: auditLog.slice(0, 300), loanMeta: _safeMeta });
   const r = await fetchWithTimeout(FB_URL + '/data.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -6628,8 +6631,9 @@ function _fmtReadinessTs(ts) {
   } catch(e) { return ts.slice(0, 10); }
 }
 function _readinessKey(batchId, loanTo, endDate) {
-  // Prefer BatchID; fall back to encoded loandoc key
-  return batchId || ('loandoc_' + encodeURIComponent((loanTo||'') + '|||' + (endDate||'')));
+  // Prefer BatchID (always safe); fall back to encoded loandoc key with Firebase-illegal chars stripped
+  if (batchId) return batchId;
+  return ('loandoc_' + encodeURIComponent((loanTo||'') + '|||' + (endDate||''))).replace(/[.#$[\]/]/g, '_');
 }
 function buildReadinessButtons(rKey, isSoon, startDate) {
   const r = getLoanReadiness(rKey);
@@ -6668,16 +6672,43 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
 
   return statusBadge + skipBtn + testedBtn + dispatchedBtn;
 }
+let _rdPending = null; // { rKey, field } — held while date picker is open
 function toggleReadiness(rKey, field) {
   if (!rKey) return;
   const r = getLoanReadiness(rKey);
   const newVal = !r[field];
-  loanMeta[rKey] = {
-    ...r,
-    [field]: newVal,
-    [field + 'At']: newVal ? nzNow() : ''
-  };
+  if (!newVal || field === 'noTestRequired') {
+    // Un-marking or noTestRequired toggle — no date picker needed
+    loanMeta[rKey] = { ...r, [field]: newVal, [field + 'At']: newVal ? nzNow() : '' };
+    scheduleSave();
+    renderLoans();
+    return;
+  }
+  // Marking tested/dispatched as done — ask for the date/time
+  _rdPending = { rKey, field };
+  const label = field === 'tested' ? 'Mark as Tested' : field === 'dispatched' ? 'Mark as Dispatched' : 'Mark as No Test Required';
+  document.getElementById('readiness-date-title').textContent = label;
+  // Default to current NZ date/time
+  const now = new Date();
+  const nzStr = now.toLocaleString('sv-SE', { timeZone: 'Pacific/Auckland' });
+  document.getElementById('readiness-date-input').value = nzStr.slice(0, 10);
+  document.getElementById('readiness-time-input').value = nzStr.slice(11, 16);
+  document.getElementById('readiness-date-modal').style.display = 'flex';
+}
+function closeReadinessDateModal() {
+  document.getElementById('readiness-date-modal').style.display = 'none';
+  _rdPending = null;
+}
+function confirmReadinessDate() {
+  if (!_rdPending) return;
+  const { rKey, field } = _rdPending;
+  const date = document.getElementById('readiness-date-input').value;
+  const time = document.getElementById('readiness-time-input').value || '00:00';
+  const ts = date ? (date + 'T' + time + ':00+12:00') : nzNow();
+  const r = getLoanReadiness(rKey);
+  loanMeta[rKey] = { ...r, [field]: true, [field + 'At']: ts };
   scheduleSave();
+  closeReadinessDateModal();
   renderLoans();
 }
 async function loadLoanMeta() {
@@ -8868,6 +8899,26 @@ function startAutoSync() {
       <div class="user-select-sub">Select your name to continue.</div>
       <div class="user-select-list" id="user-select-list"></div>
       <div class="user-select-footer" id="user-select-footer"></div>
+    </div>
+  </div>
+
+  <!-- Readiness date picker modal -->
+  <div class="modal-overlay" id="readiness-date-modal" style="display:none" onclick="if(event.target===this)closeReadinessDateModal()">
+    <div class="modal" style="max-width:340px">
+      <div class="modal-header">
+        <h2 class="modal-title" id="readiness-date-title">Mark as Tested</h2>
+        <button class="modal-close" onclick="closeReadinessDateModal()">&#x2715;</button>
+      </div>
+      <div style="padding:16px 0 8px">
+        <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px">Date</label>
+        <input type="date" id="readiness-date-input" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px">
+        <label style="font-size:13px;font-weight:600;display:block;margin:12px 0 6px">Time</label>
+        <input type="time" id="readiness-time-input" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
+        <button class="btn" onclick="closeReadinessDateModal()">Cancel</button>
+        <button class="btn btn-green" onclick="confirmReadinessDate()">Confirm</button>
+      </div>
     </div>
   </div>
 
