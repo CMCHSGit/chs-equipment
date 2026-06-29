@@ -1824,7 +1824,7 @@ async function saveBin(data) {
   } catch(e) { /* version check unavailable — proceed to avoid blocking the save */ }
 
   const newVersion = Date.now().toString();
-  const payload = Object.assign({}, data, { _v: newVersion, auditLog: auditLog.slice(0, 300) });
+  const payload = Object.assign({}, data, { _v: newVersion, auditLog: auditLog.slice(0, 300), loanMeta });
   const r = await fetchWithTimeout(FB_URL + '/data.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -1856,13 +1856,18 @@ async function loadData() {
     equipment  = Array.isArray(data.equipment)  ? data.equipment  : [];
     historyLog = Array.isArray(data.history)     ? data.history    : [];
     auditLog   = Array.isArray(data.auditLog)    ? data.auditLog   : [];
+    // loanMeta is now embedded in data.json; fall back to legacy /loanMeta.json on first migration
+    if (data.loanMeta && typeof data.loanMeta === 'object') {
+      loanMeta = data.loanMeta;
+    } else {
+      await loadLoanMeta(); // legacy path — gets folded into /data.json on next save
+    }
     setSync('ok', 'Live — auto-saving');
     renderTable(); renderHistory();
     setScanMode('batch');
     hideLoading();
     await loadSentNotifications();
     await loadUpcomingLoans();
-    await loadLoanMeta();
     await loadLoanDocNotes();
     await loadKitGroups();
     // Migrate AccountManager from items → loanMeta, then strip from items
@@ -6663,7 +6668,7 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
 
   return statusBadge + skipBtn + testedBtn + dispatchedBtn;
 }
-async function toggleReadiness(rKey, field) {
+function toggleReadiness(rKey, field) {
   if (!rKey) return;
   const r = getLoanReadiness(rKey);
   const newVal = !r[field];
@@ -6672,12 +6677,7 @@ async function toggleReadiness(rKey, field) {
     [field]: newVal,
     [field + 'At']: newVal ? nzNow() : ''
   };
-  try {
-    await saveLoanMeta();
-  } catch(e) {
-    showToast('error', 'Could not save — check connection and try again');
-    return;
-  }
+  scheduleSave();
   renderLoans();
 }
 async function loadLoanMeta() {
@@ -6687,12 +6687,9 @@ async function loadLoanMeta() {
     loanMeta = (d && typeof d === 'object') ? d : {};
   } catch(e) { loanMeta = {}; }
 }
-async function saveLoanMeta() {
-  const r = await fetch(FB_URL + '/loanMeta.json', {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(loanMeta)
-  });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
+function saveLoanMeta() {
+  scheduleSave(); // loanMeta is included in the /data.json payload via saveBin
+  return Promise.resolve();
 }
 
 // ── ACCOUNT MANAGERS ──────────────────────────────────────────────────
