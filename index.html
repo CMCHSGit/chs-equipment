@@ -6615,6 +6615,13 @@ function closeKitModal() {
 function getLoanReadiness(key) {
   return (key && loanMeta[key]) ? loanMeta[key] : {};
 }
+function _fmtReadinessTs(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch(e) { return ts.slice(0, 10); }
+}
 function _readinessKey(batchId, loanTo, endDate) {
   // Prefer BatchID; fall back to encoded loandoc key
   return batchId || ('loandoc_' + encodeURIComponent((loanTo||'') + '|||' + (endDate||'')));
@@ -6647,11 +6654,11 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
   // Test button — hidden when noTestReq set
   const testedBtn = noTestReq ? '' :
     `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
-    (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.testedAt.slice(5,10) + '</span>' : '') : '&#x25CB; Test') +
+    (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:4px">' + _fmtReadinessTs(r.testedAt) + '</span>' : '') : '&#x25CB; Test') +
     '</button>';
 
   const dispatchedBtn = `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
-    (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:2px">' + r.dispatchedAt.slice(5,10) + '</span>' : '') : '&#x1F69A; Dispatch') +
+    (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:4px">' + _fmtReadinessTs(r.dispatchedAt) + '</span>' : '') : '&#x1F69A; Dispatch') +
     '</button>';
 
   return statusBadge + skipBtn + testedBtn + dispatchedBtn;
@@ -6663,9 +6670,14 @@ async function toggleReadiness(rKey, field) {
   loanMeta[rKey] = {
     ...r,
     [field]: newVal,
-    [field + 'At']: newVal ? nzDate() : ''
+    [field + 'At']: newVal ? nzNow() : ''
   };
-  await saveLoanMeta();
+  try {
+    await saveLoanMeta();
+  } catch(e) {
+    showToast('error', 'Could not save — check connection and try again');
+    return;
+  }
   renderLoans();
 }
 async function loadLoanMeta() {
@@ -6676,10 +6688,11 @@ async function loadLoanMeta() {
   } catch(e) { loanMeta = {}; }
 }
 async function saveLoanMeta() {
-  await fetch(FB_URL + '/loanMeta.json', {
+  const r = await fetch(FB_URL + '/loanMeta.json', {
     method: 'PUT', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(loanMeta)
   });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
 }
 
 // ── ACCOUNT MANAGERS ──────────────────────────────────────────────────
