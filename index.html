@@ -4837,8 +4837,8 @@ function checkOverdueNotifications() {
     }
     const lastSent = _sentNotifications[notifKey]; // date string or undefined
     const thisMonday = lastMondayNZ();
-    // Send if: never sent, OR last sent before this Monday AND today is Monday after 9am
-    const shouldSend = !lastSent || (isMondayMorningNZ() && lastSent < thisMonday);
+    // Only send on Monday mornings (NZ time), whether first send or a repeat
+    const shouldSend = isMondayMorningNZ() && (!lastSent || lastSent < thisMonday);
     if (shouldSend) {
       // Mark in memory immediately to block duplicate calls before async .then() resolves
       _sentNotifications[notifKey] = nzDate();
@@ -6056,8 +6056,8 @@ async function createSimproJob(existingJobId) {
       console.log('Simpro: creation in flight, skipping update');
       return;
     }
-    // Stale — clear it and re-check Firebase before falling through to create
-    console.log('Simpro: stale pending detected, clearing and retrying');
+    // Stale — re-check Firebase before deciding whether to re-create
+    console.log('Simpro: stale pending detected, checking Firebase');
     jobId = null;
     if (window._simproJobCache) { delete window._simproJobCache[pdfKey]; localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache)); }
     // GAS may have written a real ID even if the local poll timed out — check now
@@ -6068,10 +6068,18 @@ async function createSimproJob(existingJobId) {
         const _storedId = _d?.simproJobId;
         const _stillPending = _storedId === 'pending' || (typeof _storedId === 'object' && _storedId?.status === 'pending');
         if (_storedId && !_stillPending) {
+          // GAS wrote a real ID — use it
           jobId = _storedId;
           window._simproJobCache[pdfKey] = jobId;
           localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+        } else if (_stillPending) {
+          // Firebase still shows pending — GAS is still processing the first request, don't create a duplicate
+          console.log('Simpro: Firebase still pending, skipping to avoid duplicate job');
+          window._simproJobCache[pdfKey] = 'pending';
+          localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+          return;
         }
+        // If Firebase shows nothing (_storedId is null/undefined), fall through to re-create
       } catch(e) {}
     }
   }
@@ -6144,6 +6152,7 @@ async function createSimproJob(existingJobId) {
           window._simproCreating = null;
           clearInterval(poll);
           showToast('success', 'Simpro job created');
+          writeAudit('simpro_created', 'Simpro job created — ' + loanTo + ' (ID pending)', { loanTo, pdfKey });
         }
       }, 3000);
     } else {
