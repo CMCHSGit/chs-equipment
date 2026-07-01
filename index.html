@@ -1206,35 +1206,31 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 
 <!-- REASSIGN ACCOUNT MANAGER MODAL -->
 <div class="modal-overlay" id="reassign-am-modal">
-  <div class="modal" style="max-width:520px">
+  <div class="modal" style="max-width:420px">
     <div class="modal-header">
       <div>
-        <div class="modal-title" id="reassign-am-title">Edit Loan</div>
+        <div class="modal-title" id="reassign-am-title">Reassign Items</div>
         <div style="font-size:12px;color:var(--text2);margin-top:2px" id="reassign-am-subtitle"></div>
       </div>
       <button class="modal-close" onclick="closeReassignAMModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <!-- Item checkboxes (active loans) -->
     <div id="reassign-items-section" style="margin-bottom:12px;display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <label style="font-size:12px;font-weight:600;color:var(--text2)">Items to update</label>
+        <label style="font-size:12px;font-weight:600;color:var(--text2)">Items to reassign</label>
         <button class="btn btn-sm" onclick="toggleAllReassignItems()" id="reassign-toggle-all" style="font-size:11px;padding:2px 8px">Deselect all</button>
       </div>
-      <div id="reassign-items-list" style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px"></div>
+      <div id="reassign-items-list" style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;border:1px solid var(--border2);border-radius:var(--radius);padding:8px"></div>
     </div>
-    <div id="reassign-mode-bar" style="display:none;margin-bottom:12px">
-      <div style="display:flex;gap:6px">
-        <button id="ramode-edit" onclick="setReassignMode('edit')" class="btn btn-sm" style="flex:1">Edit loan</button>
-        <button id="ramode-move" onclick="setReassignMode('move')" class="btn btn-sm" style="flex:1">Move to loan</button>
-        <button id="ramode-new" onclick="setReassignMode('new')" class="btn btn-sm" style="flex:1">New loan</button>
-      </div>
-    </div>
-    <div id="reassign-target-section" style="display:none;margin-bottom:12px">
-      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Target Loan</label>
+    <!-- Target loan dropdown (active loans) -->
+    <div id="reassign-target-section" style="display:none;margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Move to</label>
       <select id="reassign-target-loan" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
         <option value="">— Select loan —</option>
       </select>
     </div>
-    <div id="reassign-form-fields">
+    <!-- Form fields (upcoming loan edit only) -->
+    <div id="reassign-form-fields" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div class="form-group" style="margin:0;grid-column:1/-1">
           <label>Event and/or Customer Name</label>
@@ -1276,10 +1272,15 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <textarea id="reassign-shipping" rows="2" placeholder="Shipping details..." style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
       </div>
     </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeReassignAMModal()">Cancel</button>
-      <button class="btn btn-primary" id="reassign-confirm-btn" onclick="confirmReassignAM()">
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span id="reassign-confirm-label">Save Changes</span>
+    <div class="modal-footer" style="flex-direction:column;gap:8px;align-items:stretch">
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="closeReassignAMModal()" style="flex:1">Cancel</button>
+        <button class="btn btn-primary" id="reassign-confirm-btn" onclick="confirmReassignAM()" style="flex:1">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span id="reassign-confirm-label">Move to Loan</span>
+        </button>
+      </div>
+      <button id="reassign-new-loan-btn" onclick="reassignCreateNewLoan()" style="display:none;width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--radius);background:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--accent);cursor:pointer;text-align:center">
+        + Create new loan with these items
       </button>
     </div>
   </div>
@@ -3994,6 +3995,28 @@ async function submitBatchLoan() {
     writeAudit('loan_created',
       devicesToLoanAll.length + ' item' + (devicesToLoanAll.length !== 1 ? 's' : '') + ' loaned to ' + loanTo + (location ? ' — ' + location : ''),
       { loanTo, location, startDate, endDate, batchId, items: devicesToLoanAll.map(e => e.CHSAssetNo) });
+    // If this loan was started from "Create new loan" in the reassign flow,
+    // update the original Simpro job to reflect the items that stayed behind
+    if (window._reassignPendingSource) {
+      const src = window._reassignPendingSource;
+      window._reassignPendingSource = null;
+      const confirmedNos = new Set(devicesToLoanAll.map(e => e.CHSAssetNo));
+      // Strip moved items from original loanDoc savedRows
+      if (src.pdfKey && src.savedRows) {
+        const filteredRows = src.savedRows.filter(row => !confirmedNos.has((row[0] || '').trim()) && !src.movedNos.has((row[0] || '').trim()));
+        try {
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(src.pdfKey) + '/savedRows.json', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(filteredRows)
+          });
+        } catch(e) {}
+      }
+      // Update original Simpro job if items remain there
+      if (src.jobId && src.remainingItems.length > 0) {
+        await _simproPush(src.pdfKey, src.jobId, src.loanData, src.remainingItems);
+        writeAudit('simpro_updated', 'Simpro job #' + src.jobId + ' updated — items split to new loan for ' + loanTo, { loanTo: src.loanTo, jobId: src.jobId, pdfKey: src.pdfKey });
+      }
+    }
     clearBasket(); // clear basket now that loan is confirmed
     renderBatchDevices(); renderLoans();
   }; // end doLoan
@@ -5924,6 +5947,10 @@ async function openReassignUpcomingAM(upcomingId) {
   document.getElementById('reassign-am-subtitle').textContent = u.items.length + ' device' + (u.items.length !== 1 ? 's' : '');
   // No per-item selection for upcoming loans — all items move together
   document.getElementById('reassign-items-section').style.display = 'none';
+  document.getElementById('reassign-target-section').style.display = 'none';
+  document.getElementById('reassign-new-loan-btn').style.display   = 'none';
+  document.getElementById('reassign-form-fields').style.display    = '';
+  document.getElementById('reassign-confirm-label').textContent    = 'Save Changes';
   // Pre-fill loan fields
   document.getElementById('reassign-loan-to').value    = u.loanTo || '';
   document.getElementById('reassign-location').value   = u.location || '';
@@ -7771,6 +7798,24 @@ let _reassignLoanKey = null;
 let _reassignUpcomingId = null;
 let _reassignPdfKey = null;
 
+// Resolve Simpro job ID from cache then Firebase
+async function _getJobId(pdfKey) {
+  window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
+  const raw = window._simproJobCache[pdfKey];
+  if (raw && raw !== 'pending' && typeof raw !== 'object' && !isNaN(Number(raw))) return Number(raw);
+  try {
+    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+    const d = await r.json();
+    const id = d?.simproJobId;
+    if (id && id !== 'pending' && typeof id !== 'object' && !isNaN(Number(id))) {
+      window._simproJobCache[pdfKey] = id;
+      localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+      return Number(id);
+    }
+  } catch(e) {}
+  return null;
+}
+
 async function openReassignAMByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
@@ -7778,11 +7823,12 @@ async function openReassignAMByKey(key) {
   _reassignUpcomingId = null;
   const batchId = g.items[0]?.BatchID || null;
   _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
-  document.getElementById('reassign-am-title').textContent = 'Edit Loan — ' + g.loanTo;
+
+  document.getElementById('reassign-am-title').textContent    = 'Reassign Items — ' + g.loanTo;
   document.getElementById('reassign-am-subtitle').textContent = g.items.length + ' device' + (g.items.length !== 1 ? 's' : '');
-  // Item checkboxes
-  const itemsSection = document.getElementById('reassign-items-section');
-  itemsSection.style.display = 'block';
+
+  // Items checkboxes
+  document.getElementById('reassign-items-section').style.display = 'block';
   document.getElementById('reassign-toggle-all').textContent = 'Deselect all';
   document.getElementById('reassign-items-list').innerHTML = g.items.map(item =>
     `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
@@ -7790,48 +7836,19 @@ async function openReassignAMByKey(key) {
       <span><strong>${esc(item.CHSAssetNo)}</strong> &mdash; ${esc(item.Model||item.Description||'')}</span>
     </label>`
   ).join('');
-  // Pre-fill loan fields
-  document.getElementById('reassign-loan-to').value    = g.loanTo || '';
-  document.getElementById('reassign-location').value   = g.location || '';
-  document.getElementById('reassign-start-date').value = g.startDate || '';
-  document.getElementById('reassign-end-date').value   = g.endDate || '';
-  // AM dropdown
-  const sel = document.getElementById('reassign-am-select');
-  const curAMName = getGroupAM(g);
-  sel.innerHTML = '<option value="">Select account manager...</option>' +
-    accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === curAMName ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
-  const curAM = accountManagers.find(a => a.name === curAMName);
-  document.getElementById('reassign-am-email').value = curAM?.email || g.items[0]?.BorrowerEmail || '';
-  sel.onchange = () => {
-    const am = accountManagers.find(a => a.name === sel.value);
-    if (am) document.getElementById('reassign-am-email').value = am.email || '';
-  };
-  // Load loanDoc fields from Firebase
-  document.getElementById('reassign-contact').value  = '';
-  document.getElementById('reassign-notes').value    = '';
-  document.getElementById('reassign-shipping').value = '';
-  try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
-    if (r.ok) {
-      const d = await r.json();
-      if (d) {
-        document.getElementById('reassign-contact').value  = d.contactNumber || '';
-        document.getElementById('reassign-notes').value    = d.notesCell || d.notes || '';
-        document.getElementById('reassign-shipping').value = d.authCell || '';
-      }
-    }
-  } catch(e) {}
-  // Mode bar (active loans only)
-  document.getElementById('reassign-mode-bar').style.display = 'block';
-  setReassignMode('edit');
-  // Populate target loan dropdown with other active + upcoming loans
+
+  // Target loan dropdown
+  document.getElementById('reassign-target-section').style.display = 'block';
+  document.getElementById('reassign-form-fields').style.display     = 'none';
+  document.getElementById('reassign-new-loan-btn').style.display    = '';
+  document.getElementById('reassign-confirm-label').textContent     = 'Move to Loan';
   const _tgtSel = document.getElementById('reassign-target-loan');
   const _tgtOpts = ['<option value="">— Select loan —</option>'];
   (window._loanGroups || []).forEach(og => {
     const ogKey = encodeURIComponent(og.loanTo + '|||' + og.endDate).replace(/'/g, '%27');
     if (ogKey === key) return;
-    const ogBatchId = og.items[0]?.BatchID;
-    const sj = (ogBatchId && window._simproJobCache?.[ogBatchId]) || (ogBatchId && window._loanDocCache?.[ogBatchId]?.simproJobId);
+    const ogBId = og.items[0]?.BatchID;
+    const sj = (ogBId && window._simproJobCache?.[ogBId]) || (ogBId && window._loanDocCache?.[ogBId]?.simproJobId);
     const sjLabel = (sj && sj !== 'pending' && typeof sj !== 'object' && !isNaN(Number(sj))) ? ' · Job #' + Number(sj) : '';
     _tgtOpts.push('<option value="active:' + esc(ogKey) + '">Active: ' + esc(og.loanTo) + ' (' + (og.endDate ? formatDisplayDate(og.endDate) : 'no end date') + ')' + sjLabel + '</option>');
   });
@@ -7839,32 +7856,17 @@ async function openReassignAMByKey(key) {
     _tgtOpts.push('<option value="upcoming:' + esc(u.id) + '">Upcoming: ' + esc(u.loanTo) + ' (' + (u.startDate ? formatDisplayDate(u.startDate) : '?') + ')</option>');
   });
   _tgtSel.innerHTML = _tgtOpts.join('');
+
   document.getElementById('reassign-am-modal').classList.add('open');
 }
 
 function closeReassignAMModal() {
   document.getElementById('reassign-am-modal').classList.remove('open');
-  document.getElementById('reassign-mode-bar').style.display = 'none';
   _reassignLoanKey = null;
   _reassignUpcomingId = null;
   _reassignPdfKey = null;
-  window._reassignMode = 'edit';
 }
 
-function setReassignMode(mode) {
-  window._reassignMode = mode;
-  ['edit', 'move', 'new'].forEach(m => {
-    const btn = document.getElementById('ramode-' + m);
-    if (!btn) return;
-    btn.style.background  = m === mode ? 'var(--blue)' : '';
-    btn.style.color       = m === mode ? '#fff' : '';
-    btn.style.borderColor = m === mode ? 'var(--blue)' : '';
-  });
-  document.getElementById('reassign-target-section').style.display = mode === 'move' ? 'block' : 'none';
-  document.getElementById('reassign-form-fields').style.display    = mode === 'move' ? 'none' : '';
-  const lbl = document.getElementById('reassign-confirm-label');
-  if (lbl) lbl.textContent = mode === 'move' ? 'Move to Loan' : mode === 'new' ? 'Create New Loan' : 'Save Changes';
-}
 
 // Direct Simpro proxy call — used when we have all data in-memory (no DOM dependency)
 async function _simproPush(batchId, jobId, loanData, items) {
@@ -7892,68 +7894,56 @@ async function _simproPush(batchId, jobId, loanData, items) {
   } catch(e) { console.warn('Simpro push failed:', e); }
 }
 
-// Create a brand-new Simpro job without the loan-doc modal — used by the "New loan" reassign path
-async function _createSimproJobDirect(newBatchId, loanData, items) {
-  if (!SIMPRO_PROXY_URL || !newBatchId) return;
-  window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
-  window._simproJobCache[newBatchId] = 'pending';
-  localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
-  try {
-    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(newBatchId) + '/simproJobId.json', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'pending', ts: Date.now() })
-    });
-  } catch(e) {}
-  await _simproPush(newBatchId, null, loanData, items);
-  let _djAttempts = 0;
-  const _djPoll = setInterval(async () => {
-    _djAttempts++;
-    try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(newBatchId) + '.json');
-      const d = await r.json();
-      const storedId = d?.simproJobId;
-      const isPending = storedId === 'pending' || (storedId && typeof storedId === 'object' && storedId.status === 'pending');
-      if (storedId && !isPending) {
-        window._simproJobCache[newBatchId] = storedId;
-        localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
-        clearInterval(_djPoll);
-        showToast('success', 'Simpro job created — ID: ' + storedId);
-        writeAudit('simpro_created', 'Simpro job #' + storedId + ' created — ' + loanData.loanTo, { loanTo: loanData.loanTo, jobId: storedId, pdfKey: newBatchId });
-        return;
-      }
-    } catch(e) {}
-    if (_djAttempts >= 5) {
-      clearInterval(_djPoll);
-      showToast('success', 'Simpro job created');
-      writeAudit('simpro_created', 'Simpro job created — ' + loanData.loanTo + ' (ID pending)', { loanTo: loanData.loanTo, pdfKey: newBatchId });
+async function reassignCreateNewLoan() {
+  const g = getLoanGroupByKey(_reassignLoanKey);
+  if (!g) return;
+  const checkedAssetNos = new Set(
+    Array.from(document.querySelectorAll('#reassign-items-list input[type=checkbox]:checked'))
+      .map(cb => cb.dataset.assetno)
+  );
+  if (!checkedAssetNos.size) { showToast('error', 'Select at least one item'); return; }
+
+  const movedItems = g.items.filter(i => checkedAssetNos.has(i.CHSAssetNo));
+
+  // Capture source loan info so doLoan() can update the original Simpro job
+  const srcJobId = _reassignPdfKey ? await _getJobId(_reassignPdfKey) : null;
+  const srcDoc   = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
+  window._reassignPendingSource = {
+    loanKey:     _reassignLoanKey,
+    pdfKey:      _reassignPdfKey,
+    loanTo:      g.loanTo,
+    jobId:       srcJobId,
+    movedNos:    new Set(movedItems.map(i => i.CHSAssetNo)),
+    remainingItems: g.items.filter(i => !checkedAssetNos.has(i.CHSAssetNo)),
+    loanData:    { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: srcDoc?.notesCell || '', shippingDetails: srcDoc?.authCell || '', contactNumber: srcDoc?.contactNumber || '', jobType: srcDoc?.jobType || 'Demo' },
+    savedRows:   srcDoc?.savedRows || null
+  };
+
+  // Add moved items to the basket
+  movedItems.forEach(item => {
+    if (!_basketItems.find(b => b.CHSAssetNo === item.CHSAssetNo)) {
+      _basketItems.push({ ...item });
     }
-  }, 3000);
+  });
+
+  closeReassignAMModal();
+  switchTab('database');
+  renderBasket();
+  showToast('success', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' added to basket — build your new loan below');
 }
 
 async function confirmReassignAM() {
-  const newLoanTo    = document.getElementById('reassign-loan-to').value.trim();
-  const newLocation  = document.getElementById('reassign-location').value.trim();
-  const newStartDate = document.getElementById('reassign-start-date').value;
-  const newEndDate   = document.getElementById('reassign-end-date').value;
-  const newAM        = document.getElementById('reassign-am-select').value;
-  const newEmail     = document.getElementById('reassign-am-email').value.trim();
-  const newContact   = document.getElementById('reassign-contact').value.trim();
-  const newNotes     = document.getElementById('reassign-notes').value.trim();
-  const newShipping  = document.getElementById('reassign-shipping').value.trim();
-
-  async function patchLoanDoc(pdfKey) {
-    if (!pdfKey) return;
-    try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, ...(newAM ? { accountManager: newAM } : {}) })
-      });
-    } catch(e) {}
-  }
-
   // ── UPCOMING LOAN EDIT ─────────────────────────────────────────────
   if (_reassignUpcomingId) {
+    const newLoanTo    = document.getElementById('reassign-loan-to').value.trim();
+    const newLocation  = document.getElementById('reassign-location').value.trim();
+    const newStartDate = document.getElementById('reassign-start-date').value;
+    const newEndDate   = document.getElementById('reassign-end-date').value;
+    const newAM        = document.getElementById('reassign-am-select').value;
+    const newEmail     = document.getElementById('reassign-am-email').value.trim();
+    const newContact   = document.getElementById('reassign-contact').value.trim();
+    const newNotes     = document.getElementById('reassign-notes').value.trim();
+    const newShipping  = document.getElementById('reassign-shipping').value.trim();
     const u = upcomingLoans.find(x => x.id === _reassignUpcomingId);
     if (u) {
       if (newLoanTo)    u.loanTo         = newLoanTo;
@@ -7963,7 +7953,14 @@ async function confirmReassignAM() {
       if (newAM)        u.accountManager = newAM;
       if (newEmail)     u.borrowerEmail  = newEmail;
       await saveUpcomingLoans();
-      await patchLoanDoc(_reassignPdfKey);
+      if (_reassignPdfKey) {
+        try {
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, ...(newAM ? { accountManager: newAM } : {}) })
+          });
+        } catch(e) {}
+      }
       renderLoans();
       showToast('success', 'Loan updated');
     }
@@ -7971,6 +7968,7 @@ async function confirmReassignAM() {
     return;
   }
 
+  // ── MOVE TO EXISTING LOAN ──────────────────────────────────────────
   const g = getLoanGroupByKey(_reassignLoanKey);
   if (!g) { closeReassignAMModal(); return; }
 
@@ -7978,204 +7976,76 @@ async function confirmReassignAM() {
     Array.from(document.querySelectorAll('#reassign-items-list input[type=checkbox]:checked'))
       .map(cb => cb.dataset.assetno)
   );
-  if (!checkedAssetNos.size) { showToast('error', 'Select at least one item to update'); return; }
+  if (!checkedAssetNos.size) { showToast('error', 'Select at least one item'); return; }
+
+  const targetVal = document.getElementById('reassign-target-loan').value;
+  if (!targetVal) { showToast('error', 'Select a target loan'); return; }
 
   const movedItems     = g.items.filter(i => checkedAssetNos.has(i.CHSAssetNo));
   const remainingItems = g.items.filter(i => !checkedAssetNos.has(i.CHSAssetNo));
 
-  // Helper: load Simpro job ID for a batch (cache then Firebase)
-  async function _getJobId(pdfKey) {
-    window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
-    const raw = window._simproJobCache[pdfKey];
-    if (raw && raw !== 'pending' && typeof raw !== 'object' && !isNaN(Number(raw))) return Number(raw);
-    try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
-      const d = await r.json();
-      const id = d?.simproJobId;
-      if (id && id !== 'pending' && typeof id !== 'object' && !isNaN(Number(id))) {
-        window._simproJobCache[pdfKey] = id;
-        localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
-        return Number(id);
-      }
-    } catch(e) {}
-    return null;
+  const isUpcoming = targetVal.startsWith('upcoming:');
+  const targetKey  = decodeURIComponent(targetVal.slice(targetVal.indexOf(':') + 1));
+
+  let targetBatchId = null, targetLoanData = {}, targetGroupItems = [];
+  if (isUpcoming) {
+    const u = upcomingLoans.find(x => x.id === targetKey);
+    if (!u) { showToast('error', 'Target loan not found'); return; }
+    targetBatchId    = u.id;
+    targetGroupItems = u.items || [];
+    targetLoanData   = { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '', jobType: 'Demo' };
+  } else {
+    const tg = getLoanGroupByKey(targetKey);
+    if (!tg) { showToast('error', 'Target loan not found'); return; }
+    targetBatchId    = tg.items[0]?.BatchID || null;
+    targetGroupItems = tg.items;
+    targetLoanData   = { loanTo: tg.loanTo, location: tg.location || '', startDate: tg.startDate || '', endDate: tg.endDate || '', accountManager: getGroupAM(tg), jobType: 'Demo' };
   }
 
-  const mode = window._reassignMode || 'edit';
+  const origDoc = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
+  const tgtDoc  = targetBatchId   ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(targetBatchId)   + '.json').then(r => r.json()).catch(() => null) : null;
 
-  // ── MOVE TO EXISTING LOAN ──────────────────────────────────────────
-  if (mode === 'move') {
-    const targetVal = document.getElementById('reassign-target-loan').value;
-    if (!targetVal) { showToast('error', 'Select a target loan'); return; }
-    const isUpcoming = targetVal.startsWith('upcoming:');
-    const targetKey  = decodeURIComponent(targetVal.slice(targetVal.indexOf(':') + 1));
-
-    let targetBatchId = null, targetLoanData = {}, targetGroupItems = [];
-    if (isUpcoming) {
-      const u = upcomingLoans.find(x => x.id === targetKey);
-      if (!u) { showToast('error', 'Target loan not found'); return; }
-      targetBatchId    = u.id;
-      targetGroupItems = u.items || [];
-      targetLoanData   = { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '', jobType: 'Demo' };
-    } else {
-      const tg = getLoanGroupByKey(targetKey);
-      if (!tg) { showToast('error', 'Target loan not found'); return; }
-      targetBatchId    = tg.items[0]?.BatchID || null;
-      targetGroupItems = tg.items;
-      targetLoanData   = { loanTo: tg.loanTo, location: tg.location || '', startDate: tg.startDate || '', endDate: tg.endDate || '', accountManager: getGroupAM(tg), jobType: 'Demo' };
-    }
-
-    // Load Firebase docs for notes/shipping fields used in Simpro calls
-    const origDoc = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
-    const tgtDoc  = targetBatchId   ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(targetBatchId)   + '.json').then(r => r.json()).catch(() => null) : null;
-
-    // Update original Simpro job if items remain
-    const origJobId = _reassignPdfKey ? await _getJobId(_reassignPdfKey) : null;
-    if (origJobId && remainingItems.length > 0) {
-      await _simproPush(_reassignPdfKey, origJobId,
-        { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: origDoc?.notesCell || '', shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
-        remainingItems);
-      writeAudit('simpro_updated', 'Simpro job #' + origJobId + ' updated — items reassigned out', { loanTo: g.loanTo, jobId: origJobId, pdfKey: _reassignPdfKey });
-    }
-
-    // Update target Simpro job if it has one
-    const tgtJobId = targetBatchId ? await _getJobId(targetBatchId) : null;
-    if (tgtJobId) {
-      const allTgtItems = [...targetGroupItems, ...movedItems];
-      await _simproPush(targetBatchId, tgtJobId,
-        { ...targetLoanData, notes: tgtDoc?.notesCell || '', shippingDetails: tgtDoc?.authCell || '', contactNumber: tgtDoc?.contactNumber || '' },
-        allTgtItems);
-      writeAudit('simpro_updated', 'Simpro job #' + tgtJobId + ' updated — items moved in from ' + g.loanTo, { loanTo: targetLoanData.loanTo, jobId: tgtJobId, pdfKey: targetBatchId });
-    }
-
-    // Update equipment items to belong to target loan
-    movedItems.forEach(item => {
-      const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
-      if (idx < 0) return;
-      equipment[idx].OnLoanTo      = targetLoanData.loanTo;
-      equipment[idx].Location      = targetLoanData.location;
-      equipment[idx].LoanStartDate = targetLoanData.startDate;
-      equipment[idx].LoanEndDate   = targetLoanData.endDate;
-      if (targetBatchId) equipment[idx].BatchID = targetBatchId;
-    });
-
-    // Strip moved items from original loanDoc savedRows so the form stays accurate
-    if (_reassignPdfKey && origDoc?.savedRows) {
-      const movedNos = new Set(movedItems.map(i => (i.CHSAssetNo || '').trim().toLowerCase()));
-      const filteredRows = origDoc.savedRows.filter(row => !movedNos.has((row[0] || '').trim().toLowerCase()));
-      try {
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '/savedRows.json', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(filteredRows)
-        });
-      } catch(e) {}
-    }
-
-    scheduleSave(); renderLoans(); renderTable();
-    writeAudit('loan_reassigned', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' moved from ' + g.loanTo + ' to ' + targetLoanData.loanTo, { from: g.loanTo, to: targetLoanData.loanTo, items: movedItems.map(i => i.CHSAssetNo) });
-    closeReassignAMModal();
-    showToast('success', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' moved to ' + targetLoanData.loanTo);
-    return;
+  const origJobId = _reassignPdfKey ? await _getJobId(_reassignPdfKey) : null;
+  if (origJobId && remainingItems.length > 0) {
+    await _simproPush(_reassignPdfKey, origJobId,
+      { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: origDoc?.notesCell || '', shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
+      remainingItems);
+    writeAudit('simpro_updated', 'Simpro job #' + origJobId + ' updated — items reassigned out', { loanTo: g.loanTo, jobId: origJobId, pdfKey: _reassignPdfKey });
   }
 
-  // ── CREATE NEW LOAN ────────────────────────────────────────────────
-  if (mode === 'new') {
-    if (!newLoanTo) { showToast('error', 'Enter a customer name for the new loan'); return; }
-    const newBatchId = uid();
-    const loanData = {
-      loanTo: newLoanTo, location: newLocation || '', startDate: newStartDate || nzDate(),
-      endDate: newEndDate || '', accountManager: newAM || '', contactNumber: newContact || '',
-      notes: newNotes || '', shippingDetails: newShipping || '', jobType: 'Demo'
-    };
-
-    // Update equipment items to the new loan + new batch
-    movedItems.forEach(item => {
-      const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
-      if (idx < 0) return;
-      equipment[idx].OnLoanTo      = newLoanTo;
-      equipment[idx].Location      = loanData.location;
-      equipment[idx].LoanStartDate = loanData.startDate;
-      equipment[idx].LoanEndDate   = loanData.endDate;
-      if (newEmail) equipment[idx].BorrowerEmail = newEmail;
-      equipment[idx].BatchID = newBatchId;
-      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: newLoanTo, location: loanData.location, loanStart: loanData.startDate, loanEnd: loanData.endDate, batchId: newBatchId, _pdfKey: newBatchId });
-    });
-
-    if (newAM) {
-      loanMeta[newBatchId] = { ...(loanMeta[newBatchId] || {}), accountManager: newAM };
-      await saveLoanMeta();
-    }
-
-    // Save new loanDoc to Firebase so viewLoanDocByKey and Simpro polling can find it
-    const savedRowsNew = movedItems.map(e => [e.CHSAssetNo || '', e.Model || e.Description || '', e.SerialNo || e.PartNo || '', '']);
-    try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(newBatchId) + '.json', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loanTo: newLoanTo, location: loanData.location, startDate: loanData.startDate, endDate: loanData.endDate, accountManager: newAM || '', contactNumber: newContact || '', notesCell: newNotes || '', authCell: newShipping || '', jobType: 'Demo', savedRows: savedRowsNew })
-      });
-    } catch(e) {}
-
-    // Update original Simpro job if items remain in the original loan
-    const origDoc   = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
-    const origJobId = _reassignPdfKey ? await _getJobId(_reassignPdfKey) : null;
-    if (origJobId && remainingItems.length > 0) {
-      await _simproPush(_reassignPdfKey, origJobId,
-        { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: origDoc?.notesCell || '', shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
-        remainingItems);
-      writeAudit('simpro_updated', 'Simpro job #' + origJobId + ' updated — ' + movedItems.length + ' item(s) split to new loan', { loanTo: g.loanTo, jobId: origJobId, pdfKey: _reassignPdfKey });
-    }
-
-    // Strip moved items from original loanDoc savedRows
-    if (_reassignPdfKey && origDoc?.savedRows) {
-      const movedNos = new Set(movedItems.map(i => (i.CHSAssetNo || '').trim().toLowerCase()));
-      const filteredRows = origDoc.savedRows.filter(row => !movedNos.has((row[0] || '').trim().toLowerCase()));
-      try {
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '/savedRows.json', {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(filteredRows)
-        });
-      } catch(e) {}
-    }
-
-    // Create Simpro job for the new loan (fire-and-forget with polling)
-    _createSimproJobDirect(newBatchId, loanData, movedItems);
-
-    scheduleSave(); renderLoans(); renderTable();
-    writeAudit('loan_created', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' split from ' + g.loanTo + ' — new loan for ' + newLoanTo, { from: g.loanTo, to: newLoanTo, newBatchId, items: movedItems.map(i => i.CHSAssetNo) });
-    closeReassignAMModal();
-    showToast('success', 'New loan created for ' + newLoanTo);
-    return;
+  const tgtJobId = targetBatchId ? await _getJobId(targetBatchId) : null;
+  if (tgtJobId) {
+    await _simproPush(targetBatchId, tgtJobId,
+      { ...targetLoanData, notes: tgtDoc?.notesCell || '', shippingDetails: tgtDoc?.authCell || '', contactNumber: tgtDoc?.contactNumber || '' },
+      [...targetGroupItems, ...movedItems]);
+    writeAudit('simpro_updated', 'Simpro job #' + tgtJobId + ' updated — items moved in from ' + g.loanTo, { loanTo: targetLoanData.loanTo, jobId: tgtJobId, pdfKey: targetBatchId });
   }
 
-  // ── EDIT MODE (update fields in-place) ────────────────────────────
-  g.items.forEach(item => {
-    if (!checkedAssetNos.has(item.CHSAssetNo)) return;
+  movedItems.forEach(item => {
     const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
-    if (newLoanTo)    equipment[idx].OnLoanTo      = newLoanTo;
-    if (newLocation)  equipment[idx].Location      = newLocation;
-    if (newStartDate) equipment[idx].LoanStartDate = newStartDate;
-    if (newEndDate)   equipment[idx].LoanEndDate   = newEndDate;
-    if (newEmail)     equipment[idx].BorrowerEmail = newEmail;
+    equipment[idx].OnLoanTo      = targetLoanData.loanTo;
+    equipment[idx].Location      = targetLoanData.location;
+    equipment[idx].LoanStartDate = targetLoanData.startDate;
+    equipment[idx].LoanEndDate   = targetLoanData.endDate;
+    if (targetBatchId) equipment[idx].BatchID = targetBatchId;
   });
 
-  if (newAM) {
-    const _amKeys = [
-      g.items[0]?.BatchID,
-      _reassignPdfKey,
-      _reassignPdfKey ? decodeURIComponent(_reassignPdfKey) : null
-    ].filter(Boolean);
-    _amKeys.forEach(k => {
-      loanMeta[k] = { ...(loanMeta[k] || {}), accountManager: newAM };
-      window._loanDocCache = window._loanDocCache || {};
-      window._loanDocCache[k] = { ...(window._loanDocCache[k] || {}), accountManager: newAM };
-    });
-    await saveLoanMeta();
+  if (_reassignPdfKey && origDoc?.savedRows) {
+    const movedNos     = new Set(movedItems.map(i => (i.CHSAssetNo || '').trim().toLowerCase()));
+    const filteredRows = origDoc.savedRows.filter(row => !movedNos.has((row[0] || '').trim().toLowerCase()));
+    try {
+      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '/savedRows.json', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(filteredRows)
+      });
+    } catch(e) {}
   }
-  await patchLoanDoc(_reassignPdfKey);
+
   scheduleSave(); renderLoans(); renderTable();
+  writeAudit('loan_reassigned', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' moved from ' + g.loanTo + ' to ' + targetLoanData.loanTo, { from: g.loanTo, to: targetLoanData.loanTo, items: movedItems.map(i => i.CHSAssetNo) });
   closeReassignAMModal();
-  showToast('success', 'Loan updated');
+  showToast('success', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' moved to ' + targetLoanData.loanTo);
 }
 
 function toggleAllReassignItems() {
