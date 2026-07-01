@@ -7797,6 +7797,7 @@ async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
 let _reassignLoanKey = null;
 let _reassignUpcomingId = null;
 let _reassignPdfKey = null;
+let _reassignScheduled = false;
 
 // Resolve Simpro job ID from cache then Firebase
 async function _getJobId(pdfKey) {
@@ -7821,11 +7822,47 @@ async function openReassignAMByKey(key) {
   if (!g) return;
   _reassignLoanKey = key;
   _reassignUpcomingId = null;
+  _reassignScheduled = !!g.scheduled;
   const batchId = g.items[0]?.BatchID || null;
   _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
 
-  document.getElementById('reassign-am-title').textContent    = 'Reassign Items — ' + g.loanTo;
   document.getElementById('reassign-am-subtitle').textContent = g.items.length + ' device' + (g.items.length !== 1 ? 's' : '');
+
+  // ── Scheduled loan → show edit form (same as upcoming loan edit) ──
+  if (g.scheduled) {
+    document.getElementById('reassign-am-title').textContent = 'Edit Loan — ' + g.loanTo;
+    document.getElementById('reassign-items-section').style.display = 'none';
+    document.getElementById('reassign-target-section').style.display = 'none';
+    document.getElementById('reassign-new-loan-btn').style.display   = 'none';
+    document.getElementById('reassign-form-fields').style.display    = '';
+    document.getElementById('reassign-confirm-label').textContent    = 'Save Changes';
+    document.getElementById('reassign-loan-to').value    = g.loanTo || '';
+    document.getElementById('reassign-location').value   = g.location || '';
+    document.getElementById('reassign-start-date').value = g.startDate || '';
+    document.getElementById('reassign-end-date').value   = g.endDate || '';
+    const sel = document.getElementById('reassign-am-select');
+    const curAMName = getGroupAM(g);
+    sel.innerHTML = '<option value="">Select account manager...</option>' +
+      accountManagers.map(am => `<option value="${esc(am.name)}" ${am.name === curAMName ? 'selected' : ''}>${esc(am.name)}</option>`).join('');
+    const curAM = accountManagers.find(a => a.name === curAMName);
+    document.getElementById('reassign-am-email').value = curAM?.email || g.items[0]?.BorrowerEmail || '';
+    sel.onchange = () => {
+      const am = accountManagers.find(a => a.name === sel.value);
+      if (am) document.getElementById('reassign-am-email').value = am.email || '';
+    };
+    document.getElementById('reassign-contact').value  = '';
+    document.getElementById('reassign-notes').value    = '';
+    document.getElementById('reassign-shipping').value = '';
+    try {
+      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
+      if (r.ok) { const d = await r.json(); if (d) { document.getElementById('reassign-contact').value = d.contactNumber || ''; document.getElementById('reassign-notes').value = d.notesCell || d.notes || ''; document.getElementById('reassign-shipping').value = d.authCell || ''; } }
+    } catch(e) {}
+    document.getElementById('reassign-am-modal').classList.add('open');
+    return;
+  }
+
+  // ── Active loan → show reassign/move view ────────────────────────
+  document.getElementById('reassign-am-title').textContent = 'Reassign Items — ' + g.loanTo;
 
   // Items checkboxes
   document.getElementById('reassign-items-section').style.display = 'block';
@@ -7865,6 +7902,7 @@ function closeReassignAMModal() {
   _reassignLoanKey = null;
   _reassignUpcomingId = null;
   _reassignPdfKey = null;
+  _reassignScheduled = false;
 }
 
 
@@ -7933,17 +7971,18 @@ async function reassignCreateNewLoan() {
 }
 
 async function confirmReassignAM() {
+  const newLoanTo    = document.getElementById('reassign-loan-to').value.trim();
+  const newLocation  = document.getElementById('reassign-location').value.trim();
+  const newStartDate = document.getElementById('reassign-start-date').value;
+  const newEndDate   = document.getElementById('reassign-end-date').value;
+  const newAM        = document.getElementById('reassign-am-select').value;
+  const newEmail     = document.getElementById('reassign-am-email').value.trim();
+  const newContact   = document.getElementById('reassign-contact').value.trim();
+  const newNotes     = document.getElementById('reassign-notes').value.trim();
+  const newShipping  = document.getElementById('reassign-shipping').value.trim();
+
   // ── UPCOMING LOAN EDIT ─────────────────────────────────────────────
   if (_reassignUpcomingId) {
-    const newLoanTo    = document.getElementById('reassign-loan-to').value.trim();
-    const newLocation  = document.getElementById('reassign-location').value.trim();
-    const newStartDate = document.getElementById('reassign-start-date').value;
-    const newEndDate   = document.getElementById('reassign-end-date').value;
-    const newAM        = document.getElementById('reassign-am-select').value;
-    const newEmail     = document.getElementById('reassign-am-email').value.trim();
-    const newContact   = document.getElementById('reassign-contact').value.trim();
-    const newNotes     = document.getElementById('reassign-notes').value.trim();
-    const newShipping  = document.getElementById('reassign-shipping').value.trim();
     const u = upcomingLoans.find(x => x.id === _reassignUpcomingId);
     if (u) {
       if (newLoanTo)    u.loanTo         = newLoanTo;
@@ -7962,6 +8001,39 @@ async function confirmReassignAM() {
         } catch(e) {}
       }
       renderLoans();
+      showToast('success', 'Loan updated');
+    }
+    closeReassignAMModal();
+    return;
+  }
+
+  // ── SCHEDULED LOAN EDIT (confirmed loan with future start date) ────
+  if (_reassignScheduled) {
+    const g = getLoanGroupByKey(_reassignLoanKey);
+    if (g) {
+      g.items.forEach(item => {
+        const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
+        if (idx < 0) return;
+        if (newLoanTo)    equipment[idx].OnLoanTo      = newLoanTo;
+        if (newLocation)  equipment[idx].Location      = newLocation;
+        if (newStartDate) equipment[idx].LoanStartDate = newStartDate;
+        if (newEndDate)   equipment[idx].LoanEndDate   = newEndDate;
+        if (newEmail)     equipment[idx].BorrowerEmail = newEmail;
+      });
+      if (newAM) {
+        const amKeys = [g.items[0]?.BatchID, _reassignPdfKey].filter(Boolean);
+        amKeys.forEach(k => { loanMeta[k] = { ...(loanMeta[k] || {}), accountManager: newAM }; });
+        await saveLoanMeta();
+      }
+      if (_reassignPdfKey) {
+        try {
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, ...(newAM ? { accountManager: newAM } : {}) })
+          });
+        } catch(e) {}
+      }
+      scheduleSave(); renderLoans(); renderTable();
       showToast('success', 'Loan updated');
     }
     closeReassignAMModal();
