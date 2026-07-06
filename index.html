@@ -4105,10 +4105,12 @@ function renderLoans() {
     // Items that are ONLY in upcomingLoans (unconfirmed bookings) are handled separately below.
     const isScheduled = e.LoanStartDate && e.LoanStartDate > today;
     const target = isScheduled ? scheduledGrouped : grouped;
-    // Group by BatchID (unique per loan) so two loans that happen to share the same
-    // customer + due date never collapse into one card. Falls back to the old composite
-    // key only for legacy items saved before BatchID existed.
-    const key = e.BatchID || (e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||''));
+    // Group by customer+location+due date, not BatchID: BatchID can legitimately be
+    // fragmented across several IDs for what is really one loan (items added at different
+    // times via different flows), and — see _loanKey below — can even collide across two
+    // unrelated loans due to a separate bug. The visible card must follow OnLoanTo, the
+    // field the user actually controls, not the internal bookkeeping id.
+    const key = e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||'');
     if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled };
     target[key].items.push(e);
   });
@@ -5822,12 +5824,14 @@ function getLoanGroupByKey(key) {
   return (window._loanGroupMap || {})[key] || null;
 }
 
-// Canonical identity for a rendered loan group. Must prefer BatchID (unique per loan) —
-// keying by loanTo+endDate alone lets two different loans to the same customer with the
-// same due date collide, causing "Add items"/"Reassign"/etc. to silently act on the wrong loan.
+// Canonical identity for a rendered loan group — must match the same fields renderLoans()
+// partitions cards by (customer + location + due date), NOT BatchID: BatchID can be
+// fragmented across one real loan, or (see the reassign fix below) even collide between two
+// unrelated loans, so it's not safe as an identity key. The old key here was loanTo+endDate
+// only (no location), so two differently-located loans to the same customer with the same
+// due date could collide and hijack each other's Add items/Reassign/Extend/Return/Delete.
 function _loanKey(g) {
-  const batchId = g.items && g.items[0] && g.items[0].BatchID;
-  return encodeURIComponent(batchId || (g.loanTo + '|||' + (g.endDate || ''))).replace(/'/g, '%27');
+  return encodeURIComponent(g.loanTo + '|||' + (g.location || '') + '|||' + (g.endDate || '')).replace(/'/g, '%27');
 }
 
 function viewLoanDoc(gi) {
@@ -7893,7 +7897,7 @@ async function openReassignAMByKey(key) {
   const _tgtSel = document.getElementById('reassign-target-loan');
   const _tgtOpts = ['<option value="">— Select loan —</option>'];
   (window._loanGroups || []).forEach(og => {
-    const ogKey = encodeURIComponent(og.loanTo + '|||' + og.endDate).replace(/'/g, '%27');
+    const ogKey = _loanKey(og);
     if (ogKey === key) return;
     const ogBId = og.items[0]?.BatchID;
     const sj = (ogBId && window._simproJobCache?.[ogBId]) || (ogBId && window._loanDocCache?.[ogBId]?.simproJobId);
@@ -8080,9 +8084,21 @@ async function confirmReassignAM() {
   } else {
     const tg = getLoanGroupByKey(targetKey);
     if (!tg) { showToast('error', 'Target loan not found'); return; }
-    targetBatchId    = tg.items[0]?.BatchID || null;
     targetGroupItems = tg.items;
     targetLoanData   = { loanTo: tg.loanTo, location: tg.location || '', startDate: tg.startDate || '', endDate: tg.endDate || '', accountManager: getGroupAM(tg), jobType: 'Demo' };
+    // The target loan must always have a real BatchID to move items into. If its items
+    // predate BatchID (legacy data) or somehow lack one, mint a fresh one now and backfill
+    // it onto the target's existing items — otherwise the moved item would keep its OLD
+    // BatchID (see the unconditional assign below being skipped), leaving one BatchID
+    // pointing at two different customers' loans, which corrupts every BatchID-keyed lookup
+    // (Simpro job linkage, loan doc notes, PDF association) for both loans going forward.
+    targetBatchId = tg.items[0]?.BatchID || ('batch_' + Date.now());
+    if (!tg.items[0]?.BatchID) {
+      targetGroupItems.forEach(item => {
+        const tIdx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
+        if (tIdx >= 0) equipment[tIdx].BatchID = targetBatchId;
+      });
+    }
   }
 
   const origDoc = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
@@ -8111,7 +8127,7 @@ async function confirmReassignAM() {
     equipment[idx].Location      = targetLoanData.location;
     equipment[idx].LoanStartDate = targetLoanData.startDate;
     equipment[idx].LoanEndDate   = targetLoanData.endDate;
-    if (targetBatchId) equipment[idx].BatchID = targetBatchId;
+    equipment[idx].BatchID       = targetBatchId;
   });
 
   if (_reassignPdfKey && origDoc?.savedRows) {
