@@ -4105,7 +4105,10 @@ function renderLoans() {
     // Items that are ONLY in upcomingLoans (unconfirmed bookings) are handled separately below.
     const isScheduled = e.LoanStartDate && e.LoanStartDate > today;
     const target = isScheduled ? scheduledGrouped : grouped;
-    const key = e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||'');
+    // Group by BatchID (unique per loan) so two loans that happen to share the same
+    // customer + due date never collapse into one card. Falls back to the old composite
+    // key only for legacy items saved before BatchID existed.
+    const key = e.BatchID || (e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||''));
     if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled };
     target[key].items.push(e);
   });
@@ -4184,7 +4187,7 @@ function renderLoans() {
   // Store groups by key for reliable lookup
   window._loanGroupMap = {};
   groups.forEach((g, gi) => {
-    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
+    const key = _loanKey(g);
     // Attach loan-specific notes from cached loanDocs (not from device Notes field)
     const batchId = g.items[0]?.BatchID;
     if (batchId && window._loanDocCache && window._loanDocCache[batchId]) {
@@ -4219,7 +4222,7 @@ function renderLoans() {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
     const isSoon = daysUntilStart <= 2;
-    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
+    const key = _loanKey(g);
     window._loanGroupMap = window._loanGroupMap || {};
     window._loanGroupMap[key] = g;
     const _slcId = 'slc_' + sgi;
@@ -4345,7 +4348,7 @@ function renderLoans() {
     : '';
   document.getElementById('loans-list').innerHTML = upcomingSection + groups.map((g, gi) => {
     const overdue = g.endDate && g.endDate < today;
-    const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27');
+    const key = _loanKey(g);
     const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
     const _rActive = getLoanReadiness(_rKeyActive);
     const _startDate = g.items[0]?.LoanStartDate || '';
@@ -5819,9 +5822,17 @@ function getLoanGroupByKey(key) {
   return (window._loanGroupMap || {})[key] || null;
 }
 
+// Canonical identity for a rendered loan group. Must prefer BatchID (unique per loan) —
+// keying by loanTo+endDate alone lets two different loans to the same customer with the
+// same due date collide, causing "Add items"/"Reassign"/etc. to silently act on the wrong loan.
+function _loanKey(g) {
+  const batchId = g.items && g.items[0] && g.items[0].BatchID;
+  return encodeURIComponent(batchId || (g.loanTo + '|||' + (g.endDate || ''))).replace(/'/g, '%27');
+}
+
 function viewLoanDoc(gi) {
   const g = (window._loanGroups || [])[gi];
-  if (g) { const key = encodeURIComponent(g.loanTo + '|||' + g.endDate).replace(/'/g, '%27'); viewLoanDocByKey(key); }
+  if (g) { viewLoanDocByKey(_loanKey(g)); }
 }
 
 async function viewLoanDocByKey(key) {
@@ -8338,6 +8349,7 @@ async function activateUpcomingLoans() {
   let changed = false;
   for (const upcoming of toActivate) {
     let thisLoanActivated = false;
+    const stillBlocked = [];
     for (const uItem of upcoming.items) {
       const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (idx < 0) continue;
@@ -8346,6 +8358,15 @@ async function activateUpcomingLoans() {
       const prevLoc     = prev.Location    || '';
       const prevBatchId = prev.BatchID     || '';
       const prevEndDate = prev.LoanEndDate || '';
+      // Item is still genuinely checked out on a DIFFERENT active loan — it hasn't actually
+      // been returned yet, so don't rip it away from that loan just because this booking's
+      // start date arrived. Leave it pending here until it's actually available; otherwise
+      // an item shared between two loans (e.g. added to both) can silently empty out the
+      // original loan and make it disappear entirely.
+      if (prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes') {
+        stillBlocked.push(uItem);
+        continue;
+      }
       // Log transfer history
       if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
         logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
@@ -8383,7 +8404,15 @@ async function activateUpcomingLoans() {
     // Only remove from upcoming list if at least one item was actually activated.
     // If no items were found (e.g. equipment IDs don't match yet), keep the entry
     // so it doesn't silently disappear on every refresh.
-    if (thisLoanActivated) {
+    if (stillBlocked.length) {
+      // Some items are still checked out elsewhere — keep this upcoming loan around with
+      // only those, so it can retry once they're returned. Persist immediately since
+      // deleteUpcomingLoan (the other branch) also saves right away.
+      if (thisLoanActivated) {
+        upcoming.items = stillBlocked;
+        await saveUpcomingLoans();
+      }
+    } else if (thisLoanActivated) {
       await deleteUpcomingLoan(upcoming.id);
     }
   }
