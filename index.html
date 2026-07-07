@@ -1893,6 +1893,7 @@ async function loadData() {
     hideLoading();
     await loadSentNotifications();
     await loadUpcomingLoans();
+    await loadLoanMeta();
     await loadLoanDocNotes();
     await loadKitGroups();
     // Migrate AccountManager from items → loanMeta, then strip from items
@@ -3828,6 +3829,11 @@ function daysBetween(dateA, dateB) {
 }
 
 async function submitBatchLoan() {
+  // Disable immediately to prevent double-submission
+  const _submitBtn = document.getElementById('btn-batch');
+  if (_submitBtn && _submitBtn.disabled) return; // already running
+  if (_submitBtn) { _submitBtn.disabled = true; _submitBtn.textContent = 'Checking…'; }
+
   const loanTo   = document.getElementById('b-loan-to').value.trim();
   const location = document.getElementById('b-location').value.trim();
   const startDate = document.getElementById('b-start-date').value;
@@ -3838,6 +3844,8 @@ async function submitBatchLoan() {
   function showErr(msg) {
     document.getElementById('batch-feedback').style.display = 'block';
     document.getElementById('batch-feedback').innerHTML = `<div style="background:var(--red-light);border:1px solid var(--red-border);color:var(--red);border-radius:var(--radius);padding:10px 14px;font-size:13px">${msg}</div>`;
+    // Re-enable button on validation error so user can fix and resubmit
+    if (_submitBtn) { _submitBtn.disabled = false; _submitBtn.textContent = 'Confirm Loan'; }
   }
 
   if (!loanTo || !location) { showErr('Please fill in "On Loan To" and "Location".'); return; }
@@ -3989,8 +3997,8 @@ async function submitBatchLoan() {
     const badge = document.getElementById('loan-confirmed-badge');
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
 
-    btn.disabled = false; btn.textContent = 'Confirm Loan';
     clearTimeout(savingTimeout);
+    btn.disabled = false; btn.textContent = 'Confirm Loan';
     batchDevices = [{ id: 'bd_0', value: '' }];
     window._batchStatus = {};
     ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
@@ -7601,10 +7609,18 @@ async function confirmAddItemsToLoan() {
 async function _doAddItemsToLoan(g, validRows) {
   if (!validRows.length) return;
   const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
-  const added = [], skipped = [];
+  const added = [], skipped = [], collisions = [];
   validRows.forEach(r => {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
     if (idx < 0) { skipped.push(r.value); return; }
+    const item = equipment[idx];
+    // Collision check: item is on loan to a DIFFERENT batch — adding it here would overwrite that loan
+    const onDifferentLoan = item.OnLoanTo && item.Returned !== 'Yes' && item.BatchID && item.BatchID !== batchId;
+    if (onDifferentLoan) {
+      collisions.push(item.CHSAssetNo + ' (on loan to ' + item.OnLoanTo + ')');
+      skipped.push(r.value);
+      return;
+    }
     Object.assign(equipment[idx], {
       OnLoanTo: g.loanTo, Location: g.location,
       LoanStartDate: g.startDate || nzDate(),
@@ -7615,6 +7631,9 @@ async function _doAddItemsToLoan(g, validRows) {
     logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
     added.push(equipment[idx]);
   });
+  if (collisions.length) {
+    showToast('error', 'Skipped ' + collisions.length + ' item(s) already on a different active loan: ' + collisions.join(', '));
+  }
   if (added.length) {
     writeAudit('items_added', added.length + ' item' + (added.length !== 1 ? 's' : '') + ' added to loan — ' + g.loanTo, {
       loanTo: g.loanTo, location: g.location, batchId,
@@ -8164,6 +8183,9 @@ function toggleAllReassignItems() {
 async function deleteUpcomingLoanPrompt(id) {
   const u = upcomingLoans.find(x => x.id === id);
   if (!u) return;
+  const pw = await adminPrompt('Enter admin password to cancel upcoming loan for ' + u.loanTo + ':');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm('Cancel upcoming loan for ' + u.loanTo + ' starting ' + formatDisplayDate(u.startDate) + '?\n\nThis will remove the upcoming loan. The current loans will not be affected.')) return;
   // Clear _upcomingLoanId from affected equipment
   u.items.forEach(uItem => {
