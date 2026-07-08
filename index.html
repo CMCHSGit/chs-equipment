@@ -1572,7 +1572,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 3;
+const APP_VERSION = 4;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7483,7 +7483,15 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
           window._autoSendOnClose = false;
           window._pendingLoanDocPdfKey = batchId || null;
           generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber||'' }, _mergedSavedRows, _savedExtra);
-          setTimeout(async () => { try { await saveLoanDocChanges(); } catch(e) {} }, 600);
+          setTimeout(async () => {
+            // If the user has since opened a DIFFERENT loan's doc (e.g. clicked onto
+            // another card while this delayed save was pending), #printable-loan-doc
+            // and _currentLoanDocInfo now belong to that other loan. Saving here would
+            // write ITS content under batchId's key, corrupting the wrong loan's name/
+            // dates. Only proceed if the doc we generated above is still the one open.
+            if (window._currentLoanDocInfo?._pdfKey !== batchId) return;
+            try { await saveLoanDocChanges(); } catch(e) {}
+          }, 600);
         }, 400);
       })();
     }}]
@@ -7848,6 +7856,9 @@ async function _doAddItemsToLoan(g, validRows) {
     generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber || '' }, _mergedSavedRows, _savedExtra);
     // Auto-save the updated loan doc (persists new items to Firebase) then update Simpro
     setTimeout(async () => {
+      // Skip if the user has since opened a different loan's doc — see matching
+      // comment in _doBasketAddToLoan's Done handler for why this check exists.
+      if (window._currentLoanDocInfo?._pdfKey !== batchId) return;
       try { await saveLoanDocChanges(); } catch(e) {}
     }, 600);
   }, 400);
