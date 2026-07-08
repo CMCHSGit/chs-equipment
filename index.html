@@ -460,6 +460,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div class="header-right">
       <span id="app-version" class="desktop-only" style="font-size:10px;color:var(--text3);margin-right:2px" title="App version — bumps with every deployed change"></span>
+      <button id="test-mode-toggle" class="btn btn-sm desktop-only" onclick="toggleTestMode()" style="font-size:10px;padding:3px 7px;margin-right:6px">🧪 Test Mode</button>
       <div class="sync-pill desktop-only"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Ready</span></div>
       <div class="nav-tabs desktop-only">
         <button class="nav-tab active" onclick="switchTab('scan')" id="tab-scan"><span>Scan / Loan</span></button>
@@ -490,6 +491,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </div>
       </div>
       <span id="app-version-m" class="mobile-only" style="font-size:10px;color:var(--text3);margin-right:2px" title="App version — bumps with every deployed change"></span>
+      <button id="test-mode-toggle-m" class="btn btn-sm mobile-only" onclick="toggleTestMode()" style="font-size:10px;padding:3px 7px;margin-right:4px">🧪 Test</button>
       <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
       <button class="hamburger-btn mobile-only" onclick="event.stopPropagation();toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
         <span></span><span></span><span></span>
@@ -1574,6 +1576,42 @@ const APP_VERSION = 1;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
+
+// ── TEST MODE ──────────────────────────────────────────────────────────
+// When on, loan creation/editing/collision checks all run exactly as normal
+// and equipment + Firebase state is written for real — only the two external
+// side effects (Simpro job creation and confirmation emails) are simulated
+// instead of actually firing, so you can validate loan behaviour without
+// touching real systems.
+let TEST_MODE = localStorage.getItem('testMode') === '1';
+async function toggleTestMode() {
+  // Turning it ON is gated behind the admin password — this is an internal tool,
+  // not something any logged-in user should be able to flip. Turning it back OFF
+  // is unrestricted since that only restores normal (real) behaviour.
+  if (!TEST_MODE) {
+    const pw = await adminPrompt('Enter admin password to enable Test Mode:');
+    if (pw === null) return;
+    if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  }
+  TEST_MODE = !TEST_MODE;
+  localStorage.setItem('testMode', TEST_MODE ? '1' : '0');
+  updateTestModeUI();
+  showToast('info', TEST_MODE ? 'Test mode ON — Simpro jobs & emails are simulated, not sent' : 'Test mode OFF — Simpro & email are live again');
+}
+function updateTestModeUI() {
+  ['test-mode-toggle', 'test-mode-toggle-m'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = TEST_MODE ? '🧪 TEST MODE' : '🧪 Test Mode';
+    el.style.background = TEST_MODE ? '#e67e22' : '';
+    el.style.color = TEST_MODE ? '#fff' : '';
+    el.style.borderColor = TEST_MODE ? '#e67e22' : '';
+    el.title = TEST_MODE
+      ? 'Test mode is ON — Simpro jobs & emails are simulated, not sent. Click to turn off.'
+      : 'Click to enable test mode — simulates Simpro jobs & emails instead of sending them for real.';
+  });
+}
+updateTestModeUI();
 
 // EmailJS config
 const EJS_SERVICE           = 'service_ig1n6ut';
@@ -4766,6 +4804,7 @@ function buildReturnLink(loanTo, endDate) {
 
 async function sendOverdueEmail(group) {
   if (!_ejsReady || !group.email) return;
+  if (TEST_MODE) { console.log('TEST MODE: overdue email simulated for', group.email); return; }
   const itemsList = group.items.map(function(e) {
     return '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '');
   }).join('\n');
@@ -4817,6 +4856,7 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
     console.log('Loan confirmation not sent - EmailJS not ready or no AM email');
     return;
   }
+  if (TEST_MODE) { console.log('TEST MODE: loan confirmation email simulated for', amEmail); return; }
   const loanFormHtml = _getLoanFormHtml();
   const manageLink  = APP_URL + '?tab=loans';
   const returnLink  = buildReturnLink(loanInfo.loanTo, loanInfo.endDate);
@@ -6056,7 +6096,7 @@ function openBatchReturnByGroup(g) {
 }
 
 async function _pushSimproAfterRemoval(batchId, loanDoc, updatedRows) {
-  if (!SIMPRO_PROXY_URL) return;
+  if (!SIMPRO_PROXY_URL || TEST_MODE) return;
   window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
   const _rawJobId = window._simproJobCache[batchId] || loanDoc.simproJobId || null;
   const _isPending = _rawJobId === 'pending' || (typeof _rawJobId === 'object');
@@ -6195,6 +6235,35 @@ async function createSimproJob(existingJobId) {
     } catch(e) {}
   }
 
+  // TEST MODE — simulate success without ever calling the real Simpro proxy.
+  // Reuses a previously-simulated ID for this loan (so updates keep the same
+  // "job number") rather than minting a new one on every save. Non-numeric IDs
+  // also make every later update/close/removal Simpro call a safe no-op, since
+  // those all already guard on isNaN(Number(jobId)) before touching the network.
+  if (TEST_MODE) {
+    const fakeId = (typeof jobId === 'string' && jobId.startsWith('TEST-'))
+      ? jobId
+      : ('TEST-' + Math.floor(100000 + Math.random() * 900000));
+    window._simproJobCache[pdfKey] = fakeId;
+    localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+    if (pdfKey) {
+      try {
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fakeId)
+        });
+      } catch(e) {}
+    }
+    window._simproCreating = null;
+    if (isNew) {
+      showToast('success', 'Test mode — Simpro job simulated (' + fakeId + ')');
+      writeAudit('simpro_created', 'Simpro job ' + fakeId + ' created (TEST MODE) — ' + loanTo, { loanTo, jobId: fakeId, pdfKey });
+    } else {
+      showToast('success', 'Test mode — Simpro job update simulated (' + fakeId + ')');
+      writeAudit('simpro_updated', 'Simpro job ' + fakeId + ' updated (TEST MODE) — ' + loanTo, { loanTo, jobId: fakeId, pdfKey });
+    }
+    return;
+  }
+
   const requestBody = JSON.stringify({
     loanTo, location, notes, shippingDetails,
     startDate:      toISO(startDate),
@@ -6261,7 +6330,7 @@ async function createSimproJob(existingJobId) {
 }
 
 function closeSimproJob(jobId, loanTo) {
-  if (!SIMPRO_PROXY_URL || !jobId || isNaN(Number(jobId))) return;
+  if (!SIMPRO_PROXY_URL || !jobId || TEST_MODE || isNaN(Number(jobId))) return;
   const body = JSON.stringify({ jobId: Number(jobId), close: true });
   fetch(SIMPRO_PROXY_URL, {
     method: 'POST', headers: { 'Content-Type': 'text/plain' },
@@ -8013,7 +8082,7 @@ function closeReassignAMModal() {
 
 // Direct Simpro proxy call — used when we have all data in-memory (no DOM dependency)
 async function _simproPush(batchId, jobId, loanData, items) {
-  if (!SIMPRO_PROXY_URL) return;
+  if (!SIMPRO_PROXY_URL || TEST_MODE) return;
   function _toISO(d) {
     if (!d) return '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
