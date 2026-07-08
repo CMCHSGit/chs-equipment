@@ -460,7 +460,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div class="header-right">
       <span id="app-version" class="desktop-only" style="font-size:10px;color:var(--text3);margin-right:2px" title="App version — bumps with every deployed change"></span>
-      <button id="test-mode-toggle" class="btn btn-sm desktop-only" onclick="toggleTestMode()" style="font-size:10px;padding:3px 7px;margin-right:6px">🧪 Test Mode</button>
+      <button id="test-mode-toggle" class="btn btn-sm desktop-only" onclick="toggleTestMode()" style="display:none;font-size:10px;padding:3px 7px;margin-right:6px">🧪 Test Mode</button>
       <div class="sync-pill desktop-only"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Ready</span></div>
       <div class="nav-tabs desktop-only">
         <button class="nav-tab active" onclick="switchTab('scan')" id="tab-scan"><span>Scan / Loan</span></button>
@@ -491,7 +491,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         </div>
       </div>
       <span id="app-version-m" class="mobile-only" style="font-size:10px;color:var(--text3);margin-right:2px" title="App version — bumps with every deployed change"></span>
-      <button id="test-mode-toggle-m" class="btn btn-sm mobile-only" onclick="toggleTestMode()" style="font-size:10px;padding:3px 7px;margin-right:4px">🧪 Test</button>
+      <button id="test-mode-toggle-m" class="btn btn-sm mobile-only" onclick="toggleTestMode()" style="display:none;font-size:10px;padding:3px 7px;margin-right:4px">🧪 Test</button>
       <div class="sync-pill mobile-only" style="font-size:11px"><div class="sync-dot" id="sync-dot-m"></div><span id="sync-label-m">Ready</span></div>
       <button class="hamburger-btn mobile-only" onclick="event.stopPropagation();toggleMobileMenu()" id="hamburger-btn" aria-label="Menu">
         <span></span><span></span><span></span>
@@ -1572,7 +1572,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 2;
+const APP_VERSION = 3;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1583,11 +1583,22 @@ const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatab
 // side effects (Simpro job creation and confirmation emails) are simulated
 // instead of actually firing, so you can validate loan behaviour without
 // touching real systems.
+//
+// The toggle button itself is only shown to these two operators (matched
+// against the "Switch user" name, currentOperator — see initOperator/
+// setOperator below). Everyone else never sees it exists. Since
+// currentOperator can change mid-session, updateTestModeUI() is re-run from
+// renderOperatorAvatar() on every load and every user switch, and forces
+// TEST_MODE off if the newly-selected operator isn't on this list — so a
+// hidden "stuck on" state can never silently affect a real customer's loan
+// under someone else's name.
+const TEST_MODE_OPERATORS = ['Peter Lin', 'Jonathan Nasrun'];
 let TEST_MODE = localStorage.getItem('testMode') === '1';
 async function toggleTestMode() {
-  // Turning it ON is gated behind the admin password — this is an internal tool,
-  // not something any logged-in user should be able to flip. Turning it back OFF
-  // is unrestricted since that only restores normal (real) behaviour.
+  // Turning it ON is also gated behind the admin password — belt-and-braces
+  // with the operator check above, since this is an internal-only tool.
+  // Turning it back OFF is unrestricted since that only restores normal
+  // (real) behaviour.
   if (!TEST_MODE) {
     const pw = await adminPrompt('Enter admin password to enable Test Mode:');
     if (pw === null) return;
@@ -1599,9 +1610,17 @@ async function toggleTestMode() {
   showToast('info', TEST_MODE ? 'Test mode ON — Simpro jobs & emails are simulated, not sent' : 'Test mode OFF — Simpro & email are live again');
 }
 function updateTestModeUI() {
+  const authorized = TEST_MODE_OPERATORS.includes(currentOperator);
+  if (TEST_MODE && !authorized) {
+    // Safety net: an unauthorized/unknown operator must never inherit a
+    // silently-active test mode.
+    TEST_MODE = false;
+    localStorage.setItem('testMode', '0');
+  }
   ['test-mode-toggle', 'test-mode-toggle-m'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
+    el.style.display = authorized ? '' : 'none';
     el.textContent = TEST_MODE ? '🧪 TEST MODE' : '🧪 Test Mode';
     el.style.background = TEST_MODE ? '#e67e22' : '';
     el.style.color = TEST_MODE ? '#fff' : '';
@@ -1611,7 +1630,6 @@ function updateTestModeUI() {
       : 'Click to enable test mode — simulates Simpro jobs & emails instead of sending them for real.';
   });
 }
-updateTestModeUI();
 
 // EmailJS config
 const EJS_SERVICE           = 'service_ig1n6ut';
@@ -1696,6 +1714,7 @@ function setOperator(name) {
 }
 
 function renderOperatorAvatar() {
+  updateTestModeUI();
   const btn = document.getElementById('user-avatar-btn');
   const ddAv = document.getElementById('user-av-dd-av');
   const ddName = document.getElementById('user-av-dd-name');
