@@ -1,0 +1,10 @@
+#!/bin/sh
+# Auto-bump APP_VERSION in index.html whenever it's staged in this commit,
+# so the header badge always reflects the latest pushed code. See
+# .githooks/bump-version.js. Requires `git config core.hooksPath .githooks`
+# (run once per clone) to be active.
+if git diff --cached --name-only | grep -qx 'index.html'; then
+  repo_root="$(git rev-parse --show-toplevel)"
+  node "$repo_root/.githooks/bump-version.js" || exit 1
+  git add index.html
+fi
