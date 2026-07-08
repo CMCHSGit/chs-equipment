@@ -5785,6 +5785,12 @@ async function saveLoanDocChanges() {
   loanItems.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo);
     if (idx >= 0) {
+      // Some loan docs (upcoming bookings for items still on another active/scheduled
+      // loan) list equipment that isn't actually assigned to THIS batch yet — it's only
+      // reserved for later. Skip those here; writing to them would silently rename/move
+      // the OTHER loan that currently owns the item. Only items with no BatchID yet
+      // (legacy/never-batched) or one matching this doc's own key are safe to touch.
+      if (equipment[idx].BatchID && equipment[idx].BatchID !== pdfKey) return;
       if (newLoanTo)         equipment[idx].OnLoanTo       = newLoanTo;
       if (newLocation)       equipment[idx].Location       = newLocation;
       if (newEndDate)        equipment[idx].LoanEndDate    = toISO(newEndDate);
