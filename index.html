@@ -3932,11 +3932,31 @@ async function submitBatchLoan() {
       }
     }
 
+    const _lockedOut = [];
     for (const item of directDevices) {
       const idx = equipment.findIndex(e => e.id === item.id);
       if (idx < 0) continue;
+      // Check if item is on an active loan that OVERLAPS with this new loan
+      const _existItem = equipment[idx];
+      const _onOtherLoan = _existItem.OnLoanTo && _existItem.Returned !== 'Yes' && _existItem.BatchID && _existItem.BatchID !== batchId;
+      if (_onOtherLoan) {
+        const _existEnd   = _existItem.LoanEndDate || '';
+        const _existStart = _existItem.LoanStartDate || '';
+        const _overlaps   = (!_existEnd || _existEnd >= startDate) && (!endDate || endDate >= _existStart);
+        if (_overlaps) {
+          const _existJob = _getSimproJob(_existItem.BatchID);
+          _lockedOut.push(_existItem.CHSAssetNo + (_existJob
+            ? ' (Job #' + _existJob + ' — ' + _existItem.OnLoanTo + ' — dates overlap)'
+            : ' (on loan to ' + _existItem.OnLoanTo + ' until ' + formatDisplayDate(_existEnd) + ' — dates overlap)'));
+          continue;
+        }
+        // Dates don't overlap — allow through
+      }
       Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', BatchID: batchId, BorrowerEmail: batchEmail });
       logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
+    }
+    if (_lockedOut.length) {
+      showToast('error', _lockedOut.length + ' item(s) skipped — already locked to a Simpro job: ' + _lockedOut.join(', '));
     }
 
     if (upcomingDevices.length) {
@@ -4119,13 +4139,10 @@ function renderLoans() {
     // Items that are ONLY in upcomingLoans (unconfirmed bookings) are handled separately below.
     const isScheduled = e.LoanStartDate && e.LoanStartDate > today;
     const target = isScheduled ? scheduledGrouped : grouped;
-    // Group by customer+location+due date, not BatchID: BatchID can legitimately be
-    // fragmented across several IDs for what is really one loan (items added at different
-    // times via different flows), and — see _loanKey below — can even collide across two
-    // unrelated loans due to a separate bug. The visible card must follow OnLoanTo, the
-    // field the user actually controls, not the internal bookkeeping id.
-    const key = e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||'');
-    if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled };
+    // Group by BatchID when present (immutable, Simpro-linked).
+    // Fall back to OnLoanTo+Location+EndDate only for legacy items without a BatchID.
+    const key = e.BatchID || (e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||''));
+    if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled, batchKey: e.BatchID || null };
     target[key].items.push(e);
   });
   const overdueOnly = document.getElementById('loans-overdue-only')?.checked;
@@ -6760,7 +6777,7 @@ function toggleReadiness(rKey, field) {
   if (!newVal || field === 'noTestRequired') {
     // Un-marking or noTestRequired toggle — no date picker needed
     loanMeta[rKey] = { ...r, [field]: newVal, [field + 'At']: newVal ? nzNow() : '' };
-    scheduleSave();
+    saveLoanMeta();
     renderLoans();
     return;
   }
@@ -6787,7 +6804,7 @@ function confirmReadinessDate() {
   const ts = date ? (date + 'T' + time + ':00+12:00') : nzNow();
   const r = getLoanReadiness(rKey);
   loanMeta[rKey] = { ...r, [field]: true, [field + 'At']: ts };
-  scheduleSave();
+  saveLoanMeta();
   closeReadinessDateModal();
   renderLoans();
 }
@@ -6795,12 +6812,26 @@ async function loadLoanMeta() {
   try {
     const r = await fetch(FB_URL + '/loanMeta.json');
     const d = await r.json();
-    loanMeta = (d && typeof d === 'object') ? d : {};
-  } catch(e) { loanMeta = {}; }
+    // Merge with any loanMeta already loaded from /data.json
+    if (d && typeof d === 'object') {
+      loanMeta = { ...loanMeta, ...d };
+    }
+  } catch(e) { console.warn('loadLoanMeta failed:', e); }
 }
-function saveLoanMeta() {
-  scheduleSave(); // loanMeta is included in the /data.json payload via saveBin
-  return Promise.resolve();
+async function saveLoanMeta() {
+  // Write loanMeta directly to its own Firebase node immediately
+  // (don't rely on scheduleSave debounce which can lose state on rapid interactions)
+  try {
+    const _safeMeta = {};
+    Object.entries(loanMeta).forEach(([k, v]) => { _safeMeta[k.replace(/[.#$[\]/]/g, '_')] = v; });
+    await fetch(FB_URL + '/loanMeta.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_safeMeta)
+    });
+  } catch(e) {
+    console.warn('saveLoanMeta failed:', e);
+  }
 }
 
 // ── ACCOUNT MANAGERS ──────────────────────────────────────────────────
@@ -7606,6 +7637,20 @@ async function confirmAddItemsToLoan() {
   await _doAddItemsToLoan(g, available);
 }
 
+function _getSimproJob(batchId) {
+  // Returns Simpro job number if this batch has one locked in, null otherwise
+  if (!batchId) return null;
+  const cached = window._simproJobCache?.[batchId];
+  if (cached && cached !== 'pending' && typeof cached !== 'object') return cached;
+  return window._loanDocCache?.[batchId]?.simproJobId || null;
+}
+
+function _isSimproLocked(item) {
+  // Returns job number string if equipment is locked to a Simpro job, null otherwise
+  if (!item.OnLoanTo || item.Returned === 'Yes' || !item.BatchID) return null;
+  return _getSimproJob(item.BatchID);
+}
+
 async function _doAddItemsToLoan(g, validRows) {
   if (!validRows.length) return;
   const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
@@ -7614,12 +7659,26 @@ async function _doAddItemsToLoan(g, validRows) {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
     if (idx < 0) { skipped.push(r.value); return; }
     const item = equipment[idx];
-    // Collision check: item is on loan to a DIFFERENT batch — adding it here would overwrite that loan
+    // Collision check: item is on an ACTIVE loan to a different batch AND dates overlap.
+    // Same equipment on non-overlapping loans is allowed — handled by upcoming loan pathway.
     const onDifferentLoan = item.OnLoanTo && item.Returned !== 'Yes' && item.BatchID && item.BatchID !== batchId;
     if (onDifferentLoan) {
-      collisions.push(item.CHSAssetNo + ' (on loan to ' + item.OnLoanTo + ')');
-      skipped.push(r.value);
-      return;
+      const newStart   = g.startDate || nzDate();
+      const newEnd     = g.endDate || '';
+      const existEnd   = item.LoanEndDate || '';
+      const existStart = item.LoanStartDate || '';
+      // Dates overlap if existing loan hasn't ended before new loan starts, and vice versa
+      const overlaps = (!existEnd || existEnd >= newStart) && (!newEnd || newEnd >= existStart);
+      if (overlaps) {
+        const simproJob = _getSimproJob(item.BatchID);
+        const msg = simproJob
+          ? item.CHSAssetNo + ' (Job #' + simproJob + ' — ' + item.OnLoanTo + ' — dates overlap)'
+          : item.CHSAssetNo + ' (on loan to ' + item.OnLoanTo + ' until ' + formatDisplayDate(existEnd) + ' — dates overlap)';
+        collisions.push(msg);
+        skipped.push(r.value);
+        return;
+      }
+      // Dates don't overlap — allow through (item will transfer when current loan ends)
     }
     Object.assign(equipment[idx], {
       OnLoanTo: g.loanTo, Location: g.location,
