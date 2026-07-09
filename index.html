@@ -1572,7 +1572,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 4;
+const APP_VERSION = 5;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7356,7 +7356,13 @@ function clearBasket() {
 
 async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   if (!itemsToAdd.length) return;
-  const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
+  // For an upcoming loan, g.items are resolved to their LIVE equipment records
+  // (see proceedFromBasket's upcoming-loan branch) — for items still physically
+  // out on a different active/scheduled loan, that record's BatchID belongs to
+  // THAT other loan, not this one. Always prefer the upcoming loan's own stable
+  // id (g._upcomingId, same as u.id everywhere else it's used) so this loan's
+  // own name/Simpro job are never written onto a different loan's batch.
+  const batchId = g._upcomingId || g.items[0]?.BatchID || ('batch_' + Date.now());
   let added = 0;
 
   const today = nzDate();
@@ -7755,7 +7761,9 @@ function _isSimproLocked(item) {
 
 async function _doAddItemsToLoan(g, validRows) {
   if (!validRows.length) return;
-  const batchId = g.items[0]?.BatchID || ('batch_' + Date.now());
+  // See matching comment in _doBasketAddToLoan: prefer the upcoming loan's own
+  // stable id over a shared item's current (possibly a different loan's) BatchID.
+  const batchId = g._upcomingId || g.items[0]?.BatchID || ('batch_' + Date.now());
   const added = [], skipped = [], collisions = [];
   validRows.forEach(r => {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
