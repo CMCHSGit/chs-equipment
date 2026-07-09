@@ -1572,7 +1572,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 7;
+const APP_VERSION = 8;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3912,6 +3912,28 @@ function daysBetween(dateA, dateB) {
   return Math.round((new Date(dateB) - new Date(dateA)) / 86400000);
 }
 
+// "Starting Soon" is business-day-aware, not a flat calendar-day count — a
+// Monday start should flag from the preceding Friday, since the weekend
+// gives staff no real chance to test/dispatch. Counts weekdays strictly
+// between today and startDate (Mon–Fri only; Sat/Sun are free and don't
+// count against the 2-day notice window). Uses UTC date math throughout so
+// day-of-week is derived from the YYYY-MM-DD string itself, not shifted by
+// the browser's local timezone.
+function isStartingSoon(today, startDate) {
+  if (!startDate) return false;
+  if (startDate <= today) return true;
+  let businessDays = 0;
+  let cur = today;
+  while (cur < startDate) {
+    const [y, m, d] = cur.split('-').map(Number);
+    const next = new Date(Date.UTC(y, m - 1, d + 1));
+    cur = next.toISOString().slice(0, 10);
+    const dow = next.getUTCDay(); // 0=Sun..6=Sat
+    if (dow !== 0 && dow !== 6) businessDays++;
+  }
+  return businessDays <= 2;
+}
+
 async function submitBatchLoan() {
   // Disable immediately to prevent double-submission
   const _submitBtn = document.getElementById('btn-batch');
@@ -4340,7 +4362,7 @@ function renderLoans() {
   const scheduledCards = filteredScheduled.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
-    const isSoon = daysUntilStart <= 2;
+    const isSoon = isStartingSoon(today, g.startDate);
     const key = _loanKey(g);
     window._loanGroupMap = window._loanGroupMap || {};
     window._loanGroupMap[key] = g;
@@ -4403,7 +4425,7 @@ function renderLoans() {
   const upcomingCards = filteredUpcoming.map(u => {
     const daysUntilStart = daysBetween(today, u.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
-    const isSoon = daysUntilStart <= 2;
+    const isSoon = isStartingSoon(today, u.startDate);
     const itemsHtml = u.items.map(uItem => {
       const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (!eq) return '';
