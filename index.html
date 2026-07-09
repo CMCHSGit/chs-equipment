@@ -1572,7 +1572,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 5;
+const APP_VERSION = 6;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1594,6 +1594,18 @@ const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatab
 // under someone else's name.
 const TEST_MODE_OPERATORS = ['Peter Lin', 'Jonathan Nasrun'];
 let TEST_MODE = localStorage.getItem('testMode') === '1';
+
+// Every loan batch minted while TEST_MODE is on gets a 'testbatch_' id instead
+// of 'batch_' — this is the single source of truth for "is this a test loan",
+// since BatchID (equipment) and id (upcomingLoans) both derive from it. Views
+// use isTestBatch() to hide test loans while TEST_MODE is off, so what you do
+// in test mode never bleeds into what real staff see day to day.
+function newBatchId() { return (TEST_MODE ? 'testbatch_' : 'batch_') + Date.now(); }
+function isTestBatch(batchId) { return !!batchId && batchId.indexOf('testbatch_') === 0; }
+// True when e's current loan/booking should be hidden from view right now —
+// i.e. it's tagged as a test loan and we're not currently in test mode.
+function isHiddenTestLoan(e) { return !TEST_MODE && isTestBatch(e && e.BatchID); }
+
 async function toggleTestMode() {
   // Turning it ON is also gated behind the admin password — belt-and-braces
   // with the operator check above, since this is an internal-only tool.
@@ -1607,6 +1619,12 @@ async function toggleTestMode() {
   TEST_MODE = !TEST_MODE;
   localStorage.setItem('testMode', TEST_MODE ? '1' : '0');
   updateTestModeUI();
+  // Refresh every view that hides/shows test-mode loans so the switch takes
+  // effect immediately, without needing a tab change or page reload.
+  try { renderLoans(); } catch(e) {}
+  try { renderTable(); } catch(e) {}
+  try { updateStats(); } catch(e) {}
+  try { renderCalendar(); } catch(e) {}
   showToast('info', TEST_MODE ? 'Test mode ON — Simpro jobs & emails are simulated, not sent' : 'Test mode OFF — Simpro & email are live again');
 }
 function updateTestModeUI() {
@@ -2321,15 +2339,17 @@ function updateStats() {
   const today = nzDate();
   const total = equipment.length;
   const booked = equipment.filter(e => {
+    if (isHiddenTestLoan(e)) return false;
     const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
     return isScheduled || !!getUpcomingLoanForItem(e.id);
   }).length;
   const on = equipment.filter(e => {
+    if (isHiddenTestLoan(e)) return false;
     const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
     const isUpcoming = !isScheduled && !!getUpcomingLoanForItem(e.id);
     return e.OnLoanTo && e.Returned !== 'Yes' && !isScheduled && !isUpcoming;
   }).length;
-  const odItems = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && e.LoanEndDate < today);
+  const odItems = equipment.filter(e => !isHiddenTestLoan(e) && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && e.LoanEndDate < today);
   const od = odItems.length;
   document.getElementById('stat-total').textContent     = total;
   document.getElementById('stat-onloan').textContent    = on;
@@ -2637,7 +2657,7 @@ function buildStatusCell(e, on, od) {
   const upcoming = getUpcomingLoanForItem(e.id);
   // Also check if this equipment item IS itself a scheduled loan (future LoanStartDate on the record)
   const today = nzDate();
-  const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+  const isScheduled = !isHiddenTestLoan(e) && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
   const scheduledLoanTo = isScheduled ? e.OnLoanTo : null;
 
   const upcomingLoanTo = upcoming ? upcoming.loanTo : scheduledLoanTo;
@@ -2656,10 +2676,11 @@ function renderTable() {
   const sf  = document.getElementById('db-status').value;
   const today = nzDate();
   let rows = equipment.filter(e => {
-    const isScheduled = e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+    const hidden = isHiddenTestLoan(e);
+    const isScheduled = !hidden && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
     const isUpcoming = !isScheduled && !!getUpcomingLoanForItem(e.id);
     const isBooked = isScheduled || isUpcoming;
-    const on = e.OnLoanTo && e.Returned !== 'Yes' && !isBooked, od = on && e.LoanEndDate && e.LoanEndDate < today;
+    const on = !hidden && e.OnLoanTo && e.Returned !== 'Yes' && !isBooked, od = on && e.LoanEndDate && e.LoanEndDate < today;
     const match = !q || Object.values(e).join(' ').toLowerCase().includes(q);
     if (sf === 'available') return match && !on && !isBooked;
     if (sf === 'on-loan')   return match && on;
@@ -2678,7 +2699,13 @@ function renderTable() {
   document.getElementById('db-row-count').textContent = rows.length + ' of ' + equipment.length + ' items';
   setTimeout(() => { initDragScroll(); initColResize(); updateSelectionBar(); }, 50);
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
-    const on = e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
+    const hidden = isHiddenTestLoan(e);
+    const on = !hidden && e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
+    // Blank out loan-info columns for a hidden test loan so the row reads as
+    // fully available, not just "not flagged on-loan" with stale-looking text.
+    const dOnLoanTo = hidden ? '' : e.OnLoanTo;
+    const dLocation = hidden ? '' : e.Location;
+    const dLoanEndDate = hidden ? '' : e.LoanEndDate;
     const checked = _selectedIds.has(e.id);
     return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}" onclick="openDetail('${e.id}')">
       <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
@@ -2692,9 +2719,9 @@ function renderTable() {
       <td style="white-space:nowrap;padding:6px 8px">${buildStatusCell(e, on, od)}</td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;font-size:11px;color:var(--text2)" title="${esc(window._tileLocationCache?.[String(e.TileNo)]?.location||'')}">${e.TileNo && window._tileLocationCache?.[String(e.TileNo)] ? esc(window._tileLocationCache[String(e.TileNo)].location) : (e.TileNo ? '<span style="color:var(--text3)">—</span>' : '—')}</td>
       <td style="white-space:nowrap;padding:6px 8px;font-size:11px">${e.TileNo && window._tileLocationCache?.[String(e.TileNo)]?.alert ? '<span style="color:var(--amber);font-weight:500">⚠ ' + esc(window._tileLocationCache[String(e.TileNo)].alert) + '</span>' : '—'}</td>
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.OnLoanTo)}">${esc(e.OnLoanTo)}</td>
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Location)}">${esc(e.Location)}</td>
-      <td style="font-size:12px;white-space:nowrap;padding:6px 8px;color:${od?'var(--red)':'var(--text2)'}">${esc(e.LoanEndDate)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(dOnLoanTo)}">${esc(dOnLoanTo)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(dLocation)}">${esc(dLocation)}</td>
+      <td style="font-size:12px;white-space:nowrap;padding:6px 8px;color:${od?'var(--red)':'var(--text2)'}">${esc(dLoanEndDate)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.TileNo)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.PartNo)}</td>
       <td style="white-space:nowrap;padding:6px 8px">${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
@@ -3968,7 +3995,7 @@ async function submitBatchLoan() {
       btn.disabled = false; btn.textContent = 'Confirm Loan';
       showToast('error', 'Save timed out — please try again.');
     }, 15000);
-    const batchId    = 'batch_' + Date.now();
+    const batchId    = newBatchId();
     const notes          = document.getElementById('b-notes').value;
     const shippingDetails = document.getElementById('b-shipping-details')?.value || '';
     const batchEmail     = document.getElementById('b-email').value.trim();
@@ -4188,7 +4215,9 @@ function renderLoans() {
   const q = (document.getElementById('loans-search')?.value || '').toLowerCase();
   const sortBy = document.getElementById('loans-sort')?.value || 'added';
   const today = nzDate();
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && !isHiddenTestLoan(e));
+  // Hide test-mode bookings from the "Upcoming Loans" section while Test Mode is off.
+  const upcomingLoansVisible = TEST_MODE ? upcomingLoans : upcomingLoans.filter(u => !isTestBatch(u.id));
   const grouped = {}, scheduledGrouped = {};
   onLoan.forEach(e => {
     // A confirmed loan with a future start date shows under "Upcoming Loans" section
@@ -4234,12 +4263,12 @@ function renderLoans() {
   if (sortBy === 'alpha')  groups.sort((a,b) => a.loanTo.localeCompare(b.loanTo));
   if (sortBy === 'expiry') groups.sort((a,b) => (a.endDate||'9999') < (b.endDate||'9999') ? -1 : 1);
   if (sortBy === 'start')  groups.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
-  const upcomingDeviceCount = upcomingLoans.reduce((sum, u) => sum + u.items.length, 0);
+  const upcomingDeviceCount = upcomingLoansVisible.reduce((sum, u) => sum + u.items.length, 0);
   const scheduledGroups = Object.values(scheduledGrouped);
-  const totalUpcoming = upcomingLoans.length + scheduledGroups.length;
+  const totalUpcoming = upcomingLoansVisible.length + scheduledGroups.length;
   document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.filter(e => !(e.LoanStartDate && e.LoanStartDate > today)).length + ' devices' + (totalUpcoming ? ' · ' + totalUpcoming + ' upcoming' : '');
   if (!groups.length) {
-    if (!upcomingLoans.length) {
+    if (!upcomingLoansVisible.length) {
       document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
       return;
     }
@@ -4360,7 +4389,7 @@ function renderLoans() {
   }).join('');
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
   // Apply same search/sort to upcoming loans; skip those merged into active/scheduled cards
-  let filteredUpcoming = upcomingLoans.filter(u => {
+  let filteredUpcoming = upcomingLoansVisible.filter(u => {
     if (_mergedUpcomingIds.has(u.id)) return false;
     const matchQ = !q || u.loanTo.toLowerCase().includes(q) || (u.location||'').toLowerCase().includes(q);
     const matchAM = !amFilter || (u.accountManager || '') === amFilter;
@@ -4431,7 +4460,7 @@ function renderLoans() {
       '</div>';
   }).join('');
 
-  const upcomingSection = (upcomingLoans.length || scheduledGroups.length)
+  const upcomingSection = (upcomingLoansVisible.length || scheduledGroups.length)
     ? '<div style="margin:0 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:#6d28d9;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Upcoming Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
       + scheduledCards + upcomingCards
       + '<div style="margin:8px 0 16px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Current Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
@@ -4945,7 +4974,8 @@ function lastMondayNZ() {
 function checkOverdueNotifications() {
   if (!_ejsReady) return; // don't mark as sent if EmailJS isn't ready yet
   const today = nzDate();
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate);
+  // Test loans never get real overdue reminders, in test mode or not.
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && !isTestBatch(e.BatchID));
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + e.LoanEndDate;
@@ -7362,7 +7392,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   // THAT other loan, not this one. Always prefer the upcoming loan's own stable
   // id (g._upcomingId, same as u.id everywhere else it's used) so this loan's
   // own name/Simpro job are never written onto a different loan's batch.
-  const batchId = g._upcomingId || g.items[0]?.BatchID || ('batch_' + Date.now());
+  const batchId = g._upcomingId || g.items[0]?.BatchID || newBatchId();
   let added = 0;
 
   const today = nzDate();
@@ -7763,7 +7793,7 @@ async function _doAddItemsToLoan(g, validRows) {
   if (!validRows.length) return;
   // See matching comment in _doBasketAddToLoan: prefer the upcoming loan's own
   // stable id over a shared item's current (possibly a different loan's) BatchID.
-  const batchId = g._upcomingId || g.items[0]?.BatchID || ('batch_' + Date.now());
+  const batchId = g._upcomingId || g.items[0]?.BatchID || newBatchId();
   const added = [], skipped = [], collisions = [];
   validRows.forEach(r => {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
@@ -8289,7 +8319,7 @@ async function confirmReassignAM() {
     // BatchID (see the unconditional assign below being skipped), leaving one BatchID
     // pointing at two different customers' loans, which corrupts every BatchID-keyed lookup
     // (Simpro job linkage, loan doc notes, PDF association) for both loans going forward.
-    targetBatchId = tg.items[0]?.BatchID || ('batch_' + Date.now());
+    targetBatchId = tg.items[0]?.BatchID || newBatchId();
     if (!tg.items[0]?.BatchID) {
       targetGroupItems.forEach(item => {
         const tIdx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
@@ -8541,19 +8571,19 @@ async function deleteUpcomingLoan(id) {
 // Get upcoming loan for a given equipment id (if any)
 // Get the soonest upcoming loan for a given equipment id
 function getUpcomingLoanForItem(equipId) {
-  const matches = upcomingLoans.filter(u => u.items.some(i => i.id === equipId || i.CHSAssetNo === equipId));
+  const matches = upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.items.some(i => i.id === equipId || i.CHSAssetNo === equipId));
   if (!matches.length) return null;
   return matches.sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1)[0];
 }
 function getUpcomingLoanForAssetNo(assetNo) {
-  const matches = upcomingLoans.filter(u => u.items.some(i => i.CHSAssetNo === assetNo));
+  const matches = upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.items.some(i => i.CHSAssetNo === assetNo));
   if (!matches.length) return null;
   return matches.sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1)[0];
 }
 // Get ALL upcoming loans for an asset (sorted soonest first) — for chained scheduling
 function getAllUpcomingLoansForAssetNo(assetNo) {
   return upcomingLoans
-    .filter(u => u.items.some(i => i.CHSAssetNo === assetNo))
+    .filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.items.some(i => i.CHSAssetNo === assetNo))
     .sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
 }
 
@@ -8997,7 +9027,7 @@ function renderCalendar() {
   const rows = [];
 
   // Active loans from equipment (exclude scheduled — future start date)
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes');
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && !isHiddenTestLoan(e));
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + (e.Location || '') + '|||' + (e.LoanEndDate || '');
@@ -9015,6 +9045,7 @@ function renderCalendar() {
 
   // Upcoming loans (conflict-queued, not already in equipment records)
   upcomingLoans.forEach(u => {
+    if (!TEST_MODE && isTestBatch(u.id)) return;
     if (u.endDate && u.endDate < winStart) return;
     if (u.startDate && u.startDate > winEnd) return;
     // Skip if already represented by a scheduled equipment group for the same customer
