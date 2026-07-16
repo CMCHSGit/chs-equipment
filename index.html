@@ -1568,11 +1568,28 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<!-- MISSING SIMPRO JOBS MODAL -->
+<div class="modal-overlay" id="missing-simpro-modal">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">&#128295; Missing Simpro Jobs</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="missing-simpro-subtitle"></div>
+      </div>
+    </div>
+    <div id="missing-simpro-body" style="margin-bottom:4px;max-height:60vh;overflow-y:auto"></div>
+    <div class="modal-footer" style="justify-content:space-between">
+      <button class="btn" onclick="closeMissingSimproModal()">Close</button>
+      <button class="btn btn-secondary" onclick="refreshMissingSimproModal()">Refresh</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 8;
+const APP_VERSION = 9;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1991,6 +2008,7 @@ async function loadData() {
       await activateUpcomingLoans();
       checkOverdueNotifications();
       checkOrphanedLoans(); // detect any loans whose data.json save was lost
+      checkMissingSimproJobs(); // detect any loans whose Simpro job never got created
     }, 500);
     return true;
   } catch(e) {
@@ -2246,7 +2264,7 @@ function switchTab(n) {
   if (n === 'loans')    { if (_dirty.loans)    { renderLoans();    _dirty.loans    = false; } }
   if (n === 'calendar') { if (_dirty.calendar) { renderCalendar(); _dirty.calendar = false; } }
   if (n === 'retired')  { clearRetiredSelection(); if (_dirty.retired) { renderRetired(); _dirty.retired = false; } }
-  if (n === 'settings') { renderKitGroupsSettings(); renderSettingsUser(); }
+  if (n === 'settings') { renderKitGroupsSettings(); renderSettingsUser(); renderSimproHealthBadge(); }
 }
 
 // ── COUNT OVERVIEW ────────────────────────────────────────────────────
@@ -3306,7 +3324,7 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal','missing-simpro-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
@@ -6222,6 +6240,23 @@ async function createSimproJob(existingJobId) {
     });
   }
 
+  const pdfKey = window._currentLoanDocInfo?._pdfKey;
+  await _submitSimproJob({
+    pdfKey, loanTo, location, startDate, endDate,
+    accountManager: am, contactNumber: contactNum,
+    jobType: info.jobType || 'Demo',
+    items: loanItems, notes, shippingDetails, existingJobId
+  });
+}
+
+// Headless core shared by createSimproJob() (reads the currently-open
+// printable-loan-doc) and retryMissingSimproJob() (a loan whose doc may
+// never have been opened at all — see "Missing Simpro Jobs" below). Takes
+// every field explicitly so it has no dependency on DOM state that could be
+// stale or belong to a different loan.
+async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, accountManager, contactNumber, jobType, items, notes, shippingDetails, existingJobId }) {
+  if (!SIMPRO_PROXY_URL) return;
+
   function toISO(d) {
     if (!d) return '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
@@ -6231,8 +6266,6 @@ async function createSimproJob(existingJobId) {
     }
     return d;
   }
-
-  const pdfKey = window._currentLoanDocInfo?._pdfKey;
 
   // Check local cache first — load from localStorage so cache survives page refresh
   window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
@@ -6326,6 +6359,7 @@ async function createSimproJob(existingJobId) {
       } catch(e) {}
     }
     window._simproCreating = null;
+    _cacheSimproJobId(pdfKey, fakeId);
     if (isNew) {
       showToast('success', 'Test mode — Simpro job simulated (' + fakeId + ')');
       writeAudit('simpro_created', 'Simpro job ' + fakeId + ' created (TEST MODE) — ' + loanTo, { loanTo, jobId: fakeId, pdfKey });
@@ -6337,13 +6371,13 @@ async function createSimproJob(existingJobId) {
   }
 
   const requestBody = JSON.stringify({
-    loanTo, location, notes, shippingDetails,
+    loanTo, location, notes: notes || '', shippingDetails: shippingDetails || '',
     startDate:      toISO(startDate),
     endDate:        toISO(endDate),
-    accountManager: am,
-    contactNumber:  contactNum,
-    jobType:        info.jobType || 'Demo',
-    items:          loanItems,
+    accountManager: accountManager || '',
+    contactNumber:  contactNumber || '',
+    jobType:        jobType || 'Demo',
+    items:          items || [],
     jobId:          (jobId != null && !isNaN(Number(jobId))) ? Number(jobId) : (jobId || null),
     pdfKey:         pdfKey || null
   });
@@ -6379,6 +6413,7 @@ async function createSimproJob(existingJobId) {
             localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
             window._simproCreating = null;
             clearInterval(poll);
+            _cacheSimproJobId(pdfKey, storedId);
             showToast('success', 'Simpro job created — ID: ' + storedId);
             writeAudit('simpro_created', 'Simpro job #' + storedId + ' created — ' + loanTo, { loanTo, jobId: storedId, pdfKey });
           }
@@ -6401,6 +6436,16 @@ async function createSimproJob(existingJobId) {
   }
 }
 
+// Keep _loanDocCache (what Job # badges and findLoansMissingSimproJob() read)
+// in sync the moment a job resolves — without this, a freshly-created job
+// stays invisible in the UI until the next full loadLoanDocNotes() reload.
+function _cacheSimproJobId(pdfKey, jobId) {
+  if (!pdfKey) return;
+  window._loanDocCache = window._loanDocCache || {};
+  window._loanDocCache[pdfKey] = { ...(window._loanDocCache[pdfKey] || {}), simproJobId: jobId };
+  if (_dirty.loans === false) renderLoans();
+}
+
 function closeSimproJob(jobId, loanTo) {
   if (!SIMPRO_PROXY_URL || !jobId || TEST_MODE || isNaN(Number(jobId))) return;
   const body = JSON.stringify({ jobId: Number(jobId), close: true });
@@ -6409,6 +6454,130 @@ function closeSimproJob(jobId, loanTo) {
     body, mode: 'no-cors'
   }).catch(e => console.warn('Simpro close failed:', e));
   writeAudit('simpro_closed', 'Simpro job #' + Number(jobId) + ' closed' + (loanTo ? ' — ' + loanTo : ''), { loanTo: loanTo || '', jobId: Number(jobId) });
+}
+
+// ── MISSING SIMPRO JOBS (ADMIN) ────────────────────────────────────────
+// A loan's Simpro job is only actually created when its confirmation form
+// gets closed (see _autoCreateSimproOnClose in doLoan/closeLoanDoc) — if
+// that never happens (browser closed early, crash, dropped network mid-
+// close), the job silently never gets created and nothing ever retries it.
+// This scans current loans for any with no job number recorded at all, and
+// lets an admin create one after the fact via _submitSimproJob's headless
+// path (no dependency on that loan's doc ever having been opened).
+function findLoansMissingSimproJob() {
+  if (!SIMPRO_PROXY_URL) return [];
+  const today = nzDate();
+  const results = [];
+  const seen = new Set();
+
+  // Active + scheduled loans, grouped by BatchID exactly like renderLoans()
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && !isHiddenTestLoan(e));
+  const grouped = {};
+  onLoan.forEach(e => {
+    const key = e.BatchID || (e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||''));
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location||'', startDate: e.LoanStartDate||'', endDate: e.LoanEndDate||'', batchId: e.BatchID||null, items: [] };
+    grouped[key].items.push(e);
+  });
+  Object.values(grouped).forEach(g => {
+    if (!g.loanTo || !g.loanTo.trim()) return; // skip blank/junk legacy records
+    const pdfKey = g.batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
+    if (seen.has(pdfKey)) return;
+    seen.add(pdfKey);
+    if (window._loanDocCache?.[pdfKey]?.simproJobId) return;
+    results.push({
+      pdfKey, loanTo: g.loanTo, location: g.location, startDate: g.startDate, endDate: g.endDate,
+      accountManager: getGroupAM(g),
+      items: g.items.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
+      type: (g.startDate && g.startDate > today) ? 'Scheduled' : 'Active'
+    });
+  });
+
+  // Upcoming (booking-only) loans
+  const upcomingVisible = TEST_MODE ? upcomingLoans : upcomingLoans.filter(u => !isTestBatch(u.id));
+  upcomingVisible.forEach(u => {
+    if (!u.loanTo || !u.loanTo.trim() || seen.has(u.id)) return;
+    seen.add(u.id);
+    if (window._loanDocCache?.[u.id]?.simproJobId) return;
+    results.push({
+      pdfKey: u.id, loanTo: u.loanTo, location: u.location||'', startDate: u.startDate||'', endDate: u.endDate||'',
+      accountManager: u.accountManager||'',
+      items: u.items.map(i => {
+        const eq = equipment.find(e => e.id === i.id || e.CHSAssetNo === i.CHSAssetNo);
+        return { CHSAssetNo: i.CHSAssetNo, Model: eq?.Model||'', Description: eq?.Description||'', SerialNo: eq?.SerialNo||'' };
+      }),
+      type: 'Upcoming'
+    });
+  });
+
+  results.sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
+  return results;
+}
+
+// Quiet startup check — nudges toward Settings rather than popping the modal
+// unprompted, since this can run before the operator has even looked around.
+function checkMissingSimproJobs() {
+  const missing = findLoansMissingSimproJob();
+  renderSimproHealthBadge();
+  if (missing.length) {
+    showToast('warn', missing.length + ' loan' + (missing.length > 1 ? 's have' : ' has') + ' no Simpro job — see Settings → Simpro Job Health.');
+  }
+}
+
+function renderSimproHealthBadge() {
+  const el = document.getElementById('simpro-health-count');
+  if (!el) return;
+  const n = findLoansMissingSimproJob().length;
+  el.textContent = n ? n + ' missing' : 'All good';
+  el.style.color = n ? 'var(--red)' : 'var(--green)';
+}
+
+function openMissingSimproJobsModal() {
+  renderMissingSimproJobsModal();
+  document.getElementById('missing-simpro-modal').classList.add('open');
+}
+function closeMissingSimproModal() {
+  document.getElementById('missing-simpro-modal').classList.remove('open');
+}
+function refreshMissingSimproModal() {
+  renderMissingSimproJobsModal();
+  renderSimproHealthBadge();
+}
+function renderMissingSimproJobsModal() {
+  const missing = findLoansMissingSimproJob();
+  document.getElementById('missing-simpro-subtitle').textContent = missing.length
+    ? missing.length + ' loan' + (missing.length > 1 ? 's' : '') + ' with no Simpro job recorded'
+    : 'All current loans have a Simpro job';
+  document.getElementById('missing-simpro-body').innerHTML = missing.length
+    ? missing.map(m => `
+      <div class="loan-device" id="msj_${esc(m.pdfKey)}" style="align-items:center">
+        <div class="loan-device-info">
+          <div style="font-weight:600;font-size:13px">${esc(m.loanTo)} <span style="font-weight:400;color:var(--text3);font-size:11px">&middot; ${esc(m.type)}</span></div>
+          <div class="loan-device-desc">${esc(m.location)} &middot; ${m.items.length} device${m.items.length!==1?'s':''}${m.startDate ? ' &middot; Starts ' + formatDisplayDate(m.startDate) : ''}${m.endDate ? ' &middot; Due ' + formatDisplayDate(m.endDate) : ''}</div>
+        </div>
+        <button class="btn btn-sm btn-primary" onclick="retryMissingSimproJob('${esc(m.pdfKey)}')">Create Job</button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:24px;color:var(--text3)">&#10003; No missing Simpro jobs right now.</div>';
+}
+
+async function retryMissingSimproJob(pdfKey) {
+  const missing = findLoansMissingSimproJob();
+  const m = missing.find(x => x.pdfKey === pdfKey);
+  if (!m) { showToast('error', 'Could not find that loan — it may already have a job now.'); renderMissingSimproJobsModal(); return; }
+  const row = document.getElementById('msj_' + pdfKey);
+  const btn = row?.querySelector('button');
+  if (btn) { btn.disabled = true; btn.textContent = TEST_MODE ? 'Simulating…' : 'Creating…'; }
+  await _submitSimproJob({
+    pdfKey: m.pdfKey, loanTo: m.loanTo, location: m.location, startDate: m.startDate, endDate: m.endDate,
+    accountManager: m.accountManager, contactNumber: '', jobType: 'Demo', items: m.items,
+    notes: '', shippingDetails: ''
+  });
+  // TEST_MODE and the "no pdfKey" path resolve synchronously above; the real
+  // path polls Firebase in the background over ~15s. Refresh shortly after
+  // either way — _cacheSimproJobId() already re-renders renderLoans() the
+  // moment a real job actually resolves, this just keeps this modal in sync.
+  setTimeout(() => {
+    if (document.getElementById('missing-simpro-modal').classList.contains('open')) refreshMissingSimproModal();
+  }, TEST_MODE ? 300 : 3500);
 }
 
 function exportLoanRTF() {
@@ -8537,6 +8706,12 @@ async function loadLoanDocNotes() {
           loanMeta[_encodedKey] = { ...(loanMeta[_encodedKey] || {}), accountManager: doc.accountManager };
       }
     }
+    // If the Loans tab already rendered before this fetch finished (likely,
+    // since this is one of several sequential loads at startup), its Job #
+    // badges and account-manager labels were built against an empty cache
+    // and silently stayed blank — nothing else was going to re-render them.
+    // Refresh now that the cache is actually ready.
+    renderLoans();
   } catch(e) { console.warn('Could not load loan doc notes', e); }
 }
 
@@ -9386,6 +9561,16 @@ function startAutoSync() {
         <div class="settings-section-sub">Define which accessories should be suggested when a trigger device is added to a loan basket.</div>
         <div id="kit-groups-list"></div>
         <button class="btn btn-primary" onclick="openAddKitGroup()" style="margin-top:8px">＋ Add Kit Group</button>
+      </div>
+
+      <!-- SIMPRO JOB HEALTH -->
+      <div class="settings-section">
+        <div class="settings-section-title">🔧 Simpro Job Health</div>
+        <div class="settings-section-sub">A loan's Simpro job is only created once its confirmation form is closed — if that never happens (browser closed early, crash, dropped network), the job silently never gets created. Check here for any current loan missing one.</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+          <button class="btn btn-primary" onclick="openMissingSimproJobsModal()">Review Missing Jobs</button>
+          <span id="simpro-health-count" style="font-size:13px;font-weight:500"></span>
+        </div>
       </div>
     </div>
 
