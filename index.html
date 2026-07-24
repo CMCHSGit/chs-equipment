@@ -1568,6 +1568,26 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
   </div>
 </div>
 
+<!-- TEST REPORTS MODAL -->
+<div class="modal-overlay" id="test-reports-modal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="test-reports-title">Test Reports</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Uploaded here, not part of the printable loan form. Max 8 MB per file.</div>
+      </div>
+    </div>
+    <div id="test-reports-body" style="margin-bottom:12px;max-height:50vh;overflow-y:auto"></div>
+    <div style="display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);padding-top:12px">
+      <input type="file" id="test-reports-input" style="flex:1;font-size:12px">
+      <button class="btn btn-primary btn-sm" id="test-reports-upload-btn" onclick="uploadTestReport()">&#x2B06; Upload</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTestReportsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- MISSING SIMPRO JOBS MODAL -->
 <div class="modal-overlay" id="missing-simpro-modal">
   <div class="modal" style="max-width:640px">
@@ -1589,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 9;
+const APP_VERSION = 10;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3324,7 +3344,7 @@ function showToast(type,msg) { const t=document.createElement('div'); t.classNam
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal','missing-simpro-modal'].forEach(id=>{
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal','missing-simpro-modal','test-reports-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
@@ -4409,6 +4429,9 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal(\'' + _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate).replace(/'/g,"%27") + '\',\'' + esc(g.loanTo).replace(/'/g,"&#39;") + '\')" title="Test reports">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports' +
+        '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(\'' + key + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Reassign account manager" style="font-size:11px">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
@@ -4485,6 +4508,9 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal(\'' + _readinessKey(u.id, u.loanTo, u.endDate).replace(/'/g,"%27") + '\',\'' + esc(u.loanTo).replace(/'/g,"&#39;") + '\')" title="Test reports">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports' +
+        '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendUpcomingLoan(\'' + u.id + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Reassign account manager" style="font-size:11px">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
@@ -4525,6 +4551,9 @@ function renderLoans() {
           ${buildReadinessButtons(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), false, g.items[0]?.LoanStartDate || '')}
           <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey('${key}')" title="View loan form">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal('${_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate).replace(/'/g,"%27")}','${esc(g.loanTo).replace(/'/g,"&#39;")}')" title="Test reports">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}')" title="Reassign account manager" style="font-size:11px">
@@ -7148,6 +7177,125 @@ async function saveLoanMeta() {
   } catch(e) {
     console.warn('saveLoanMeta failed:', e);
   }
+}
+
+// ── TEST REPORTS (per-loan file attachments) ───────────────────────────
+// Separate from the printable loan form entirely. Stored directly in the
+// Firebase Realtime Database as base64 (no Storage bucket set up for this
+// project) — metadata (filename/size/uploader) lives at /testReports/{key}
+// so the list is cheap to load; the base64 payload itself lives separately
+// at /testReportFiles/{key} and is only fetched when a file is actually
+// downloaded, so opening the modal never pulls the heavy data unnecessarily.
+// Keyed via _readinessKey() — the same stable per-loan identity used for
+// Test/Dispatch marks, so reports stay attached through scheduled → active
+// transitions exactly like readiness does.
+const TEST_REPORT_MAX_BYTES = 8 * 1024 * 1024; // 8MB per file
+let _testReportsKey = null; // loan key the modal is currently showing
+let _testReportsList = [];  // [{id, filename, mimeType, size, uploadedAt, uploadedBy}]
+
+async function openTestReportsModal(key, loanTo) {
+  if (!key) return;
+  _testReportsKey = key;
+  document.getElementById('test-reports-title').textContent = 'Test Reports — ' + loanTo;
+  document.getElementById('test-reports-input').value = '';
+  document.getElementById('test-reports-body').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">Loading…</div>';
+  document.getElementById('test-reports-modal').classList.add('open');
+  await refreshTestReportsList();
+}
+function closeTestReportsModal() {
+  document.getElementById('test-reports-modal').classList.remove('open');
+  _testReportsKey = null;
+  _testReportsList = [];
+}
+async function refreshTestReportsList() {
+  if (!_testReportsKey) return;
+  try {
+    const r = await fetch(FB_URL + '/testReports/' + _testReportsKey + '.json');
+    const d = await r.json();
+    _testReportsList = d ? Object.entries(d).map(([id, meta]) => ({ id, ...meta })) : [];
+    _testReportsList.sort((a,b) => (b.uploadedAt||'').localeCompare(a.uploadedAt||''));
+  } catch(e) { _testReportsList = []; }
+  renderTestReportsList();
+}
+function renderTestReportsList() {
+  const body = document.getElementById('test-reports-body');
+  if (!body) return;
+  body.innerHTML = _testReportsList.length ? _testReportsList.map(f => `
+    <div class="loan-device" style="align-items:center">
+      <div class="loan-device-info">
+        <div style="font-weight:600;font-size:13px">${esc(f.filename)}</div>
+        <div class="loan-device-desc">${_fmtFileSize(f.size)} &middot; uploaded by ${esc(f.uploadedBy || '—')} &middot; ${_fmtReadinessTs(f.uploadedAt)}</div>
+      </div>
+      <button class="btn btn-sm" onclick="downloadTestReport('${esc(f.id)}','${esc(f.filename).replace(/'/g,"&#39;")}')" title="Download">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+      <button class="btn btn-sm btn-red" onclick="deleteTestReport('${esc(f.id)}')" title="Delete">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+      </button>
+    </div>`).join('') : '<div style="text-align:center;padding:20px;color:var(--text3)">No test reports uploaded yet.</div>';
+}
+function _fmtFileSize(bytes) {
+  if (!bytes) return '0 KB';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+async function uploadTestReport() {
+  const input = document.getElementById('test-reports-input');
+  const file = input.files?.[0];
+  if (!file) { showToast('error', 'Choose a file first'); return; }
+  if (file.size > TEST_REPORT_MAX_BYTES) { showToast('error', 'File too large — max ' + _fmtFileSize(TEST_REPORT_MAX_BYTES)); return; }
+  if (!_testReportsKey) return;
+  const btn = document.getElementById('test-reports-upload-btn');
+  btn.disabled = true; btn.textContent = 'Uploading…';
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Could not read file'));
+      reader.readAsDataURL(file);
+    });
+    const id = uid();
+    const meta = { filename: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, uploadedAt: nzNow(), uploadedBy: currentOperator || '' };
+    await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
+    });
+    await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataUrl)
+    });
+    writeAudit('test_report_uploaded', file.name + ' uploaded — ' + document.getElementById('test-reports-title').textContent.replace('Test Reports — ', ''), { key: _testReportsKey, filename: file.name });
+    showToast('success', 'Report uploaded');
+    await refreshTestReportsList();
+  } catch(e) {
+    showToast('error', 'Upload failed: ' + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '⬆ Upload';
+  }
+}
+
+async function downloadTestReport(id, filename) {
+  if (!_testReportsKey) return;
+  try {
+    const r = await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json');
+    const dataUrl = await r.json();
+    if (!dataUrl) { showToast('error', 'Could not load file'); return; }
+    const a = document.createElement('a');
+    a.href = dataUrl; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  } catch(e) { showToast('error', 'Download failed'); }
+}
+
+async function deleteTestReport(id) {
+  const pw = await adminPrompt('Enter admin password to delete this test report:');
+  if (pw === null) return;
+  if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+  if (!_testReportsKey) return;
+  try {
+    await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
+    await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
+    showToast('success', 'Report deleted');
+    await refreshTestReportsList();
+  } catch(e) { showToast('error', 'Delete failed'); }
 }
 
 // ── ACCOUNT MANAGERS ──────────────────────────────────────────────────
