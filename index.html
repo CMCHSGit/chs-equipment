@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 10;
+const APP_VERSION = 11;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7095,20 +7095,25 @@ function buildReadinessButtons(rKey, isSoon, startDate) {
     statusBadge = '<span class="status-badge badge-not-tested">&#x26A0; Not Tested</span>';
   }
 
-  if (!showButtons) return statusBadge;
-
-  // Skip button — hidden when tested or noTestReq already set
-  const skipBtn = (!tested && !noTestReq)
+  // Skip is only OFFERED while still undecided, inside the action window —
+  // once the window closes with nothing chosen, it quietly stops offering.
+  const skipBtn = (showButtons && !tested && !noTestReq)
     ? `<button class="btn-readiness unticked" onclick="event.stopPropagation();toggleReadiness('${rKey}','noTestRequired')" title="Mark as no test required">&#x2014; Skip</button>`
     : '';
 
-  // Test button — hidden when noTestReq set
-  const testedBtn = noTestReq ? '' :
+  // Tested/Dispatched are permanent records once actually set — they keep
+  // showing (with their timestamp, and stay toggleable) even after the
+  // 7-day action window closes, so a loan that WAS tested/dispatched never
+  // looks like it silently never happened. Only an UNSET one is still
+  // gated to the window — no point offering the action on an old loan
+  // nobody's going to test/dispatch anymore.
+  const testedBtn = (noTestReq || !(showButtons || tested)) ? '' :
     `<button class="btn-readiness ${tested ? 'ticked-tested' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','tested')" title="${tested ? 'Tested ' + (r.testedAt||'') : 'Mark as tested'}">` +
     (tested ? '&#x2714; Tested' + (r.testedAt ? '<span style="font-size:10px;opacity:.7;margin-left:4px">' + _fmtReadinessTs(r.testedAt) + '</span>' : '') : '&#x25CB; Test') +
     '</button>';
 
-  const dispatchedBtn = `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
+  const dispatchedBtn = !(showButtons || dispatched) ? '' :
+    `<button class="btn-readiness ${dispatched ? 'ticked-dispatched' : 'unticked'}" onclick="event.stopPropagation();toggleReadiness('${rKey}','dispatched')" title="${dispatched ? 'Dispatched ' + (r.dispatchedAt||'') : 'Mark as dispatched'}">` +
     (dispatched ? '&#x1F69A; Dispatched' + (r.dispatchedAt ? '<span style="font-size:10px;opacity:.7;margin-left:4px">' + _fmtReadinessTs(r.dispatchedAt) + '</span>' : '') : '&#x1F69A; Dispatch') +
     '</button>';
 
