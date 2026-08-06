@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 11;
+const APP_VERSION = 12;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -8939,14 +8939,45 @@ function getAllUpcomingLoansForAssetNo(assetNo) {
 }
 
 // Called on app load — activate any upcoming loans whose start date has arrived
+// Certain account managers' equipment (currently: vet clinic demo kits)
+// routinely goes straight from one clinic to the next without ever coming
+// back to the office — so waiting on a "Returned" flag that will never come
+// just stalls the booking indefinitely. For loans run by these AMs,
+// activateUpcomingLoans() below auto-transfers instead of blocking, but only
+// when the new booking wants the EXACT same full set of items the old loan
+// currently has (a partial/mixed match still waits normally — see
+// _vetExactMatchBatchId()).
+const VET_AUTO_TRANSFER_AMS = ['Jessica Chalklen', 'Jessica Broughan', 'Leeanne Higgins'];
+
+// Returns the blocking BatchID if item eq is held by a loan whose FULL item
+// set exactly equals upcomingAssetSet (same items, same count — nothing more
+// or less), otherwise null. A booking that only shares SOME items with the
+// old loan is a mixed/partial case and does not qualify.
+function _vetExactMatchBatchId(eq, upcomingAssetSet) {
+  if (!eq.BatchID) return null;
+  const blockingItems = equipment.filter(e => e.BatchID === eq.BatchID && e.Returned !== 'Yes');
+  const blockingSet = new Set(blockingItems.map(e => e.CHSAssetNo));
+  if (blockingSet.size !== upcomingAssetSet.size) return null;
+  for (const assetNo of blockingSet) if (!upcomingAssetSet.has(assetNo)) return null;
+  return eq.BatchID;
+}
+
 async function activateUpcomingLoans() {
   const today = nzDate();
-  const toActivate = upcomingLoans.filter(u => u.startDate && u.startDate <= today);
+  // Sorted by start date so a chain of vet auto-transfers (kit going straight
+  // from one clinic to the next to the next) resolves in booking order —
+  // otherwise array order could let a later booking claim the kit ahead of
+  // an earlier one still waiting on it.
+  const toActivate = upcomingLoans
+    .filter(u => u.startDate && u.startDate <= today)
+    .sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
   if (!toActivate.length) return;
   let changed = false;
   for (const upcoming of toActivate) {
     let thisLoanActivated = false;
     const stillBlocked = [];
+    const isVetAM = VET_AUTO_TRANSFER_AMS.includes(upcoming.accountManager);
+    const upcomingAssetSet = new Set(upcoming.items.map(i => i.CHSAssetNo));
     for (const uItem of upcoming.items) {
       const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (idx < 0) continue;
@@ -8955,12 +8986,14 @@ async function activateUpcomingLoans() {
       const prevLoc     = prev.Location    || '';
       const prevBatchId = prev.BatchID     || '';
       const prevEndDate = prev.LoanEndDate || '';
+      const isBlocked = prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes';
+      const vetAutoTransfer = isBlocked && isVetAM && !!_vetExactMatchBatchId(prev, upcomingAssetSet);
       // Item is still genuinely checked out on a DIFFERENT active loan — it hasn't actually
       // been returned yet, so don't rip it away from that loan just because this booking's
       // start date arrived. Leave it pending here until it's actually available; otherwise
       // an item shared between two loans (e.g. added to both) can silently empty out the
-      // original loan and make it disappear entirely.
-      if (prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes') {
+      // original loan and make it disappear entirely. Exception: vetAutoTransfer above.
+      if (isBlocked && !vetAutoTransfer) {
         stillBlocked.push(uItem);
         continue;
       }
@@ -8969,11 +9002,11 @@ async function activateUpcomingLoans() {
         logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
           action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
           loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
-          notes: 'Auto-transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
+          notes: (vetAutoTransfer ? 'Auto-transferred (vet exact-match kit, never returned to office) from ' : 'Auto-transferred from ') + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
           operator: null
         });
         writeAudit('items_transferred',
-          prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + ' — upcoming loan started ' + upcoming.startDate,
+          prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + (vetAutoTransfer ? ' (vet exact-match kit)' : '') + ' — upcoming loan started ' + upcoming.startDate,
           { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] },
           'System (auto)');
       }
