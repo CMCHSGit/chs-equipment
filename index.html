@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 12;
+const APP_VERSION = 11;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4467,21 +4467,6 @@ function renderLoans() {
     const daysUntilStart = daysBetween(today, u.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
     const isSoon = isStartingSoon(today, u.startDate);
-    // If this booking's own start date has arrived but it still hasn't
-    // activated (see activateUpcomingLoans), it's stuck waiting on one of
-    // its items to actually come back from whoever currently has it — which
-    // can sit indefinitely with zero visible difference from a normal,
-    // on-track "Starting Soon" card. Surface it as a hard warning instead.
-    let blockInfo = null;
-    if (u.startDate && u.startDate <= today) {
-      for (const uItem of u.items) {
-        const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
-        if (eq && eq.OnLoanTo && eq.OnLoanTo !== u.loanTo && eq.Returned !== 'Yes') {
-          blockInfo = { assetNo: eq.CHSAssetNo, heldBy: eq.OnLoanTo, heldUntil: eq.LoanEndDate || '' };
-          break;
-        }
-      }
-    }
     const itemsHtml = u.items.map(uItem => {
       const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (!eq) return '';
@@ -4504,10 +4489,10 @@ function renderLoans() {
         'Remove</button>' +
         '</div>';
     }).join('');
-    return '<div class="loan-card" style="border-color:' + (blockInfo ? 'var(--red-border)' : (isSoon ? 'var(--amber-border)' : '#c4b5fd')) + '">' +
+    return '<div class="loan-card" style="border-color:' + (isSoon ? 'var(--amber-border)' : '#c4b5fd') + '">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'ulc_' + u.id + '\')">' +
       '<div>' +
-      '<div class="loan-card-customer" style="color:' + (blockInfo ? 'var(--red)' : (isSoon ? 'var(--amber)' : '#4c1d95')) + '">' + esc(u.loanTo) + '</div>' +
+      '<div class="loan-card-customer" style="color:' + (isSoon ? 'var(--amber)' : '#4c1d95') + '">' + esc(u.loanTo) + '</div>' +
       '<div class="loan-card-meta">' +
         (u.accountManager ? '<span style="color:' + (isSoon ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(u.accountManager) + '</span> · ' : '') +
         esc(u.location) + ' · Starts: ' + formatDisplayDate(u.startDate) +
@@ -4515,13 +4500,10 @@ function renderLoans() {
         ' · ' + u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
         (() => { const sj = window._loanDocCache?.[u.id]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
       '</div>' +
-      (blockInfo ? '<div style="font-size:11px;color:var(--red);margin-top:2px">&#x26A0; Waiting on <strong>' + esc(blockInfo.heldBy) + '</strong> to return ' + esc(blockInfo.assetNo) + (blockInfo.heldUntil ? ' — was due back ' + formatDisplayDate(blockInfo.heldUntil) : '') + '</div>' : '') +
       '</div>' +
       '<div class="loan-card-badge">' +
         buildLoanUpdateBadge(u.id, u.loanTo) +
-        (blockInfo
-          ? '<span class="status-badge badge-not-tested" title="Waiting on ' + esc(blockInfo.heldBy) + ' to return ' + esc(blockInfo.assetNo) + (blockInfo.heldUntil ? ' (was due ' + formatDisplayDate(blockInfo.heldUntil) + ')' : '') + '">&#x26A0; Blocked</span>'
-          : (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>')) +
+        (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         buildReadinessButtons(_readinessKey(u.id, u.loanTo, u.endDate), true, u.startDate) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
