@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 12;
+const APP_VERSION = 13;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5114,6 +5114,14 @@ function handleReturnLink() {
   // Handle direct tab link e.g. ?tab=loans
   const tabParam = params.get('tab');
   if (tabParam) { switchTab(tabParam); return; }
+  // Confirm-transfer link from a blocked-loan email (see confirmBlockedTransfer)
+  const confirmTransferToken = params.get('confirmTransfer');
+  if (confirmTransferToken) {
+    const [blockingBatchId, upcomingId] = confirmTransferToken.split('__').map(decodeURIComponent);
+    switchTab('loans');
+    setTimeout(() => { confirmBlockedTransfer(blockingBatchId, upcomingId); }, 600);
+    return;
+  }
   const returnToken = params.get('return');
   const extendToken = params.get('extend');
   const token = returnToken || extendToken;
@@ -9044,6 +9052,80 @@ async function activateUpcomingLoans() {
   }
 }
 
+// Manually-triggered counterpart to activateUpcomingLoans()'s normal path —
+// reached via the "confirm transfer" link in a blocked-loan notification
+// email (see .gas-proxy/Code.js checkBlockedLoans). Where the automatic path
+// refuses to move an item that's still checked out elsewhere and hasn't been
+// returned, this is the AM/staff explicitly overriding that: "yes, this item
+// is genuinely going straight to the new customer, it's just never coming
+// back to the office to be marked returned first." Only forces through items
+// actually blocked by the specific loan named in the email — anything this
+// upcoming loan is blocked on for some OTHER reason is left alone.
+async function confirmBlockedTransfer(blockingBatchId, upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) { showToast('error', 'Could not find that upcoming loan — it may have already resolved.'); return; }
+
+  const stillBlocked = [];
+  const toTransfer = [];
+  u.items.forEach(uItem => {
+    const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+    if (idx < 0) { stillBlocked.push(uItem); return; }
+    const eq = equipment[idx];
+    const blockedElsewhere = eq.OnLoanTo && eq.OnLoanTo !== u.loanTo && eq.Returned !== 'Yes';
+    if (blockedElsewhere && (eq.BatchID || '') === blockingBatchId) toTransfer.push({ idx, uItem });
+    else if (blockedElsewhere) stillBlocked.push(uItem); // blocked by something else — not this email's concern
+  });
+
+  if (!toTransfer.length) {
+    showToast('info', 'Nothing to confirm here — this item may have already been resolved.');
+    return;
+  }
+  if (!confirm('Confirm ' + toTransfer.length + ' device(s) transferred directly to ' + u.loanTo + ' without coming back to the office first?')) return;
+
+  toTransfer.forEach(({ idx }) => {
+    const prev = equipment[idx];
+    const prevLoanTo = prev.OnLoanTo || '', prevLoc = prev.Location || '', prevBatchId = prev.BatchID || '', prevEndDate = prev.LoanEndDate || '';
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
+      action: 'Transfer', loanTo: u.loanTo, location: u.location,
+      loanStart: u.startDate, loanEnd: u.endDate,
+      notes: 'Confirmed direct transfer from ' + prevLoanTo + ' (' + prevLoc + ') to ' + u.loanTo + ' — never returned to office, confirmed via AM notification',
+      operator: currentOperator || null
+    });
+    writeAudit('items_transferred',
+      prev.CHSAssetNo + ' confirmed transferred from ' + prevLoanTo + ' to ' + u.loanTo + ' (never returned to office)',
+      { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: u.loanTo, items: [prev.CHSAssetNo] });
+    Object.assign(equipment[idx], {
+      OnLoanTo: u.loanTo, Location: u.location,
+      LoanStartDate: u.startDate, LoanEndDate: u.endDate,
+      Returned: 'No', BatchID: u.id,
+      BorrowerEmail: u.borrowerEmail || '',
+      _upcomingLoanId: null,
+      _transferNote: {
+        fromLoanTo: prevLoanTo, fromLocation: prevLoc, fromBatchId: prevBatchId, fromEndDate: prevEndDate,
+        toLoanTo: u.loanTo, toStartDate: u.startDate, transferredOn: nzDate()
+      }
+    });
+  });
+
+  if (stillBlocked.length) {
+    u.items = stillBlocked;
+    await saveUpcomingLoans();
+  } else {
+    await deleteUpcomingLoan(u.id);
+  }
+
+  try {
+    setSync('saving', 'Saving...');
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+  } catch(e) {
+    setSync('err', 'Save failed');
+    showToast('error', 'Could not save transfer: ' + e.message);
+    return;
+  }
+  renderTable(); updateStats(); renderLoans();
+  showToast('success', toTransfer.length + ' device(s) transferred to ' + u.loanTo);
+}
 
 async function saveRetiredAssets() {
   markRetiredChanged();
