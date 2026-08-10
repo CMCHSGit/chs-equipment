@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 18;
+const APP_VERSION = 19;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -8782,6 +8782,11 @@ async function confirmReassignAM() {
   movedItems.forEach(item => {
     const idx = equipment.findIndex(e => e.CHSAssetNo === item.CHSAssetNo);
     if (idx < 0) return;
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model,
+      action: 'Transfer', loanTo: targetLoanData.loanTo, location: targetLoanData.location,
+      loanStart: targetLoanData.startDate, loanEnd: targetLoanData.endDate,
+      notes: 'Reassigned from ' + g.loanTo + ' (' + (g.location || '') + ') to ' + targetLoanData.loanTo + ' (' + targetLoanData.location + ')'
+    });
     equipment[idx].OnLoanTo      = targetLoanData.loanTo;
     equipment[idx].Location      = targetLoanData.location;
     equipment[idx].LoanStartDate = targetLoanData.startDate;
