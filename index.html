@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 15;
+const APP_VERSION = 16;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6562,16 +6562,17 @@ function checkStuckLoansForAM() {
   const stuck = upcomingLoans.filter(u =>
     u.startDate && u.startDate <= today && (isServiceTeam || u.accountManager === currentOperator)
   );
-  if (!stuck.length) return;
-  if (stuck.length === 1) {
-    const u = stuck[0];
+  // One toast PER stuck loan, always — collapsing to a bare count when
+  // there's more than one left no way to tell which loans they actually
+  // were without hunting through the whole Loans tab. Toasts stack
+  // independently (each is its own element, auto-dismisses on its own), so
+  // this scales fine for a handful of them.
+  stuck.forEach(u => {
     const amNote = isServiceTeam && u.accountManager ? ' (AM: ' + u.accountManager + ')' : '';
     showToast('warn', (isServiceTeam ? 'Stuck booking — ' : 'Your booking for ') + u.loanTo + amNote + ' is still waiting — ' +
       u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
       ' not available yet. Check Loans tab to see what\'s holding it up or reassign manually.');
-  } else {
-    showToast('warn', stuck.length + (isServiceTeam ? ' bookings are' : ' of your bookings are') + ' still waiting on devices that aren\'t available yet. Check the Loans tab.');
-  }
+  });
 }
 
 // Quiet startup check — nudges toward Settings rather than popping the modal
