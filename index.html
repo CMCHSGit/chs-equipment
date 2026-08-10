@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 14;
+const APP_VERSION = 15;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6543,28 +6543,34 @@ function findLoansMissingSimproJob() {
   return results;
 }
 
-// Nudges the assigned AM — only them, nobody else — that one of their own
-// upcoming bookings is still stuck: its start date has passed but
-// activateUpcomingLoans() (run just before this) still couldn't clear it
-// (an item it needs is still checked out elsewhere, and the vet
-// auto-transfer exception didn't apply). Re-evaluated fresh on every login,
-// so it naturally acts as a recurring reminder for as long as it stays
-// stuck, and simply stops nudging the moment it resolves — no separate
-// dismiss/snooze tracking needed.
+// Nudges about upcoming bookings still stuck past their start date (an item
+// they need is still checked out elsewhere, and the vet auto-transfer
+// exception didn't apply) — but who sees what differs: an AM only ever sees
+// their OWN stuck bookings, since that's the one thing they'd actually know
+// how to act on. The service team sees EVERY stuck booking regardless of
+// AM, since they check the site far more often than any individual AM does
+// and can act on their behalf. Whichever one actually reassigns it first
+// resolves it — both are just different paths to the same fix. Re-evaluated
+// fresh on every login, so it naturally acts as a recurring reminder for as
+// long as it stays stuck, and simply stops nudging once resolved — no
+// separate dismiss/snooze tracking needed.
+const SERVICE_TEAM_OPERATORS = ['Peter Lin', 'Jonathan Nasrun'];
 function checkStuckLoansForAM() {
   if (!currentOperator) return;
   const today = nzDate();
+  const isServiceTeam = SERVICE_TEAM_OPERATORS.includes(currentOperator);
   const stuck = upcomingLoans.filter(u =>
-    u.startDate && u.startDate <= today && u.accountManager === currentOperator
+    u.startDate && u.startDate <= today && (isServiceTeam || u.accountManager === currentOperator)
   );
   if (!stuck.length) return;
   if (stuck.length === 1) {
     const u = stuck[0];
-    showToast('warn', 'Your booking for ' + u.loanTo + ' is still waiting — ' +
+    const amNote = isServiceTeam && u.accountManager ? ' (AM: ' + u.accountManager + ')' : '';
+    showToast('warn', (isServiceTeam ? 'Stuck booking — ' : 'Your booking for ') + u.loanTo + amNote + ' is still waiting — ' +
       u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
       ' not available yet. Check Loans tab to see what\'s holding it up or reassign manually.');
   } else {
-    showToast('warn', stuck.length + ' of your bookings are still waiting on devices that aren\'t available yet. Check the Loans tab.');
+    showToast('warn', stuck.length + (isServiceTeam ? ' bookings are' : ' of your bookings are') + ' still waiting on devices that aren\'t available yet. Check the Loans tab.');
   }
 }
 
