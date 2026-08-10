@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 13;
+const APP_VERSION = 14;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2029,6 +2029,7 @@ async function loadData() {
       checkOverdueNotifications();
       checkOrphanedLoans(); // detect any loans whose data.json save was lost
       checkMissingSimproJobs(); // detect any loans whose Simpro job never got created
+      checkStuckLoansForAM(); // nudge the assigned AM about their own stuck bookings
     }, 500);
     return true;
   } catch(e) {
@@ -6542,6 +6543,31 @@ function findLoansMissingSimproJob() {
   return results;
 }
 
+// Nudges the assigned AM — only them, nobody else — that one of their own
+// upcoming bookings is still stuck: its start date has passed but
+// activateUpcomingLoans() (run just before this) still couldn't clear it
+// (an item it needs is still checked out elsewhere, and the vet
+// auto-transfer exception didn't apply). Re-evaluated fresh on every login,
+// so it naturally acts as a recurring reminder for as long as it stays
+// stuck, and simply stops nudging the moment it resolves — no separate
+// dismiss/snooze tracking needed.
+function checkStuckLoansForAM() {
+  if (!currentOperator) return;
+  const today = nzDate();
+  const stuck = upcomingLoans.filter(u =>
+    u.startDate && u.startDate <= today && u.accountManager === currentOperator
+  );
+  if (!stuck.length) return;
+  if (stuck.length === 1) {
+    const u = stuck[0];
+    showToast('warn', 'Your booking for ' + u.loanTo + ' is still waiting — ' +
+      u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
+      ' not available yet. Check Loans tab to see what\'s holding it up or reassign manually.');
+  } else {
+    showToast('warn', stuck.length + ' of your bookings are still waiting on devices that aren\'t available yet. Check the Loans tab.');
+  }
+}
+
 // Quiet startup check — nudges toward Settings rather than popping the modal
 // unprompted, since this can run before the operator has even looked around.
 function checkMissingSimproJobs() {
@@ -8950,7 +8976,7 @@ function getAllUpcomingLoansForAssetNo(assetNo) {
 // were part of Nikki Hewitt's 6-item loan — those extras are left exactly
 // where they are; only the shared/wanted items transfer, never a whole
 // loan get split by guessing at items nobody asked for.
-const VET_AUTO_TRANSFER_AMS = ['Jessica Chalklen', 'Jessica Broughan', 'Leeanne Higgins'];
+const VET_AUTO_TRANSFER_AMS = ['Jessica Chalklen', 'Jessica Broughan', 'Lee-Anne Higgins'];
 
 // Returns the blocking BatchID if EVERY item in upcomingAssetSet is currently
 // held by item eq's batch (a subset match — that batch may hold additional
