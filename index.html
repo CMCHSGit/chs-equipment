@@ -1609,7 +1609,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 16;
+const APP_VERSION = 17;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3336,7 +3336,18 @@ function showFeedback(type,msg){
   el.style.display='block'; el.innerHTML=`<div style="background:${bg};border:1px solid ${b};color:${color};border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:13px">${msg}</div>`;
 }
 function hideFeedback() { document.getElementById('scan-feedback').style.display='none'; }
-function showToast(type,msg) { const t=document.createElement('div'); t.className=`toast-item toast-${type}`; t.textContent=msg; document.getElementById('toast').appendChild(t); setTimeout(()=>t.remove(),3500); }
+function showToast(type,msg,onClick) {
+  const t=document.createElement('div');
+  t.className=`toast-item toast-${type}`;
+  t.textContent=msg;
+  if (onClick) {
+    t.style.cursor = 'pointer';
+    t.title = 'Click to jump straight to this';
+    t.addEventListener('click', () => { onClick(); t.remove(); });
+  }
+  document.getElementById('toast').appendChild(t);
+  setTimeout(()=>t.remove(),3500);
+}
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
 // Use mousedown + mouseleave + mouseup tracking instead of click events.
@@ -6571,8 +6582,51 @@ function checkStuckLoansForAM() {
     const amNote = isServiceTeam && u.accountManager ? ' (AM: ' + u.accountManager + ')' : '';
     showToast('warn', (isServiceTeam ? 'Stuck booking — ' : 'Your booking for ') + u.loanTo + amNote + ' is still waiting — ' +
       u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
-      ' not available yet. Check Loans tab to see what\'s holding it up or reassign manually.');
+      ' not available yet. Tap to reassign.',
+      () => openStuckLoanReassign(u.id));
   });
+}
+
+// Jumps straight into the Reassign modal for whichever loan is currently
+// blocking a stuck upcoming booking, pre-selecting only the specific
+// item(s) that booking is actually waiting on and pre-selecting this
+// booking as the move-to target — so confirming is the only step left,
+// instead of hunting down the right card and re-selecting everything by
+// hand. Re-derives what's blocking it live rather than trusting whatever
+// was true when the toast first fired, in case it's since changed.
+function openStuckLoanReassign(upcomingId) {
+  const u = upcomingLoans.find(x => x.id === upcomingId);
+  if (!u) { showToast('error', 'Could not find that booking — it may have already resolved.'); return; }
+
+  let blockingKey = null;
+  const blockedAssetNos = [];
+  u.items.forEach(uItem => {
+    const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+    if (eq && eq.OnLoanTo && eq.OnLoanTo !== u.loanTo && eq.Returned !== 'Yes') {
+      blockedAssetNos.push(eq.CHSAssetNo);
+      if (!blockingKey) blockingKey = _loanKey({ loanTo: eq.OnLoanTo, location: eq.Location || '', endDate: eq.LoanEndDate || '' });
+    }
+  });
+  if (!blockingKey) {
+    showToast('info', 'Could not find what is blocking ' + u.loanTo + '’s booking — it may already be resolved.');
+    return;
+  }
+
+  switchTab('loans');
+  setTimeout(async () => {
+    renderLoans(); // rebuild _loanGroupMap fresh before looking the blocking loan up in it
+    await openReassignAMByKey(blockingKey);
+    // Only wired up for the "Active loan → move items" view; if the blocking
+    // loan turns out to be Scheduled instead, openReassignAMByKey() shows
+    // its plain edit form instead and these elements won't be present —
+    // harmless no-op, you're still looking at the right loan either way.
+    const boxes = document.querySelectorAll('#reassign-items-list input[type=checkbox]');
+    if (boxes.length) boxes.forEach(cb => { cb.checked = blockedAssetNos.includes(cb.dataset.assetno); });
+    const tgtSel = document.getElementById('reassign-target-loan');
+    if (tgtSel && tgtSel.querySelector('option[value="upcoming:' + CSS.escape(u.id) + '"]')) {
+      tgtSel.value = 'upcoming:' + u.id;
+    }
+  }, 400);
 }
 
 // Quiet startup check — nudges toward Settings rather than popping the modal
