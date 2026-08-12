@@ -1155,6 +1155,10 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <button class="modal-close" onclick="closeLoanDoc()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
+    <div id="loan-doc-confirm-reminder" style="display:none;align-items:center;gap:8px;background:var(--amber-light);border-bottom:1px solid var(--amber-border);color:var(--amber);font-size:13px;font-weight:500;padding:10px 20px">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Click the ✕ above to finish this loan — that's what creates the Simpro job, sends the confirmation email, and saves your notes. Clicking outside this window won't do it.
+    </div>
 
     <div id="loan-doc-content" style="padding:24px;overflow-y:auto;flex:1;min-height:0"></div>
   </div>
@@ -1592,7 +1596,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 21;
+const APP_VERSION = 22;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4101,6 +4105,8 @@ async function submitBatchLoan() {
     // Only auto-send on close when this is a brand new loan just confirmed
     window._autoSendOnClose = !!amEmailForConfirm;
     window._autoCreateSimproOnClose = true;
+    const _rem = document.getElementById('loan-doc-confirm-reminder');
+    if (_rem) _rem.style.display = 'flex';
 
     const badge = document.getElementById('loan-confirmed-badge');
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
@@ -5457,6 +5463,10 @@ function _loanDocEditHandler() {
 
 function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   _currentLoanDocItems = loanItems;
+  // Reset here — shown again below only when this is a brand-new loan that
+  // still needs its Simpro job/email/notes created on close (see submitBatchLoan()).
+  const _rem = document.getElementById('loan-doc-confirm-reminder');
+  if (_rem) _rem.style.display = 'none';
   const today = nzDate();
   const spare = 3;
   let rows, blank;
