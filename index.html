@@ -633,6 +633,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
               <div class="form-group"><label>Job Type</label><select id="b-job-type"><option value="Demo">Demo</option><option value="PMV">PMV</option><option value="Repair">Repair</option></select></div>
+              <div class="form-group" style="grid-column:1/-1"><label>Demo Type <span style="color:var(--red)">*</span></label><select id="b-demo-type" required><option value="">Select demo type…</option><option value="Conference/Presentation">Conference/Presentation</option><option value="Clinical Trial">Clinical Trial</option><option value="Hotswap">Hotswap</option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
               <div class="form-group" style="grid-column:1/-1"><label>Shipping Details</label><textarea id="b-shipping-details" rows="2" style="resize:vertical"></textarea></div>
             </div>
@@ -1596,7 +1597,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 22;
+const APP_VERSION = 23;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2166,6 +2167,19 @@ function markLoanSeen(batchId, loanTo) {
   try { localStorage.setItem(_loanSeenKey(batchId, loanTo), nzNow()); } catch(e) {}
 }
 
+// Flags whether a loan needs a full clinical test or just an electrical safety
+// test before dispatch — Clinical Trial gets the red/urgent treatment since
+// that's the one that actually needs the complete test, not just a quick check.
+function _demoTypeBadge(demoType) {
+  if (!demoType) return '';
+  const isClinical = demoType === 'Clinical Trial';
+  const bg     = isClinical ? '#fef2f2' : '#eff4ff';
+  const color  = isClinical ? '#dc2626' : '#1d4ed8';
+  const border = isClinical ? '#fecaca' : '#bfdbfe';
+  const icon   = isClinical ? '&#x1F52C;' : '&#x26A1;';
+  return ' · <span style="background:' + bg + ';color:' + color + ';border:1px solid ' + border + ';border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap">' + icon + ' ' + esc(demoType) + '</span>';
+}
+
 function buildLoanUpdateBadge(batchId, loanTo) {
   const history = getLoanAuditHistory(batchId, loanTo);
   if (!history.length) return '';
@@ -2538,6 +2552,7 @@ function clearScan() {
   window._batchStatus = {};
   ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
   const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+  const dtEl2 = document.getElementById('b-demo-type'); if(dtEl2) dtEl2.value = '';
   const bsEl = document.getElementById('b-start-date'); if(bsEl) bsEl.value = nzDate();
   const fb = document.getElementById('batch-feedback'); if(fb) { fb.style.display='none'; fb.innerHTML=''; }
   const badge = document.getElementById('loan-confirmed-badge'); if(badge) badge.style.display='none';
@@ -3932,6 +3947,7 @@ async function submitBatchLoan() {
   const endDate   = document.getElementById('b-end-date').value;
   const batchEmailCheck = document.getElementById('b-email').value.trim();
   const batchAMCheck    = document.getElementById('b-account-manager')?.value || '';
+  const batchDemoTypeCheck = document.getElementById('b-demo-type')?.value || '';
 
   function showErr(msg) {
     document.getElementById('batch-feedback').style.display = 'block';
@@ -3946,6 +3962,7 @@ async function submitBatchLoan() {
   if (endDate <= startDate) { showErr('Loan End Date must be after the Start Date.'); return; }
   if (!batchAMCheck) { showErr('Please select an Account Manager.'); return; }
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
+  if (!batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
 
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
   // True overlap check: new loan [startDate, endDate] vs existing [existingStart, existingEnd].
@@ -4010,6 +4027,7 @@ async function submitBatchLoan() {
     const contactNumber  = document.getElementById('b-contact-number')?.value.trim() || '';
     const batchAM        = document.getElementById('b-account-manager')?.value || '';
     const batchJobType   = document.getElementById('b-job-type')?.value || 'Demo';
+    const batchDemoType  = document.getElementById('b-demo-type')?.value || '';
 
     const targetIsFuture = startDate && startDate > today;
     const directDevices = [], upcomingDevices = [];
@@ -4086,14 +4104,15 @@ async function submitBatchLoan() {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, notes: notes, notesCell: notes, authCell: shippingDetails,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, demoType: batchDemoType, notes: notes, notesCell: notes, authCell: shippingDetails,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loanDocPayload)
         });
         window._loanDocCache = window._loanDocCache || {};
-        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails };
+        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails, demoType: batchDemoType };
+        if (_dirty.loans === false) renderLoans();
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
     }, 300);
 
@@ -4118,6 +4137,7 @@ async function submitBatchLoan() {
     ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
     const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
+    const dtEl = document.getElementById('b-demo-type'); if(dtEl) dtEl.value = '';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
     writeAudit('loan_created',
@@ -4370,6 +4390,7 @@ function renderLoans() {
         ' · ' + totalDevices + ' device' + (totalDevices !== 1 ? 's' : '') +
         (g._pendingItems?.length ? ' <span style="color:#6d28d9;font-size:11px">(+' + g._pendingItems.length + ' pending pickup)</span>' : '') +
         (() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
+        (() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })() +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
@@ -4449,6 +4470,7 @@ function renderLoans() {
         ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         ' · ' + u.items.length + ' device' + (u.items.length !== 1 ? 's' : '') +
         (() => { const sj = window._loanDocCache?.[u.id]?.simproJobId; return sj ? ' · <span style="color:#6d28d9;font-weight:500">Job #' + esc(sj) + '</span>' : ''; })() +
+        _demoTypeBadge(window._loanDocCache?.[u.id]?.demoType) +
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
@@ -4493,7 +4515,7 @@ function renderLoans() {
       <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
+          <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           ${buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo)}
@@ -8871,7 +8893,8 @@ async function loadLoanDocNotes() {
         notes:          doc.notes          || '',
         notesCell:      doc.notesCell      || doc.notes || '',
         simproJobId:    doc.simproJobId    || '',
-        accountManager: doc.accountManager || ''
+        accountManager: doc.accountManager || '',
+        demoType:       doc.demoType       || ''
       };
       // Firebase returns keys decoded. Store under both decoded (as returned)
       // and encoded (as constructed by lookup code) so both paths hit the cache.
