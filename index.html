@@ -1592,7 +1592,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 20;
+const APP_VERSION = 21;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3282,7 +3282,13 @@ function showToast(type,msg,onClick) {
 // browser window and re-entering) can spuriously close the modal.
 // Fix: only close if mousedown AND mouseup both landed on the backdrop itself,
 // and reset the flag if the mouse leaves the overlay in between.
-['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','loan-doc-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal','missing-simpro-modal','test-reports-modal'].forEach(id=>{
+// loan-doc-modal is deliberately excluded — its close button (closeLoanDoc())
+// is the only trigger for Simpro job creation, the confirmation email, and the
+// notes/shipping autosave on a brand-new loan. A stray backdrop click used to
+// silently skip all three with zero error or audit trail (see the missing
+// Simpro job on the Manukau Health Park loan, 2026-08-10 — never surfaced
+// until someone noticed the job number was blank on the card).
+['item-modal','history-modal','qr-modal','extend-modal','history-mgmt-modal','batch-return-modal','am-modal','add-items-modal','retire-modal','reassign-am-modal','conflict-modal','orphan-modal','audit-log-modal','loan-history-modal','generic-modal','missing-simpro-modal','test-reports-modal'].forEach(id=>{
   const el = document.getElementById(id);
   let _md = false;
   el.addEventListener('mousedown', function(e){ _md = (e.target === this); });
