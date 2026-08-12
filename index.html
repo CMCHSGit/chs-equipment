@@ -591,23 +591,6 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
               <div class="asset-field" id="prev-counted-wrap" style="display:none"><label>Last Counted</label><span id="prev-counted">—</span></div>
             </div>
           </div>
-          <!-- LOAN FORM -->
-          <div id="loan-form" style="display:none">
-            <div class="form-grid">
-              <div class="form-group"><label>Event and/or Customer Name <span style="color:var(--red)">*</span></label><input type="text" id="f-loan-to" list="contacts-list"><datalist id="contacts-list"></datalist></div>
-              <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="f-location" list="locations-list"><datalist id="locations-list"></datalist></div>
-              <div class="form-group"><label>Loan Start Date</label><input type="date" id="f-start-date"></div>
-              <div class="form-group"><label>Loan End Date</label><input type="date" id="f-end-date"></div>
-              <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="f-email" placeholder="borrower@email.com" required></div>
-              <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="f-notes" rows="2" style="resize:vertical"></textarea></div>
-            </div>
-            <div class="form-actions">
-              <button class="btn btn-primary" id="btn-loan" onclick="submitLoan()">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Loan
-              </button>
-              <button class="btn" onclick="clearScan()">Cancel</button>
-            </div>
-          </div>
           <!-- RETURN FORM -->
           <div id="return-form" style="display:none">
             <div class="asset-preview-box" style="background:var(--green-light);border-color:var(--green-border);margin-top:0">
@@ -1609,7 +1592,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 19;
+const APP_VERSION = 20;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1975,7 +1958,7 @@ async function saveBin(data) {
 let equipment = [], historyLog = [], auditLog = [], sortCol = 'CHSAssetNo', sortDir = 1;
 let upcomingLoans = []; // [{id,loanTo,location,startDate,endDate,accountManager,borrowerEmail,items:[{id,CHSAssetNo}]}]
 let loanMeta = {};     // { [batchId]: { accountManager } } — AM stored per loan, not per item
-let scanMode = 'loan', currentItem = null, editingId = null, sessionItems = [];
+let scanMode = 'batch', currentItem = null, editingId = null, sessionItems = [];
 let saveTimer = null;
 
 // ── DIRTY FLAGS — only re-render a tab if data has changed since last render ──
@@ -2456,7 +2439,6 @@ function showAssetPreview(item) {
     ? `<span class="status-badge badge-loan">${od ? '⚠ Overdue' : 'On loan'}</span>`
     : `<span class="status-badge badge-avail">Available</span>`;
   document.getElementById('asset-preview').style.display = 'block';
-  document.getElementById('loan-form').style.display   = scanMode === 'loan'   ? 'block' : 'none';
   document.getElementById('return-form').style.display = scanMode === 'return' ? 'block' : 'none';
   document.getElementById('count-form').style.display  = scanMode === 'count'  ? 'block' : 'none';
   const prevCountedWrap = document.getElementById('prev-counted-wrap');
@@ -2469,12 +2451,6 @@ function showAssetPreview(item) {
     } else {
       prevCountedWrap.style.display = 'none';
     }
-  }
-  if (scanMode === 'loan') {
-    document.getElementById('f-start-date').value = today;
-    if (on) { showFeedback('warn', `Already on loan to ${item.OnLoanTo}.`); document.getElementById('f-loan-to').value = item.OnLoanTo; document.getElementById('f-location').value = item.Location; document.getElementById('f-end-date').value = item.LoanEndDate; }
-    document.getElementById('contacts-list').innerHTML = [...new Set(equipment.filter(e=>e.OnLoanTo).map(e=>e.OnLoanTo))].map(c=>`<option value="${esc(c)}">`).join('');
-    document.getElementById('locations-list').innerHTML = [...new Set(equipment.filter(e=>e.Location).map(e=>e.Location))].map(l=>`<option value="${esc(l)}">`).join('');
   }
   if (scanMode === 'return' && on) document.getElementById('return-details').innerHTML = `Loaned to: <strong>${item.OnLoanTo}</strong><br>Location: ${item.Location||'—'} &nbsp;·&nbsp; Due: ${item.LoanEndDate||'—'}`;
   if (scanMode === 'count') {
@@ -2491,54 +2467,6 @@ function showAssetPreview(item) {
       if (countBtn) { countBtn.innerHTML = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Mark as Counted'; }
     }
   }
-}
-
-function submitLoan() {
-  if (!currentItem) return;
-  const loanTo   = document.getElementById('f-loan-to').value.trim();
-  const location = document.getElementById('f-location').value.trim();
-  const emailVal = document.getElementById('f-email').value.trim();
-  if (!loanTo || !location) { showFeedback('error', 'Please fill in "On Loan To" and "Location".'); return; }
-  if (!emailVal || !emailVal.includes('@')) { showFeedback('error', 'Please enter a valid Account Manager Email address.'); return; }
-  const idx = equipment.findIndex(e => e.id === currentItem.id);
-  const borrowerEmail = document.getElementById('f-email').value.trim();
-  Object.assign(equipment[idx], {
-    OnLoanTo: loanTo, Location: location,
-    LoanStartDate: document.getElementById('f-start-date').value || '',
-    LoanEndDate:   document.getElementById('f-end-date').value   || '',
-    Returned: 'No',
-    Notes: equipment[idx].Notes || '',
-    BorrowerEmail: borrowerEmail
-  });
-  const singleLoanKey = 'loan_' + uid();
-  logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loan', loanTo, location, loanStart: equipment[idx].LoanStartDate, loanEnd: equipment[idx].LoanEndDate, notes: document.getElementById('f-notes').value, _pdfKey: singleLoanKey });
-  setTimeout(async () => {
-    const docEl = document.getElementById('printable-loan-doc');
-    if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[singleLoanKey] = docEl.innerHTML; }
-    try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(singleLoanKey) + '.json', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: getLoanAM(equipment[idx].BatchID),
-          notes: document.getElementById('f-notes').value || '',
-          notesCell: document.getElementById('f-notes').value || '',
-          items: [{ CHSAssetNo: currentItem.CHSAssetNo, Model: currentItem.Model, Description: currentItem.Description, SerialNo: currentItem.SerialNo }]
-        })
-      });
-    } catch(e) { console.warn('Could not save loan doc', e); }
-  }, 300);
-  addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Loaned', loanTo, location });
-  updateStats(); renderTable();
-  setSync('saving', 'Saving...');
-  saveBin({ equipment, history: historyLog }).then(() => setSync('ok', 'Saved')).catch(e => { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); });
-  // Generate loan document — set _pendingLoanDocPdfKey first so saves go to the right Firebase path
-  const singleNotes = document.getElementById('f-notes').value || '';
-  window._pendingLoanDocPdfKey = singleLoanKey;
-  window._lastLoanDoc = { items: [equipment[idx]], info: { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: getLoanAM(equipment[idx].BatchID) } };
-  generateLoanDoc([equipment[idx]], { loanTo, location, startDate: equipment[idx].LoanStartDate, endDate: equipment[idx].LoanEndDate, accountManager: getLoanAM(equipment[idx].BatchID) }, null, { notesCell: '', authCell: '', batchNotes: singleNotes });
-  clearScan();
-  showToast('success', `${currentItem.CHSAssetNo} loaned to ${loanTo}`);
 }
 
 async function submitReturn() {
@@ -2599,10 +2527,8 @@ function clearScan() {
   currentItem = null;
   document.getElementById('scan-input').value = '';
   document.getElementById('asset-preview').style.display = 'none';
-  ['loan-form','return-form','count-form'].forEach(id => document.getElementById(id).style.display = 'none');
+  ['return-form','count-form'].forEach(id => document.getElementById(id).style.display = 'none');
   hideFeedback();
-  ['f-loan-to','f-location','f-end-date','f-notes','f-email'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
-  document.getElementById('f-start-date').value = nzDate();
   // Also reset batch form
   batchDevices = [{ id: 'bd_0', value: '' }];
   window._batchStatus = {};
@@ -4868,9 +4794,6 @@ function detailAction(action) {
   closeDetail();
   if (action === 'return') {
     switchTab('scan'); setScanMode('return');
-    setTimeout(() => { document.getElementById('scan-input').value = item.CHSAssetNo; lookupAsset(item.CHSAssetNo); }, 50);
-  } else if (action === 'loan') {
-    switchTab('scan'); setScanMode('loan');
     setTimeout(() => { document.getElementById('scan-input').value = item.CHSAssetNo; lookupAsset(item.CHSAssetNo); }, 50);
   } else if (action === 'loan') {
     switchTab('scan'); setScanMode('batch');
@@ -9788,8 +9711,6 @@ function startAutoSync() {
 }
 
 (function() {
-  const sd = document.getElementById('f-start-date');
-  if (sd) sd.value = nzDate();
   initEmailJS();
   loadAccountManagers();
   loadRetiredAssets();
