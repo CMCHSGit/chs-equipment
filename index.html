@@ -1597,7 +1597,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 23;
+const APP_VERSION = 24;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6135,6 +6135,7 @@ async function openReassignUpcomingAM(upcomingId) {
   document.getElementById('reassign-new-loan-btn').style.display   = 'none';
   document.getElementById('reassign-form-fields').style.display    = '';
   document.getElementById('reassign-confirm-label').textContent    = 'Save Changes';
+  document.getElementById('reassign-confirm-btn').disabled          = false;
   // Pre-fill loan fields
   document.getElementById('reassign-loan-to').value    = u.loanTo || '';
   document.getElementById('reassign-location').value   = u.location || '';
@@ -8471,6 +8472,7 @@ async function openReassignAMByKey(key) {
     document.getElementById('reassign-new-loan-btn').style.display   = 'none';
     document.getElementById('reassign-form-fields').style.display    = '';
     document.getElementById('reassign-confirm-label').textContent    = 'Save Changes';
+    document.getElementById('reassign-confirm-btn').disabled          = false;
     document.getElementById('reassign-loan-to').value    = g.loanTo || '';
     document.getElementById('reassign-location').value   = g.location || '';
     document.getElementById('reassign-start-date').value = g.startDate || '';
@@ -8514,6 +8516,7 @@ async function openReassignAMByKey(key) {
   document.getElementById('reassign-form-fields').style.display     = 'none';
   document.getElementById('reassign-new-loan-btn').style.display    = '';
   document.getElementById('reassign-confirm-label').textContent     = 'Move to Loan';
+  document.getElementById('reassign-confirm-btn').disabled           = false;
   const _tgtSel = document.getElementById('reassign-target-loan');
   const _tgtOpts = ['<option value="">— Select loan —</option>'];
   (window._loanGroups || []).forEach(og => {
@@ -8606,6 +8609,22 @@ async function reassignCreateNewLoan() {
 }
 
 async function confirmReassignAM() {
+  // This does several sequential Firebase/Simpro round-trips (can take a few
+  // seconds), but the modal stays open throughout — without a visible loading
+  // state that reads as "stuck", inviting repeat clicks that each re-run the
+  // whole move (duplicate audit entries, duplicate Simpro pushes, races on
+  // the same equipment records). Disable + relabel immediately and guard
+  // against re-entry; restore on every early-return so the button isn't left
+  // stuck disabled if validation fails.
+  const _rBtn = document.getElementById('reassign-confirm-btn');
+  const _rLabel = document.getElementById('reassign-confirm-label');
+  if (_rBtn && _rBtn.disabled) return;
+  const _rOrigLabel = _rLabel ? _rLabel.textContent : '';
+  if (_rBtn) _rBtn.disabled = true;
+  if (_rLabel) _rLabel.textContent = 'Saving…';
+  const _rReenable = () => { if (_rBtn) _rBtn.disabled = false; if (_rLabel) _rLabel.textContent = _rOrigLabel; };
+  const _rSafetyNet = setTimeout(() => { _rReenable(); showToast('error', 'Taking longer than expected — please check the Loans tab before retrying.'); }, 20000);
+
   const newLoanTo    = document.getElementById('reassign-loan-to').value.trim();
   const newLocation  = document.getElementById('reassign-location').value.trim();
   const newStartDate = document.getElementById('reassign-start-date').value;
@@ -8638,6 +8657,7 @@ async function confirmReassignAM() {
       renderLoans();
       showToast('success', 'Loan updated');
     }
+    clearTimeout(_rSafetyNet); _rReenable();
     closeReassignAMModal();
     return;
   }
@@ -8671,22 +8691,23 @@ async function confirmReassignAM() {
       scheduleSave(); renderLoans(); renderTable();
       showToast('success', 'Loan updated');
     }
+    clearTimeout(_rSafetyNet); _rReenable();
     closeReassignAMModal();
     return;
   }
 
   // ── MOVE TO EXISTING LOAN ──────────────────────────────────────────
   const g = getLoanGroupByKey(_reassignLoanKey);
-  if (!g) { closeReassignAMModal(); return; }
+  if (!g) { clearTimeout(_rSafetyNet); _rReenable(); closeReassignAMModal(); return; }
 
   const checkedAssetNos = new Set(
     Array.from(document.querySelectorAll('#reassign-items-list input[type=checkbox]:checked'))
       .map(cb => cb.dataset.assetno)
   );
-  if (!checkedAssetNos.size) { showToast('error', 'Select at least one item'); return; }
+  if (!checkedAssetNos.size) { clearTimeout(_rSafetyNet); _rReenable(); showToast('error', 'Select at least one item'); return; }
 
   const targetVal = document.getElementById('reassign-target-loan').value;
-  if (!targetVal) { showToast('error', 'Select a target loan'); return; }
+  if (!targetVal) { clearTimeout(_rSafetyNet); _rReenable(); showToast('error', 'Select a target loan'); return; }
 
   const movedItems     = g.items.filter(i => checkedAssetNos.has(i.CHSAssetNo));
   const remainingItems = g.items.filter(i => !checkedAssetNos.has(i.CHSAssetNo));
@@ -8697,13 +8718,13 @@ async function confirmReassignAM() {
   let targetBatchId = null, targetLoanData = {}, targetGroupItems = [];
   if (isUpcoming) {
     const u = upcomingLoans.find(x => x.id === targetKey);
-    if (!u) { showToast('error', 'Target loan not found'); return; }
+    if (!u) { clearTimeout(_rSafetyNet); _rReenable(); showToast('error', 'Target loan not found'); return; }
     targetBatchId    = u.id;
     targetGroupItems = u.items || [];
     targetLoanData   = { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '', jobType: 'Demo' };
   } else {
     const tg = getLoanGroupByKey(targetKey);
-    if (!tg) { showToast('error', 'Target loan not found'); return; }
+    if (!tg) { clearTimeout(_rSafetyNet); _rReenable(); showToast('error', 'Target loan not found'); return; }
     targetGroupItems = tg.items;
     targetLoanData   = { loanTo: tg.loanTo, location: tg.location || '', startDate: tg.startDate || '', endDate: tg.endDate || '', accountManager: getGroupAM(tg), jobType: 'Demo' };
     // The target loan must always have a real BatchID to move items into. If its items
@@ -8768,6 +8789,7 @@ async function confirmReassignAM() {
 
   scheduleSave(); renderLoans(); renderTable();
   writeAudit('loan_reassigned', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' moved from ' + g.loanTo + ' to ' + targetLoanData.loanTo, { from: g.loanTo, to: targetLoanData.loanTo, items: movedItems.map(i => i.CHSAssetNo) });
+  clearTimeout(_rSafetyNet); _rReenable();
   closeReassignAMModal();
   showToast('success', movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' moved to ' + targetLoanData.loanTo);
 }
