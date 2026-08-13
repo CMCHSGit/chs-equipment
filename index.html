@@ -1571,12 +1571,12 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     <div class="modal-header">
       <div>
         <div class="modal-title" id="test-reports-title">Test Reports</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">Uploaded here, not part of the printable loan form. Max 8 MB per file.</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Drag to upload test reports here. Max 8 MB per file.</div>
       </div>
     </div>
-    <div id="test-reports-body" style="margin-bottom:12px;max-height:50vh;overflow-y:auto"></div>
+    <div id="test-reports-body" ondragover="_trDragOver(event)" ondragleave="_trDragLeave(event)" ondrop="_trDrop(event)" style="margin-bottom:12px;max-height:50vh;overflow-y:auto;border:2px dashed var(--border2);border-radius:var(--radius);padding:8px;transition:border-color .15s,background .15s"></div>
     <div style="display:flex;gap:8px;align-items:center;border-top:1px solid var(--border);padding-top:12px">
-      <input type="file" id="test-reports-input" style="flex:1;font-size:12px">
+      <input type="file" id="test-reports-input" multiple style="flex:1;font-size:12px">
       <button class="btn btn-primary btn-sm" id="test-reports-upload-btn" onclick="uploadTestReport()">&#x2B06; Upload</button>
     </div>
     <div class="modal-footer">
@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 27;
+const APP_VERSION = 28;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7305,37 +7305,71 @@ function _fmtFileSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function _trDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.style.borderColor = 'var(--accent)';
+  e.currentTarget.style.background  = 'var(--accent-light)';
+}
+function _trDragLeave(e) {
+  e.currentTarget.style.borderColor = 'var(--border2)';
+  e.currentTarget.style.background  = '';
+}
+function _trDrop(e) {
+  e.preventDefault();
+  _trDragLeave(e);
+  const files = Array.from(e.dataTransfer?.files || []);
+  if (files.length) uploadTestReports(files);
+}
+
 async function uploadTestReport() {
   const input = document.getElementById('test-reports-input');
-  const file = input.files?.[0];
-  if (!file) { showToast('error', 'Choose a file first'); return; }
-  if (file.size > TEST_REPORT_MAX_BYTES) { showToast('error', 'File too large — max ' + _fmtFileSize(TEST_REPORT_MAX_BYTES)); return; }
+  const files = Array.from(input.files || []);
+  if (!files.length) { showToast('error', 'Choose a file first'); return; }
+  await uploadTestReports(files);
+  input.value = '';
+}
+
+// Shared by the file-picker button and drag-and-drop — uploads sequentially
+// (rather than in parallel) so a batch of large files doesn't try to read
+// and PUT all of them into memory/bandwidth at once.
+async function uploadTestReports(files) {
   if (!_testReportsKey) return;
-  const btn = document.getElementById('test-reports-upload-btn');
-  btn.disabled = true; btn.textContent = 'Uploading…';
-  try {
-    const dataUrl = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(new Error('Could not read file'));
-      reader.readAsDataURL(file);
-    });
-    const id = uid();
-    const meta = { filename: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, uploadedAt: nzNow(), uploadedBy: currentOperator || '' };
-    await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
-    });
-    await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataUrl)
-    });
-    writeAudit('test_report_uploaded', file.name + ' uploaded — ' + document.getElementById('test-reports-title').textContent.replace('Test Reports — ', ''), { key: _testReportsKey, filename: file.name });
-    showToast('success', 'Report uploaded');
-    await refreshTestReportsList();
-  } catch(e) {
-    showToast('error', 'Upload failed: ' + e.message);
-  } finally {
-    btn.disabled = false; btn.textContent = '⬆ Upload';
+  const oversized = files.filter(f => f.size > TEST_REPORT_MAX_BYTES);
+  const toUpload  = files.filter(f => f.size <= TEST_REPORT_MAX_BYTES);
+  if (oversized.length) {
+    showToast('error', oversized.length + ' file' + (oversized.length !== 1 ? 's' : '') + ' too large (max ' + _fmtFileSize(TEST_REPORT_MAX_BYTES) + '): ' + oversized.map(f => f.name).join(', '));
   }
+  if (!toUpload.length) return;
+  const btn = document.getElementById('test-reports-upload-btn');
+  btn.disabled = true;
+  let uploaded = 0, failed = 0;
+  for (const file of toUpload) {
+    btn.textContent = 'Uploading ' + (uploaded + failed + 1) + '/' + toUpload.length + '…';
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read file'));
+        reader.readAsDataURL(file);
+      });
+      const id = uid();
+      const meta = { filename: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, uploadedAt: nzNow(), uploadedBy: currentOperator || '' };
+      await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
+      });
+      await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataUrl)
+      });
+      writeAudit('test_report_uploaded', file.name + ' uploaded — ' + document.getElementById('test-reports-title').textContent.replace('Test Reports — ', ''), { key: _testReportsKey, filename: file.name });
+      uploaded++;
+    } catch(e) {
+      failed++;
+    }
+  }
+  btn.disabled = false; btn.textContent = '⬆ Upload';
+  if (uploaded)      showToast('success', uploaded + ' report' + (uploaded !== 1 ? 's' : '') + ' uploaded' + (failed ? ' (' + failed + ' failed)' : ''));
+  else if (failed)   showToast('error', 'Upload failed');
+  await refreshTestReportsList();
 }
 
 async function downloadTestReport(id, filename) {
