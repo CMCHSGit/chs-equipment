@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 26;
+const APP_VERSION = 27;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -8669,8 +8669,27 @@ async function confirmReassignAM() {
           window._loanDocCache[_reassignPdfKey] = { ...(window._loanDocCache[_reassignPdfKey] || {}), demoType: newDemoType };
         } catch(e) {}
       }
+      // If the (possibly just-edited) start date means this booking should already
+      // be live, try activating it right now instead of waiting for the next page
+      // load — scoped to just this one booking via _tryActivateUpcomingLoan(), so
+      // editing one loan's date can never silently change any other pending loan.
+      let _activationToast = null;
+      if (u.startDate && u.startDate <= nzDate()) {
+        const result = await _tryActivateUpcomingLoan(u);
+        if (result.changed) {
+          try {
+            setSync('saving', 'Saving...');
+            await saveBin({ equipment, history: historyLog });
+            setSync('ok', 'Saved');
+          } catch(e) { setSync('err', 'Save failed'); }
+          renderTable(); updateStats();
+        }
+        if (result.fullyActivated) _activationToast = ['success', 'Loan updated — now active'];
+        else if (result.stillBlockedCount) _activationToast = ['warn', 'Loan updated — but items still not available yet. Tap to reassign.', () => openStuckLoanReassign(u.id)];
+      }
       renderLoans();
-      showToast('success', 'Loan updated');
+      if (_activationToast) showToast(..._activationToast);
+      else showToast('success', 'Loan updated');
     }
     clearTimeout(_rSafetyNet); _rReenable();
     closeReassignAMModal();
@@ -9031,6 +9050,90 @@ function getAllUpcomingLoansForAssetNo(assetNo) {
     .sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
 }
 
+// Tries to activate ONE upcoming booking right now — same per-item block
+// check as the startup sweep below, just scoped to a single loan so callers
+// (e.g. editing a booking's date to today) can retry just that one booking
+// without also sweeping in every other unrelated overdue booking sitting in
+// upcomingLoans. Mutates `equipment` and persists upcomingLoans changes
+// itself, but leaves the final saveBin()/render calls to the caller so a
+// batch of these can share one save.
+async function _tryActivateUpcomingLoan(upcoming) {
+  let thisLoanActivated = false;
+  let changed = false;
+  const stillBlocked = [];
+  for (const uItem of upcoming.items) {
+    const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+    if (idx < 0) continue;
+    const prev = equipment[idx];
+    const prevLoanTo  = prev.OnLoanTo    || '';
+    const prevLoc     = prev.Location    || '';
+    const prevBatchId = prev.BatchID     || '';
+    const prevEndDate = prev.LoanEndDate || '';
+    const isBlocked = prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes';
+    // Item is still genuinely checked out on a DIFFERENT active loan — it hasn't actually
+    // been returned yet, so don't rip it away from that loan just because this booking's
+    // start date arrived. Leave it pending here until it's actually available (returned,
+    // or manually reassigned) — this booking will keep showing up in the stuck-loan
+    // reminder (checkStuckLoansForAM) until someone resolves it. No auto-transfer
+    // exception here anymore — even for AMs whose kit rarely comes back to the office,
+    // since that requires every item a booking wants to trace to one single blocking
+    // loan, which silently stops applying the moment any of those items get partially
+    // reassigned elsewhere first (see the Riddiford/Amy Secomb case, 2026-08-13).
+    if (isBlocked) {
+      stillBlocked.push(uItem);
+      continue;
+    }
+    // Log transfer history
+    if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
+        action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
+        loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
+        notes: 'Auto-transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
+        operator: null
+      });
+      writeAudit('items_transferred',
+        prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + ' — upcoming loan started ' + upcoming.startDate,
+        { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] },
+        'System (auto)');
+    }
+    // Activate: update equipment — but keep a _transferNote so the item still appears
+    // as a ghost on the old loan card with a "transferred" indicator
+    Object.assign(equipment[idx], {
+      OnLoanTo: upcoming.loanTo, Location: upcoming.location,
+      LoanStartDate: upcoming.startDate, LoanEndDate: upcoming.endDate,
+      Returned: 'No', BatchID: upcoming.id,
+      BorrowerEmail: upcoming.borrowerEmail || '',
+      _upcomingLoanId: null,
+      _transferNote: prevLoanTo && prevLoanTo !== upcoming.loanTo ? {
+        fromLoanTo:  prevLoanTo,
+        fromLocation: prevLoc,
+        fromBatchId:  prevBatchId,
+        fromEndDate:  prevEndDate,
+        toLoanTo:     upcoming.loanTo,
+        toStartDate:  upcoming.startDate,
+        transferredOn: nzDate()
+      } : (prev._transferNote || null)
+    });
+    changed = true;
+    thisLoanActivated = true;
+  }
+  // Only remove from upcoming list if at least one item was actually activated.
+  // If no items were found (e.g. equipment IDs don't match yet), keep the entry
+  // so it doesn't silently disappear on every refresh.
+  if (stillBlocked.length) {
+    // Some items are still checked out elsewhere — keep this upcoming loan around with
+    // only those, so it can retry once they're returned. Persist immediately since
+    // deleteUpcomingLoan (the other branch) also saves right away.
+    if (thisLoanActivated) {
+      upcoming.items = stillBlocked;
+      await saveUpcomingLoans();
+    }
+  } else if (thisLoanActivated) {
+    await deleteUpcomingLoan(upcoming.id);
+  }
+  return { changed, fullyActivated: thisLoanActivated && !stillBlocked.length, stillBlockedCount: stillBlocked.length };
+}
+
 async function activateUpcomingLoans() {
   const today = nzDate();
   // Sorted by start date so, once items do become available (returned or
@@ -9043,78 +9146,8 @@ async function activateUpcomingLoans() {
   if (!toActivate.length) return;
   let changed = false;
   for (const upcoming of toActivate) {
-    let thisLoanActivated = false;
-    const stillBlocked = [];
-    for (const uItem of upcoming.items) {
-      const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
-      if (idx < 0) continue;
-      const prev = equipment[idx];
-      const prevLoanTo  = prev.OnLoanTo    || '';
-      const prevLoc     = prev.Location    || '';
-      const prevBatchId = prev.BatchID     || '';
-      const prevEndDate = prev.LoanEndDate || '';
-      const isBlocked = prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes';
-      // Item is still genuinely checked out on a DIFFERENT active loan — it hasn't actually
-      // been returned yet, so don't rip it away from that loan just because this booking's
-      // start date arrived. Leave it pending here until it's actually available (returned,
-      // or manually reassigned) — this booking will keep showing up in the stuck-loan
-      // reminder (checkStuckLoansForAM) until someone resolves it. No auto-transfer
-      // exception here anymore — even for AMs whose kit rarely comes back to the office,
-      // since that requires every item a booking wants to trace to one single blocking
-      // loan, which silently stops applying the moment any of those items get partially
-      // reassigned elsewhere first (see the Riddiford/Amy Secomb case, 2026-08-13).
-      if (isBlocked) {
-        stillBlocked.push(uItem);
-        continue;
-      }
-      // Log transfer history
-      if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
-        logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
-          action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
-          loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
-          notes: 'Auto-transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
-          operator: null
-        });
-        writeAudit('items_transferred',
-          prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + ' — upcoming loan started ' + upcoming.startDate,
-          { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] },
-          'System (auto)');
-      }
-      // Activate: update equipment — but keep a _transferNote so the item still appears
-      // as a ghost on the old loan card with a "transferred" indicator
-      Object.assign(equipment[idx], {
-        OnLoanTo: upcoming.loanTo, Location: upcoming.location,
-        LoanStartDate: upcoming.startDate, LoanEndDate: upcoming.endDate,
-        Returned: 'No', BatchID: upcoming.id,
-        BorrowerEmail: upcoming.borrowerEmail || '',
-        _upcomingLoanId: null,
-        _transferNote: prevLoanTo && prevLoanTo !== upcoming.loanTo ? {
-          fromLoanTo:  prevLoanTo,
-          fromLocation: prevLoc,
-          fromBatchId:  prevBatchId,
-          fromEndDate:  prevEndDate,
-          toLoanTo:     upcoming.loanTo,
-          toStartDate:  upcoming.startDate,
-          transferredOn: nzDate()
-        } : (prev._transferNote || null)
-      });
-      changed = true;
-      thisLoanActivated = true;
-    }
-    // Only remove from upcoming list if at least one item was actually activated.
-    // If no items were found (e.g. equipment IDs don't match yet), keep the entry
-    // so it doesn't silently disappear on every refresh.
-    if (stillBlocked.length) {
-      // Some items are still checked out elsewhere — keep this upcoming loan around with
-      // only those, so it can retry once they're returned. Persist immediately since
-      // deleteUpcomingLoan (the other branch) also saves right away.
-      if (thisLoanActivated) {
-        upcoming.items = stillBlocked;
-        await saveUpcomingLoans();
-      }
-    } else if (thisLoanActivated) {
-      await deleteUpcomingLoan(upcoming.id);
-    }
+    const result = await _tryActivateUpcomingLoan(upcoming);
+    if (result.changed) changed = true;
   }
   if (changed) {
     try {
