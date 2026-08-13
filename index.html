@@ -1256,6 +1256,15 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
         <input type="email" id="reassign-am-email" placeholder="Email address" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
       </div>
       <div class="form-group" style="margin-bottom:8px">
+        <label>Demo Type</label>
+        <select id="reassign-demo-type" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          <option value="">Select demo type…</option>
+          <option value="Conference/Presentation">Conference/Presentation</option>
+          <option value="Clinical Trial">Clinical Trial</option>
+          <option value="Hotswap">Hotswap</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
         <label>Notes</label>
         <textarea id="reassign-notes" rows="2" placeholder="Loan notes..." style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
       </div>
@@ -1597,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 25;
+const APP_VERSION = 26;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6155,6 +6164,7 @@ async function openReassignUpcomingAM(upcomingId) {
   document.getElementById('reassign-contact').value  = '';
   document.getElementById('reassign-notes').value    = '';
   document.getElementById('reassign-shipping').value = '';
+  document.getElementById('reassign-demo-type').value = '';
   try {
     const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
     if (r.ok) {
@@ -6163,6 +6173,7 @@ async function openReassignUpcomingAM(upcomingId) {
         document.getElementById('reassign-contact').value  = d.contactNumber || '';
         document.getElementById('reassign-notes').value    = d.notesCell || d.notes || '';
         document.getElementById('reassign-shipping').value = d.authCell || '';
+        document.getElementById('reassign-demo-type').value = d.demoType || '';
       }
     }
   } catch(e) {}
@@ -8490,9 +8501,10 @@ async function openReassignAMByKey(key) {
     document.getElementById('reassign-contact').value  = '';
     document.getElementById('reassign-notes').value    = '';
     document.getElementById('reassign-shipping').value = '';
+    document.getElementById('reassign-demo-type').value = '';
     try {
       const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
-      if (r.ok) { const d = await r.json(); if (d) { document.getElementById('reassign-contact').value = d.contactNumber || ''; document.getElementById('reassign-notes').value = d.notesCell || d.notes || ''; document.getElementById('reassign-shipping').value = d.authCell || ''; } }
+      if (r.ok) { const d = await r.json(); if (d) { document.getElementById('reassign-contact').value = d.contactNumber || ''; document.getElementById('reassign-notes').value = d.notesCell || d.notes || ''; document.getElementById('reassign-shipping').value = d.authCell || ''; document.getElementById('reassign-demo-type').value = d.demoType || ''; } }
     } catch(e) {}
     document.getElementById('reassign-am-modal').classList.add('open');
     return;
@@ -8634,6 +8646,7 @@ async function confirmReassignAM() {
   const newContact   = document.getElementById('reassign-contact').value.trim();
   const newNotes     = document.getElementById('reassign-notes').value.trim();
   const newShipping  = document.getElementById('reassign-shipping').value.trim();
+  const newDemoType  = document.getElementById('reassign-demo-type')?.value || '';
 
   // ── UPCOMING LOAN EDIT ─────────────────────────────────────────────
   if (_reassignUpcomingId) {
@@ -8650,8 +8663,10 @@ async function confirmReassignAM() {
         try {
           await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, ...(newAM ? { accountManager: newAM } : {}) })
+            body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, demoType: newDemoType, ...(newAM ? { accountManager: newAM } : {}) })
           });
+          window._loanDocCache = window._loanDocCache || {};
+          window._loanDocCache[_reassignPdfKey] = { ...(window._loanDocCache[_reassignPdfKey] || {}), demoType: newDemoType };
         } catch(e) {}
       }
       renderLoans();
@@ -8684,8 +8699,10 @@ async function confirmReassignAM() {
         try {
           await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, ...(newAM ? { accountManager: newAM } : {}) })
+            body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, demoType: newDemoType, ...(newAM ? { accountManager: newAM } : {}) })
           });
+          window._loanDocCache = window._loanDocCache || {};
+          window._loanDocCache[_reassignPdfKey] = { ...(window._loanDocCache[_reassignPdfKey] || {}), demoType: newDemoType };
         } catch(e) {}
       }
       scheduleSave(); renderLoans(); renderTable();
