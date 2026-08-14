@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 28;
+const APP_VERSION = 29;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2004,6 +2004,7 @@ async function loadData() {
     await loadUpcomingLoans();
     await loadLoanMeta();
     await loadLoanDocNotes();
+    await loadTestReportsIndex();
     await loadKitGroups();
     // Migrate AccountManager from items → loanMeta, then strip from items
     let _amMigrated = false, _amStripped = false;
@@ -2187,6 +2188,16 @@ function _demoTypeBadge(demoType) {
   const border = isClinical ? '#fecaca' : '#bfdbfe';
   const icon   = isClinical ? '&#x1F52C;' : '&#x26A1;';
   return ' · <span style="background:' + bg + ';color:' + color + ';border:1px solid ' + border + ';border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap">' + icon + ' ' + esc(demoType) + '</span>';
+}
+
+// Filled/green once at least one test report has been uploaded for this loan,
+// so the service team can tell at a glance without opening the modal.
+function _reportsButtonHtml(key, loanTo) {
+  const hasReports = !!(window._testReportsKeys && window._testReportsKeys.has(key));
+  const style = hasReports ? ' style="background:var(--green-light);border-color:var(--green-border);color:var(--green)"' : '';
+  return '<button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal(\'' + String(key).replace(/'/g,"%27") + '\',\'' + esc(loanTo).replace(/'/g,"&#39;") + '\')" title="' + (hasReports ? 'Test reports — uploaded' : 'Test reports') + '"' + style + '>' +
+    '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports' +
+    '</button>';
 }
 
 function buildLoanUpdateBadge(batchId, loanTo) {
@@ -4409,9 +4420,7 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal(\'' + _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate).replace(/'/g,"%27") + '\',\'' + esc(g.loanTo).replace(/'/g,"&#39;") + '\')" title="Test reports">' +
-        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports' +
-        '</button>' +
+        _reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(\'' + key + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Reassign account manager" style="font-size:11px">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
@@ -4489,9 +4498,7 @@ function renderLoans() {
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal(\'' + _readinessKey(u.id, u.loanTo, u.endDate).replace(/'/g,"%27") + '\',\'' + esc(u.loanTo).replace(/'/g,"&#39;") + '\')" title="Test reports">' +
-        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports' +
-        '</button>' +
+        _reportsButtonHtml(_readinessKey(u.id, u.loanTo, u.endDate), u.loanTo) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendUpcomingLoan(\'' + u.id + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Reassign account manager" style="font-size:11px">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
@@ -4533,9 +4540,7 @@ function renderLoans() {
           <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey('${key}')" title="View loan form">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openTestReportsModal('${_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate).replace(/'/g,"%27")}','${esc(g.loanTo).replace(/'/g,"&#39;")}')" title="Test reports">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>Reports
-          </button>
+          ${_reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo)}
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}')" title="Reassign account manager" style="font-size:11px">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign
@@ -7258,6 +7263,17 @@ const TEST_REPORT_MAX_BYTES = 8 * 1024 * 1024; // 8MB per file
 let _testReportsKey = null; // loan key the modal is currently showing
 let _testReportsList = [];  // [{id, filename, mimeType, size, uploadedAt, uploadedBy}]
 
+// Which loan keys have at least one report uploaded — powers the filled/green
+// "Reports" button on loan cards without fetching every loan's report list.
+// Shallow fetch only returns {key: true, ...}, which is all presence needs.
+async function loadTestReportsIndex() {
+  try {
+    const r = await fetch(FB_URL + '/testReports.json?shallow=true');
+    const d = await r.json();
+    window._testReportsKeys = new Set(d ? Object.keys(d) : []);
+  } catch(e) { window._testReportsKeys = new Set(); }
+}
+
 async function openTestReportsModal(key, loanTo) {
   if (!key) return;
   _testReportsKey = key;
@@ -7369,6 +7385,11 @@ async function uploadTestReports(files) {
   btn.disabled = false; btn.textContent = '⬆ Upload';
   if (uploaded)      showToast('success', uploaded + ' report' + (uploaded !== 1 ? 's' : '') + ' uploaded' + (failed ? ' (' + failed + ' failed)' : ''));
   else if (failed)   showToast('error', 'Upload failed');
+  if (uploaded) {
+    window._testReportsKeys = window._testReportsKeys || new Set();
+    window._testReportsKeys.add(_testReportsKey);
+    if (_dirty.loans === false) renderLoans();
+  }
   await refreshTestReportsList();
 }
 
@@ -7394,6 +7415,10 @@ async function deleteTestReport(id) {
     await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
     showToast('success', 'Report deleted');
     await refreshTestReportsList();
+    if (!_testReportsList.length && window._testReportsKeys) {
+      window._testReportsKeys.delete(_testReportsKey);
+      if (_dirty.loans === false) renderLoans();
+    }
   } catch(e) { showToast('error', 'Delete failed'); }
 }
 
