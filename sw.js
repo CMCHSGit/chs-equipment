@@ -34,10 +34,15 @@ self.addEventListener('fetch', event => {
   // Firebase and external API calls — never intercept
   if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) return;
 
-  // HTML page — network first, update cache, fall back to cache if offline
+  // HTML page — network first, update cache, fall back to cache if offline.
+  // cache: 'no-store' is required here — a plain fetch() is still subject to
+  // normal HTTP caching, and GitHub Pages serves this file with
+  // Cache-Control: max-age=600, so without this a "network-first" fetch
+  // could still be silently satisfied from the browser's HTTP cache for up
+  // to 10 minutes after a deploy, defeating the whole point of this branch.
   if (url.pathname === '/' || url.pathname.endsWith('.html')) {
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { cache: 'no-store' })
         .then(response => {
           if (response.ok) {
             const copy = response.clone();
