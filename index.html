@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 30;
+const APP_VERSION = 31;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5430,10 +5430,11 @@ async function sendLoanDocEmail() {
       equipTable.querySelectorAll('tbody tr').forEach(tr => {
         const cells = tr.querySelectorAll('td');
         if (cells.length >= 3) {
-          const asset = cells[0]?.innerText?.trim();
-          const desc  = cells[1]?.innerText?.trim();
-          const serial = cells[2]?.innerText?.trim();
-          if (asset || desc) rows.push((asset ? asset + ' — ' : '') + (desc || '') + (serial ? ' (SN: ' + serial + ')' : ''));
+          const asset  = cells[0]?.innerText?.trim();
+          const model  = cells[1]?.innerText?.trim();
+          const desc   = cells[2]?.innerText?.trim();
+          const serial = cells[3]?.innerText?.trim();
+          if (asset || model || desc) rows.push((asset ? asset + ' — ' : '') + (model ? model + ' — ' : '') + (desc || '') + (serial ? ' (SN: ' + serial + ')' : ''));
         }
       });
     } else {
@@ -5503,6 +5504,24 @@ function _loanDocEditHandler() {
   if (sb) sb.style.display = 'inline-flex';
 }
 
+// Normalizes one saved loan-doc equipment row into a stable named shape —
+// the stored column count/order has changed over time (current: 5 columns
+// [assetNo, model, description, serial, notes]; legacy: 4 columns without
+// Model), and every place that reads a row needs to agree on what each
+// position means. Legacy rows recover Model by looking up the live
+// equipment record; any other stray shape falls back to safe positional
+// guesses rather than crashing.
+function _parseLoanDocRow(r) {
+  if (!Array.isArray(r)) return { CHSAssetNo: '', Model: '', Description: '', SerialNo: '', Notes: '' };
+  if (r.length === 5) {
+    return { CHSAssetNo: r[0]||'', Model: r[1]||'', Description: r[2]||'', SerialNo: r[3]||'', Notes: r[4]||'' };
+  }
+  if (r.length === 4) {
+    return { CHSAssetNo: r[0]||'', Model: equipment.find(e => e.CHSAssetNo === r[0])?.Model || '', Description: r[1]||'', SerialNo: r[2]||'', Notes: r[3]||'' };
+  }
+  return { CHSAssetNo: r[0]||'', Model: '', Description: r[1]||'', SerialNo: r[2]||'', Notes: r[3]||'' };
+}
+
 function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   _currentLoanDocItems = loanItems;
   // Reset here — shown again below only when this is a brand-new loan that
@@ -5514,7 +5533,8 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   let rows, blank;
   if (savedRows && savedRows.length > 0) {
     rows = savedRows.map(r => {
-      const cols = r.length > 4 ? [r[0]||'', r[1]||'', r[2]||'', ''] : r;
+      const p = _parseLoanDocRow(r);
+      const cols = [p.CHSAssetNo, p.Model, p.Description, p.SerialNo, p.Notes];
       return '<tr>' + cols.map(cell =>
         '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">' + (cell || '') + '</td>'
       ).join('') + '</tr>';
@@ -5524,11 +5544,12 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
     rows = loanItems.map(e => `
     <tr>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.CHSAssetNo||''}</td>
+      <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.Model||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.Description||e.Model||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e._pendingNote||''}</td>
     </tr>`).join('');
-    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(4) + '</tr>').join('');
+    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(5) + '</tr>').join('');
   }
 
   document.getElementById('loan-doc-content').innerHTML = `
@@ -5570,8 +5591,9 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
         <thead style="position:sticky;top:0;z-index:2">
           <tr style="background:#f5f5f5">
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:12%;background:#f5f5f5">CHS Asset #</th>
-            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:22%;background:#f5f5f5">Description</th>
-            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:15%;background:#f5f5f5">Serial/Part #</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:15%;background:#f5f5f5">Model</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:18%;background:#f5f5f5">Description</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:14%;background:#f5f5f5">Serial/Part #</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;background:#f5f5f5">Notes/Additional Info</th>
           </tr>
         </thead>
@@ -5811,7 +5833,7 @@ function addDocRow() {
     if (!hasContent && !insertBefore) insertBefore = row;
   }
   const tr = document.createElement('tr');
-  tr.innerHTML = Array(7).fill(0).map(() =>
+  tr.innerHTML = Array(5).fill(0).map(() =>
     '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px;min-width:40px;background:#fffef0" title="Click to edit"></td>'
   ).join('');
   if (insertBefore) tbody.insertBefore(tr, insertBefore);
@@ -6223,7 +6245,10 @@ async function _pushSimproAfterRemoval(batchId, loanDoc, updatedRows) {
     if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(d)) { const [dd,mm,yyyy]=d.split('/'); return yyyy+'-'+mm.padStart(2,'0')+'-'+dd.padStart(2,'0'); }
     return d;
   }
-  const _loanItems = updatedRows.map(row => ({ CHSAssetNo: row[0]||'', Description: row[1]||'', SerialNo: row[2]||'' })).filter(i => i.CHSAssetNo);
+  const _loanItems = updatedRows.map(row => {
+    const p = _parseLoanDocRow(row);
+    return { CHSAssetNo: p.CHSAssetNo, Model: p.Model, Description: p.Description, SerialNo: p.SerialNo };
+  }).filter(i => i.CHSAssetNo);
   try {
     await fetch(SIMPRO_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
@@ -6261,7 +6286,7 @@ async function createSimproJob(existingJobId) {
   if (equipTable) {
     equipTable.querySelectorAll('tbody tr').forEach(row => {
       const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText?.trim() || '');
-      if (cells.some(c => c)) loanItems.push({ CHSAssetNo: cells[0], Description: cells[1], SerialNo: cells[2] });
+      if (cells.some(c => c)) loanItems.push({ CHSAssetNo: cells[0], Model: cells[1], Description: cells[2], SerialNo: cells[3] });
     });
   }
 
@@ -6706,8 +6731,9 @@ function exportLoanRTF() {
       if (cells.some(c => c)) {
         rowLines.push(
           (cells[0] || '').padEnd(12) + '  ' +
-          (cells[1] || '').padEnd(35) + '  ' +
-          (cells[2] || '')
+          (cells[1] || '').padEnd(18) + '  ' +
+          (cells[2] || '').padEnd(30) + '  ' +
+          (cells[3] || '')
         );
       }
     });
@@ -6738,7 +6764,7 @@ function exportLoanRTF() {
   rtf += rule();
 
   // Equipment header
-  rtf += '{\\pard ' + bold('CHS ASSET #'.padEnd(12) + '  ' + 'DESCRIPTION'.padEnd(35) + '  SERIAL/PART #') + '\\par}\n';
+  rtf += '{\\pard ' + bold('CHS ASSET #'.padEnd(12) + '  ' + 'MODEL'.padEnd(18) + '  ' + 'DESCRIPTION'.padEnd(30) + '  SERIAL/PART #') + '\\par}\n';
   rtf += rule();
 
   // Equipment rows
@@ -7981,7 +8007,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
         if (_savedRows && _savedRows.length > 0) {
           const _newItemRows = itemsToAdd.map(b => {
             const eq = equipment.find(e => e.id === b.id);
-            return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', ''];
+            return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Model||b.Model||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', ''];
           });
           _mergedSavedRows = [..._savedRows, ..._newItemRows];
         }
@@ -8350,7 +8376,7 @@ async function _doAddItemsToLoan(g, validRows) {
   let _mergedSavedRows = null;
   if (_savedRows && _savedRows.length > 0) {
     const _newItemRows = added.map(e => [
-      e.CHSAssetNo || '', e.Description || e.Model || '', e.SerialNo || e.PartNo || '', ''
+      e.CHSAssetNo || '', e.Model || '', e.Description || e.Model || '', e.SerialNo || e.PartNo || '', ''
     ]);
     _mergedSavedRows = [..._savedRows, ..._newItemRows];
   }
@@ -8412,7 +8438,7 @@ async function removeDeviceFromLoan(id, assetNo) {
             } else {
               _updatedRows = equipment
                 .filter(e => e.BatchID === _removedFromBatchId && e.Returned !== 'Yes')
-                .map(e => [e.CHSAssetNo||'', e.Description||e.Model||'', e.SerialNo||'', '', '', '', '']);
+                .map(e => [e.CHSAssetNo||'', e.Model||'', e.Description||e.Model||'', e.SerialNo||'', '']);
             }
             await _pushSimproAfterRemoval(_removedFromBatchId, _dd, _updatedRows);
           }
