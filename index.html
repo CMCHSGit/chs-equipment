@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 33;
+const APP_VERSION = 34;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2034,6 +2034,7 @@ async function loadData() {
       checkOrphanedLoans(); // detect any loans whose data.json save was lost
       checkMissingSimproJobs(); // detect any loans whose Simpro job never got created
       checkStuckLoansForAM(); // nudge the assigned AM about their own stuck bookings
+      checkAutoTransferNotifications(); // tell both AMs + service team about any same-batch auto-transfers since their last visit
     }, 500);
     return true;
   } catch(e) {
@@ -6579,7 +6580,7 @@ function findLoansMissingSimproJob() {
 }
 
 // Nudges about upcoming bookings still stuck past their start date (an item
-// they need is still checked out elsewhere, and the vet auto-transfer
+// they need is still checked out elsewhere, and the same-batch auto-transfer
 // exception didn't apply) — but who sees what differs: an AM only ever sees
 // their OWN stuck bookings, since that's the one thing they'd actually know
 // how to act on. The service team sees EVERY stuck booking regardless of
@@ -6609,6 +6610,46 @@ function checkStuckLoansForAM() {
       ' not available yet. Tap to reassign.',
       () => openStuckLoanReassign(u.id));
   });
+}
+
+// Prompts both AM(s) involved and the service team, next time they open the
+// app, that equipment was auto-transferred off a loan that was never
+// actually returned (see _findSingleBlockingBatchId/_tryActivateUpcomingLoan)
+// — this happens without either AM clicking anything, so without an explicit
+// prompt neither would otherwise know their loan's inventory just changed.
+// Grouped by (from loan -> to loan) so a multi-item move is one toast, not
+// one per asset. Uses a per-operator localStorage watermark (same idea as
+// _loanSeenKey) so the same transfer is only ever announced once per person.
+function _autoTransferSeenKey() {
+  return 'autoTransferSeen_' + encodeURIComponent(currentOperator || '');
+}
+function checkAutoTransferNotifications() {
+  if (!currentOperator) return;
+  const isServiceTeam = SERVICE_TEAM_OPERATORS.includes(currentOperator);
+  let lastSeen = '';
+  try { lastSeen = localStorage.getItem(_autoTransferSeenKey()) || ''; } catch(e) {}
+  if (!lastSeen) {
+    // First time checking on this device/operator (or localStorage got cleared) —
+    // don't replay the entire audit history, just the last few days, so a fresh
+    // browser/profile doesn't get flooded with a long backlog of old transfers.
+    lastSeen = new Date(Date.now() - 3*24*60*60*1000).toLocaleString('sv-SE', { timeZone: 'Pacific/Auckland' }).replace(' ', 'T') + '+12:00';
+  }
+  const relevant = auditLog.filter(a =>
+    a.type === 'items_transferred' && a.detail?.autoTransfer && a.ts > lastSeen &&
+    (isServiceTeam || a.detail.fromAM === currentOperator || a.detail.toAM === currentOperator)
+  );
+  if (!relevant.length) return;
+  const groups = {};
+  relevant.forEach(a => {
+    const key = (a.detail.fromLoanTo||'') + '|||' + (a.detail.toLoanTo||'');
+    if (!groups[key]) groups[key] = { fromLoanTo: a.detail.fromLoanTo||'', toLoanTo: a.detail.toLoanTo||'', count: 0 };
+    groups[key].count++;
+  });
+  Object.values(groups).forEach(g => {
+    showToast('info', g.count + ' item' + (g.count !== 1 ? 's' : '') + ' auto-transferred from ' + g.fromLoanTo + ' to ' + g.toLoanTo + ' — never explicitly returned, moved automatically since ' + g.toLoanTo + ' needed it.');
+  });
+  const maxTs = relevant.reduce((m, a) => a.ts > m ? a.ts : m, lastSeen);
+  try { localStorage.setItem(_autoTransferSeenKey(), maxTs); } catch(e) {}
 }
 
 // Jumps straight into the Reassign modal for whichever loan is currently
@@ -9231,7 +9272,16 @@ async function _tryActivateUpcomingLoan(upcoming) {
       });
       writeAudit('items_transferred',
         prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + (autoTransfer ? ' (same-batch match)' : '') + ' — upcoming loan started ' + upcoming.startDate,
-        { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] },
+        { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo],
+          // autoTransfer distinguishes the new same-batch bypass (equipment pulled
+          // off a loan that was never actually returned) from the ordinary case
+          // here (an item that WAS properly returned and got picked up by the next
+          // booking) — checkAutoTransferNotifications() only prompts for the former,
+          // since the latter is just normal reallocation of available stock.
+          autoTransfer,
+          fromAM: getLoanAM(prevBatchId, prevLoanTo, prevEndDate) || '',
+          toAM: upcoming.accountManager || ''
+        },
         'System (auto)');
     }
     // Activate: update equipment — but keep a _transferNote so the item still appears
