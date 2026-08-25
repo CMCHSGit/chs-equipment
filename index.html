@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 34;
+const APP_VERSION = 35;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3323,17 +3323,34 @@ function showFeedback(type,msg){
   el.style.display='block'; el.innerHTML=`<div style="background:${bg};border:1px solid ${b};color:${color};border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;font-size:13px">${msg}</div>`;
 }
 function hideFeedback() { document.getElementById('scan-feedback').style.display='none'; }
-function showToast(type,msg,onClick) {
+// link (optional): { label, onClick } — renders as its own underlined,
+// separately-clickable span appended after the message, distinct from the
+// whole-toast onClick above (e.g. "message text" + " View in History").
+// Built with createElement/textContent throughout, never innerHTML, so a
+// message containing untrusted text (customer names, notes, etc.) can never
+// be interpreted as markup.
+function showToast(type,msg,onClick,link) {
   const t=document.createElement('div');
   t.className=`toast-item toast-${type}`;
-  t.textContent=msg;
+  const msgSpan=document.createElement('span');
+  msgSpan.textContent=msg;
+  t.appendChild(msgSpan);
+  if (link) {
+    const linkSpan=document.createElement('span');
+    linkSpan.textContent=' ' + link.label;
+    linkSpan.style.textDecoration='underline';
+    linkSpan.style.fontWeight='600';
+    linkSpan.style.cursor='pointer';
+    linkSpan.addEventListener('click', (e) => { e.stopPropagation(); link.onClick(); t.remove(); });
+    t.appendChild(linkSpan);
+  }
   if (onClick) {
     t.style.cursor = 'pointer';
     t.title = 'Click to jump straight to this';
     t.addEventListener('click', () => { onClick(); t.remove(); });
   }
   document.getElementById('toast').appendChild(t);
-  setTimeout(()=>t.remove(), onClick ? 9000 : 6000);
+  setTimeout(()=>t.remove(), (onClick || link) ? 9000 : 6000);
 }
 
 // ── MODAL CLOSE ON OVERLAY CLICK ───────────────────────────────────────
@@ -6646,7 +6663,7 @@ function checkAutoTransferNotifications() {
     groups[key].count++;
   });
   Object.values(groups).forEach(g => {
-    showToast('info', g.count + ' item' + (g.count !== 1 ? 's' : '') + ' auto-transferred from ' + g.fromLoanTo + ' to ' + g.toLoanTo + ' — never explicitly returned, moved automatically since ' + g.toLoanTo + ' needed it.');
+    showToast('info', g.count + ' item' + (g.count !== 1 ? 's' : '') + ' auto-transferred: ' + g.fromLoanTo + ' → ' + g.toLoanTo, null, { label: 'View in History', onClick: () => switchTab('history') });
   });
   const maxTs = relevant.reduce((m, a) => a.ts > m ? a.ts : m, lastSeen);
   try { localStorage.setItem(_autoTransferSeenKey(), maxTs); } catch(e) {}
