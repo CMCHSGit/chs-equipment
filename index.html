@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 32;
+const APP_VERSION = 33;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -9156,6 +9156,32 @@ function getAllUpcomingLoansForAssetNo(assetNo) {
     .sort((a, b) => (a.startDate || '') < (b.startDate || '') ? -1 : 1);
 }
 
+// Determines whether every item a booking is STILL waiting on (i.e. still
+// blocked right now — already-resolved items don't count) currently traces
+// back to exactly one other loan's BatchID. Returns that BatchID if so,
+// otherwise null. Computed fresh from live equipment state on every call
+// rather than the booking's original wanted-list, so it stays correct even
+// if some of the booking's items already got resolved separately (returned,
+// or manually reassigned) — an earlier, narrower version of this feature
+// used a frozen wanted-list snapshot instead and broke silently the moment
+// any item resolved out of band (see the Riddiford/Amy Secomb case,
+// 2026-08-13, where 2 of 4 wanted items got manually reassigned first and
+// that silently disqualified the other 2 even though they were still
+// cleanly covered by one single blocking loan).
+function _findSingleBlockingBatchId(upcoming) {
+  let blockingBatchId = null;
+  for (const uItem of upcoming.items) {
+    const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
+    if (!eq) continue;
+    const isBlocked = eq.OnLoanTo && eq.OnLoanTo !== upcoming.loanTo && eq.Returned !== 'Yes';
+    if (!isBlocked) continue; // already free, already returned, or already on this booking — doesn't count
+    if (!eq.BatchID) return null; // blocked but no BatchID to group by — can't confidently auto-transfer
+    if (blockingBatchId === null) blockingBatchId = eq.BatchID;
+    else if (blockingBatchId !== eq.BatchID) return null; // blocked by more than one distinct loan — too ambiguous to auto-resolve
+  }
+  return blockingBatchId;
+}
+
 // Tries to activate ONE upcoming booking right now — same per-item block
 // check as the startup sweep below, just scoped to a single loan so callers
 // (e.g. editing a booking's date to today) can retry just that one booking
@@ -9167,6 +9193,13 @@ async function _tryActivateUpcomingLoan(upcoming) {
   let thisLoanActivated = false;
   let changed = false;
   const stillBlocked = [];
+  // Same-batch auto-transfer: if this booking's still-outstanding items are
+  // ALL currently held by one single other loan (exact match or a subset of
+  // that loan), treat this as equipment handing straight off from that loan
+  // to this one — no explicit Return required. Applies to any loan/AM/
+  // equipment type; extra items the blocking loan holds beyond what this
+  // booking wants are left exactly where they are.
+  const autoTransferBatchId = _findSingleBlockingBatchId(upcoming);
   for (const uItem of upcoming.items) {
     const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
     if (idx < 0) continue;
@@ -9176,16 +9209,15 @@ async function _tryActivateUpcomingLoan(upcoming) {
     const prevBatchId = prev.BatchID     || '';
     const prevEndDate = prev.LoanEndDate || '';
     const isBlocked = prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes';
+    const autoTransfer = isBlocked && !!autoTransferBatchId && prevBatchId === autoTransferBatchId;
     // Item is still genuinely checked out on a DIFFERENT active loan — it hasn't actually
     // been returned yet, so don't rip it away from that loan just because this booking's
-    // start date arrived. Leave it pending here until it's actually available (returned,
-    // or manually reassigned) — this booking will keep showing up in the stuck-loan
-    // reminder (checkStuckLoansForAM) until someone resolves it. No auto-transfer
-    // exception here anymore — even for AMs whose kit rarely comes back to the office,
-    // since that requires every item a booking wants to trace to one single blocking
-    // loan, which silently stops applying the moment any of those items get partially
-    // reassigned elsewhere first (see the Riddiford/Amy Secomb case, 2026-08-13).
-    if (isBlocked) {
+    // start date arrived, UNLESS every item this booking still needs traces back to that
+    // exact same loan (autoTransfer above) — a clean single-source handoff, not a guess
+    // across multiple unrelated blocking loans. Otherwise leave it pending here until
+    // it's actually available; this booking will keep showing up in the stuck-loan
+    // reminder (checkStuckLoansForAM) until someone resolves it.
+    if (isBlocked && !autoTransfer) {
       stillBlocked.push(uItem);
       continue;
     }
@@ -9194,11 +9226,11 @@ async function _tryActivateUpcomingLoan(upcoming) {
       logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
         action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
         loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
-        notes: 'Auto-transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
+        notes: (autoTransfer ? 'Auto-transferred (same-batch match, not yet returned) from ' : 'Auto-transferred from ') + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
         operator: null
       });
       writeAudit('items_transferred',
-        prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + ' — upcoming loan started ' + upcoming.startDate,
+        prev.CHSAssetNo + ' auto-transferred from ' + prevLoanTo + ' to ' + upcoming.loanTo + (autoTransfer ? ' (same-batch match)' : '') + ' — upcoming loan started ' + upcoming.startDate,
         { assetNo: prev.CHSAssetNo, fromLoanTo: prevLoanTo, toLoanTo: upcoming.loanTo, items: [prev.CHSAssetNo] },
         'System (auto)');
     }
