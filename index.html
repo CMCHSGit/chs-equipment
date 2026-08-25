@@ -1067,8 +1067,8 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
     </div>
     <div class="modal-form-grid">
       <div class="form-group"><label>CHS Asset Number <span style="color:var(--red)">*</span></label><input type="text" id="m-CHSAssetNo"></div>
-      <div class="form-group"><label>Model</label><input type="text" id="m-Model"></div>
-      <div class="form-group" style="grid-column:1/-1"><label>Description</label><input type="text" id="m-Description"></div>
+      <div class="form-group"><label>Model</label><input type="text" id="m-Model" list="m-model-list" autocomplete="off"><datalist id="m-model-list"></datalist></div>
+      <div class="form-group" style="grid-column:1/-1"><label>Description</label><input type="text" id="m-Description" list="m-desc-list" autocomplete="off"><datalist id="m-desc-list"></datalist></div>
       <div class="form-group"><label>Serial Number</label><input type="text" id="m-SerialNo"></div>
       <div class="form-group"><label>Battery Serial Number</label><input type="text" id="m-BatterySerialNo" placeholder="—"></div>
       <div class="form-group"><label>Part Number</label><input type="text" id="m-PartNo"></div>
@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 31;
+const APP_VERSION = 32;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2785,10 +2785,23 @@ function uid()  { return 'id_' + Date.now() + '_' + Math.random().toString(36).s
 // ── ADD/EDIT ───────────────────────────────────────────────────────────
 const MF = ['CHSAssetNo','Model','Description','SerialNo','PartNo','MfgDate','PurchaseDate','USPrice','NZPrice','TileNo','OnLoanTo','Location','LoanStartDate','LoanEndDate','Returned','Counted','Notes','ShelfLocation','DeviceID','LanMAC','WlanMAC','OldCHS','TileType','BorrowerEmail','TileUUID','BatterySerialNo'];
 
+// Shared by openAddModal()/openEditModal() — suggests existing Model/Description
+// values so the same model doesn't end up with several inconsistently-typed
+// variants over time. Kept independent of each other (not filtered by the other
+// field's value), since the same model can legitimately have different
+// descriptions depending on hardware configuration.
+function _populateModelDescLists() {
+  const modelList = document.getElementById('m-model-list');
+  const descList  = document.getElementById('m-desc-list');
+  if (modelList) modelList.innerHTML = [...new Set(equipment.map(e => e.Model).filter(Boolean))].sort().map(m => `<option value="${esc(m)}">`).join('');
+  if (descList)  descList.innerHTML  = [...new Set(equipment.map(e => e.Description).filter(Boolean))].sort().map(d => `<option value="${esc(d)}">`).join('');
+}
+
 function openAddModal() {
   editingId=null;
   document.getElementById('modal-title').textContent='Add Asset';
   MF.forEach(f=>{const el=document.getElementById('m-'+f);if(el)el.value='';});
+  _populateModelDescLists();
   document.getElementById('item-modal').classList.add('open');
 }
 
@@ -2808,6 +2821,7 @@ function openMaModal() {
   document.getElementById('ma-kit-enable').checked = false;
   document.getElementById('ma-kit-options').style.display = 'none';
   document.getElementById('ma-kit-name').value = '';
+  _populateModelDescLists();
   // Populate existing kit dropdown
   const existSel = document.getElementById('ma-kit-existing');
   existSel.innerHTML = '<option value="">— Create new kit group —</option>';
@@ -2836,8 +2850,8 @@ function maAddSlot() {
     + '</div>'
     + '<div class="ma-grid">'
     + '<div><label class="ma-label">CHS Asset No. <span style="color:var(--red)">*</span></label><input class="ma-input" id="ma-assetno-' + idx + '" inputmode="numeric" oninput="maUpdateKit()"></div>'
-    + '<div><label class="ma-label">Model</label><input class="ma-input" id="ma-model-' + idx + '"></div>'
-    + '<div class="full"><label class="ma-label">Description</label><input class="ma-input" id="ma-desc-' + idx + '"></div>'
+    + '<div><label class="ma-label">Model</label><input class="ma-input" id="ma-model-' + idx + '" list="m-model-list" autocomplete="off"></div>'
+    + '<div class="full"><label class="ma-label">Description</label><input class="ma-input" id="ma-desc-' + idx + '" list="m-desc-list" autocomplete="off"></div>'
     + '<div><label class="ma-label">Serial Number</label><input class="ma-input" id="ma-serial-' + idx + '"></div>'
     + '<div><label class="ma-label">Battery Serial No.</label><input class="ma-input" id="ma-battserial-' + idx + '" placeholder="—"></div>'
     + '<div><label class="ma-label">Part Number</label><input class="ma-input" id="ma-partno-' + idx + '"></div>'
@@ -3009,6 +3023,7 @@ function openEditModal(id) {
   editingId = id;
   document.getElementById('modal-title').textContent = 'Edit Asset';
   MF.forEach(f => { const el = document.getElementById('m-'+f); if(el) el.value = item[f]||''; });
+  _populateModelDescLists();
   document.getElementById('item-modal').classList.add('open');
 }
 function closeModal() { document.getElementById('item-modal').classList.remove('open'); }
