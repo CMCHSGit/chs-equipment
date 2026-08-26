@@ -325,7 +325,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .table-scroll{max-height:calc(100vh - 160px)}
   .stats-row{grid-template-columns:1fr 1fr}
   .form-grid,.asset-grid{grid-template-columns:1fr}
-  .modal-form-grid{grid-column:1fr}
+  .modal-form-grid{grid-template-columns:1fr}
   .modal{margin:10px;max-height:calc(100vh - 20px)}
   .detail-panel{max-width:100%!important;height:100vh}
   .scan-card{padding:16px}
@@ -334,7 +334,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .stats-row .stat-card{padding:10px 12px}
   .stats-row .stat-val{font-size:20px}
   .mobile-bottom-nav{display:block}
-  .loan-card-header{flex-wrap:wrap;gap:8px}
+  .loan-card-header{flex-wrap:wrap;gap:8px;align-items:flex-start}
 
   /* Hide desktop tables, show cards */
   .db-table-area .table-wrap{display:none!important}
@@ -379,7 +379,7 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .loan-card-header:hover{background:var(--surface2)}
 .loan-card-customer{font-size:15px;font-weight:600}
 .loan-card-meta{font-size:12px;color:var(--text2);margin-top:2px}
-.loan-card-badge{display:flex;gap:6px;align-items:center}
+.loan-card-badge{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .loan-card-body{border-top:1px solid var(--border);padding:0}
 .loan-update-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text2);white-space:nowrap;transition:background .15s;line-height:1.4}
 .loan-update-btn:hover{background:var(--border)}
@@ -1133,12 +1133,12 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
       <div class="spinner"></div>
       <div style="font-size:13px;color:var(--text2);font-weight:500">Closing loan form…</div>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:16px 20px;border-bottom:1px solid var(--border)">
       <div>
         <div style="font-size:16px;font-weight:600">Loan Form</div>
         <div style="font-size:12px;color:var(--text2);margin-top:2px">Click any cell to edit before printing</div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <div id="doc-edited-note" style="display:none;font-size:12px;color:var(--amber);font-weight:500">● Edited</div>
         <button class="btn btn-sm btn-green" id="doc-save-btn" onclick="saveLoanDocChanges()" style="display:none">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Save changes
@@ -1606,7 +1606,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 35;
+const APP_VERSION = 36;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
