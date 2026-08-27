@@ -1607,7 +1607,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 38;
+const APP_VERSION = 39;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6633,6 +6633,7 @@ function checkStuckLoansForAM() {
   const today = nzDate();
   const isServiceTeam = SERVICE_TEAM_OPERATORS.includes(currentOperator);
   const stuck = upcomingLoans.filter(u =>
+    (TEST_MODE || !isTestBatch(u.id)) &&
     u.startDate && u.startDate <= today && (isServiceTeam || u.accountManager === currentOperator)
   );
   // One toast PER stuck loan, always — collapsing to a bare count when
