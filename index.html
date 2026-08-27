@@ -379,7 +379,8 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .loan-card-header:hover{background:var(--surface2)}
 .loan-card-customer{font-size:15px;font-weight:600}
 .loan-card-meta{font-size:12px;color:var(--text2);margin-top:2px}
-.loan-card-badge{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.loan-card-badge{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.loan-card-badge-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 .loan-card-body{border-top:1px solid var(--border);padding:0}
 .loan-update-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text2);white-space:nowrap;transition:background .15s;line-height:1.4}
 .loan-update-btn:hover{background:var(--border)}
@@ -1606,7 +1607,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 37;
+const APP_VERSION = 38;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4452,9 +4453,12 @@ function renderLoans() {
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
+        '<div class="loan-card-badge-row">' +
         buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo) +
         (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         buildReadinessButtons(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), true, g.startDate) +
+        '</div>' +
+        '<div class="loan-card-badge-row">' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey(\'' + key + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
@@ -4469,6 +4473,7 @@ function renderLoans() {
         '<button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteScheduledLoanByKey(\'' + key + '\')" title="Delete this scheduled loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
         '</button>' +
+        '</div>' +
       '</div>' +
       '</div>' +
       '<div class="loan-card-body" id="' + _slcId + '" style="' + _bodyOpen + '">' +
@@ -4530,9 +4535,12 @@ function renderLoans() {
       '</div>' +
       '</div>' +
       '<div class="loan-card-badge">' +
+        '<div class="loan-card-badge-row">' +
         buildLoanUpdateBadge(u.id, u.loanTo) +
         (isSoon ? '<span class="status-badge badge-loan">&#x26A0; Starting Soon</span>' : '<span class="status-badge badge-upcoming">&#x1F4C5; Scheduled</span>') +
         buildReadinessButtons(_readinessKey(u.id, u.loanTo, u.endDate), true, u.startDate) +
+        '</div>' +
+        '<div class="loan-card-badge-row">' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();viewUpcomingLoanDoc(\'' + u.id + '\')" title="View loan form">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>' +
         '</button>' +
@@ -4547,6 +4555,7 @@ function renderLoans() {
         '<button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteUpcomingLoanPrompt(\'' + u.id + '\')" title="Cancel upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>' +
         '</button>' +
+        '</div>' +
       '</div>' +
       '</div>' +
       '<div class="loan-card-body" id="ulc_' + u.id + '" style="display:none">' + itemsHtml + '</div>' +
@@ -4572,9 +4581,12 @@ function renderLoans() {
           <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500">Job #${esc(sj)}</span>` : ''; })()}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
+          <div class="loan-card-badge-row">
           ${buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo)}
           ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
           ${buildReadinessButtons(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), false, g.items[0]?.LoanStartDate || '')}
+          </div>
+          <div class="loan-card-badge-row">
           <button class="btn btn-sm" onclick="event.stopPropagation();viewLoanDocByKey('${key}')" title="View loan form">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
@@ -4590,6 +4602,7 @@ function renderLoans() {
           <button class="btn btn-sm btn-red" onclick="event.stopPropagation();deleteLoanByKey('${key}')" title="Delete this loan">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
           </button>
+          </div>
         </div>
       </div>
       <div class="loan-card-body" id="lc_${gi}" style="display:none">
