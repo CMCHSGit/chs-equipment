@@ -1778,7 +1778,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 42;
+const APP_VERSION = 43;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10321,8 +10321,8 @@ function startAutoSync() {
 // scripts still share one global scope, so everything here can freely call
 // the desktop app's existing functions/globals (equipment, upcomingLoans,
 // getGroupAM, toggleReadiness, setOperator, etc.) without any wiring, as
-// long as this tag runs after they're defined (it does — it's after the
-// closing </script> of the main block).
+// long as this tag runs after they're defined (it does — it runs after the
+// main block's closing script tag).
 //
 // Design decisions made explicit in code, not just the plan doc:
 // - Test/Dispatch stays PER LOAN, reusing getLoanReadiness()/toggleReadiness()
