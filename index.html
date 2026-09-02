@@ -3,6 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+// Runs synchronously, before anything renders, so the mobile PWA never
+// flashes the desktop login screen while checkAuth()'s async loadConfig()
+// is still in flight — see html.mp-mode rule in the #mp-styles block.
+(function(){
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches ||
+        navigator.standalone === true ||
+        new URLSearchParams(location.search).get('mobile') === '1') {
+      document.documentElement.classList.add('mp-mode');
+    }
+  } catch (e) {}
+})();
+</script>
 <link rel="manifest" href="manifest.json">
 <title>CMCHS Demo Equipment Tracker</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -443,6 +457,14 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
      motion, elevation) — that folder is a reference, not linked live.
      ══════════════════════════════════════════════════════════════════════ -->
 <style id="mp-styles">
+/* Pre-paint mode switch — set by the tiny sync script in <head>. Without
+   this, #login-wrap (desktop) is visible by default and only gets hidden
+   once checkAuth()'s async loadConfig() resolves, so mobile briefly shows
+   the desktop login before flipping to #mp-signin. !important is required
+   to beat #mobile-app's own inline style="display:none". */
+html.mp-mode #login-wrap,
+html.mp-mode #app{display:none!important}
+html.mp-mode #mobile-app{display:flex!important}
 #mobile-app{
   /* Brand */
   --mp-purple:#554596;--mp-purple-60:#968ac1;--mp-purple-30:#cac4e3;--mp-purple-20:#dbd7ed;
@@ -1778,7 +1800,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 43;
+const APP_VERSION = 44;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
