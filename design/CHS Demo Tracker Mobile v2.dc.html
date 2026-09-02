@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/colors.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/typography.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/spacing.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/radius.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/elevation.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/motion.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/tokens/base.css">
+<link rel="stylesheet" href="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/styles.css">
+<script src="_ds/connected-healthcare-systems-design-syst-914962cd-e731-4d50-8ee9-8e6faf54401d/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#ececeb}
+a{color:var(--chs-purple);text-decoration:none}
+a:hover{color:#3f3374;text-decoration:underline}
+input,textarea,button{font-family:var(--font-body)}
+</style>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#0b3b5c"/><rect x="38" y="24" width="24" height="52" rx="4" fill="#fff"/><rect x="42" y="32" width="16" height="3" rx="1.5" fill="#0b3b5c"/><rect x="42" y="39" width="16" height="3" rx="1.5" fill="#7aa7c0"/><rect x="42" y="46" width="11" height="3" rx="1.5" fill="#7aa7c0"/></svg></template>
+</helmet>
+
+<div style="min-height:100vh;padding:48px 40px 80px;font-family:var(--font-body);color:var(--text-body);box-sizing:border-box">
+  <div style="max-width:1180px;margin:0 auto">
+
+    <div style="display:flex;gap:6px;margin-bottom:18px">
+      <div style="width:44px;height:5px;background:var(--stripe-1)"></div>
+      <div style="width:44px;height:5px;background:var(--stripe-2)"></div>
+      <div style="width:44px;height:5px;background:var(--stripe-3)"></div>
+    </div>
+    <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">CMCHS Demo Equipment Tracker · mobile</div>
+    <h1 style="font-family:var(--font-display);font-size:40px;font-weight:600;letter-spacing:-.02em;line-height:1.1;color:var(--text-strong);margin:0 0 12px">One app, two views</h1>
+    <p style="max-width:660px;font-weight:300;font-size:17px;line-height:1.55;margin:0 0 30px;text-wrap:pretty">Account managers sign in and see only their own loans, their own week, their own bookings. Service and project staff sign in to the same app and get the fleet: every loan, every account manager, and what is still awaiting test and sign-off. Same tab bar shape, different first screen and different scope rules.</p>
+
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:34px">
+      <span style="font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted)">Signed in as</span>
+      <div style="display:flex;background:var(--chs-black-10);border-radius:10px;padding:3px;gap:3px">
+        <button onClick="{{ beAm }}" style="{{ roleAmStyle }}">Lee-Anne · account manager</button>
+        <button onClick="{{ beOps }}" style="{{ roleOpsStyle }}">Dave · service &amp; projects</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:52px;align-items:flex-start;flex-wrap:wrap">
+      <div style="position:relative;flex:none">
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ 402 }}" height="{{ 874 }}" hint-size="402px,874px">
+
+          <div style="height:100%;display:flex;flex-direction:column;position:relative;background:var(--chs-black-05);font-family:var(--font-body);overflow:hidden">
+
+            <div style="height:56px;flex-shrink:0;background:var(--chs-white)"></div>
+
+            <sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:0 16px;background:var(--chs-white);flex-shrink:0">
+                <div style="display:flex;align-items:center;justify-content:space-between;height:46px">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                    <div style="display:flex;gap:2px;flex-shrink:0">
+                      <div style="width:5px;height:20px;border-radius:2px;background:var(--stripe-1)"></div>
+                      <div style="width:5px;height:20px;border-radius:2px;background:var(--stripe-2)"></div>
+                      <div style="width:5px;height:20px;border-radius:2px;background:var(--stripe-3)"></div>
+                    </div>
+                    <div style="font-family:var(--font-display);font-size:17px;font-weight:600;letter-spacing:-.01em;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ screenTitle }}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:{{ roleChipBg }};flex-shrink:0">
+                    <div style="width:6px;height:6px;border-radius:50%;background:{{ roleChipDot }}"></div>
+                    <span style="font-size:11px;font-weight:600;color:{{ roleChipFg }}">{{ roleChip }}</span>
+                  </div>
+                </div>
+                <div style="display:flex;height:3px;margin:0 -16px">
+                  <div style="flex:1;background:var(--stripe-1)"></div>
+                  <div style="flex:1;background:var(--stripe-2)"></div>
+                  <div style="flex:1;background:var(--stripe-3)"></div>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch">
+
+              <sc-if value="{{ isSignin }}" hint-placeholder-val="{{ false }}">
+                <div style="min-height:100%;box-sizing:border-box;padding:20px 22px 40px;display:flex;flex-direction:column;justify-content:center;gap:20px;background:var(--chs-white)">
+                  <div style="display:flex;gap:4px">
+                    <div style="width:30px;height:5px;background:var(--stripe-1)"></div>
+                    <div style="width:30px;height:5px;background:var(--stripe-2)"></div>
+                    <div style="width:30px;height:5px;background:var(--stripe-3)"></div>
+                  </div>
+                  <div>
+                    <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">CMCHS</div>
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:28px;font-weight:600;letter-spacing:-.01em;line-height:1.14;color:var(--text-strong)">Demo equipment tracker</h2>
+                  </div>
+                  <p style="margin:0;font-weight:300;font-size:15.5px;line-height:1.55">Sign in with your CMCHS account. What you see next depends on your role, not a setting you have to remember.</p>
+                  <button onClick="{{ signIn }}" style="min-height:52px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:16px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Sign in with Microsoft</button>
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <div style="flex:1;height:1px;background:var(--border-subtle)"></div>
+                    <span style="font-size:12px;font-weight:300;color:var(--text-muted)">or</span>
+                    <div style="flex:1;height:1px;background:var(--border-subtle)"></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:7px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Team password</label>
+                    <input type="password" placeholder="••••••••" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;background:var(--chs-white);outline:none" />
+                  </div>
+                  <button onClick="{{ signIn }}" style="min-height:48px;border:1px solid var(--chs-purple);border-radius:6px;background:var(--chs-white);color:var(--chs-purple);font-size:15.5px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-purple-20)">Continue</button>
+                  <p style="margin:0;font-weight:300;font-size:12.5px;line-height:1.5;color:var(--text-muted)">The admin password is still asked separately for deleting a loan, retiring an item or editing equipment.</p>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isToday }}" hint-placeholder-val="{{ true }}">
+                <div style="padding:14px 16px 24px">
+                  <div style="margin-bottom:16px">
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.15;color:var(--text-strong)">Kia ora, Lee-Anne</h2>
+                    <div style="font-size:13.5px;font-weight:300;color:var(--text-muted);margin-top:3px">Wednesday 2 September · your loans only</div>
+                  </div>
+
+                  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:20px">
+                    <sc-for list="{{ amStats }}" as="s" hint-placeholder-count="3">
+                      <div style="background:var(--chs-white);border-radius:10px;padding:12px 13px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                        <div style="font-family:var(--font-display);font-size:24px;font-weight:600;letter-spacing:-.03em;line-height:1;color:{{ s.fg }}">{{ s.v }}</div>
+                        <div style="font-size:11.5px;color:var(--text-muted);margin-top:5px">{{ s.l }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Needs you today</div>
+                  <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">
+                    <sc-for list="{{ amAttention }}" as="a" hint-placeholder-count="3">
+                      <button onClick="{{ a.on }}" style="text-align:left;width:100%;display:flex;align-items:stretch;gap:12px;background:var(--chs-white);border:none;border-radius:10px;padding:12px 14px;min-height:58px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06)" style-hover="box-shadow:0 4px 12px rgba(0,0,0,.07)">
+                        <div style="width:4px;border-radius:2px;background:{{ a.bar }};flex-shrink:0"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.cust }}</div>
+                          <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:2px">{{ a.sub }}</div>
+                        </div>
+                        <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:{{ a.bar }};white-space:nowrap;flex-shrink:0">{{ a.t }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Your week</div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:20px">
+                    <sc-for list="{{ amWeek }}" as="w" hint-placeholder-count="3">
+                      <button onClick="{{ w.on }}" style="text-align:left;width:100%;display:flex;align-items:center;gap:12px;background:transparent;border:none;border-top:1px solid var(--border-subtle);padding:12px 14px;min-height:54px;cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <div style="width:34px;height:34px;border-radius:8px;background:var(--chs-purple-20);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0">
+                          <span style="font-size:9px;font-weight:600;color:var(--chs-purple);line-height:1;text-transform:uppercase">{{ w.dow }}</span>
+                          <span style="font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--chs-purple);line-height:1.1">{{ w.day }}</span>
+                        </div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ w.cust }}</div>
+                          <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:2px">{{ w.sub }}</div>
+                        </div>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a7a9ac" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg>
+                      </button>
+                    </sc-for>
+                  </div>
+
+                  <button onClick="{{ goBook }}" style="width:100%;min-height:50px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:15.5px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Book a demo</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 24px">
+                  <div style="margin-bottom:16px">
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:24px;font-weight:600;letter-spacing:-.02em;line-height:1.15;color:var(--text-strong)">Fleet overview</h2>
+                    <div style="font-size:13.5px;font-weight:300;color:var(--text-muted);margin-top:3px">61 assets · all account managers · Wed 2 Sep</div>
+                  </div>
+
+                  <div style="background:var(--chs-white);border-radius:10px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:12px">
+                    <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px">
+                      <span style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Utilisation</span>
+                      <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">{{ utilLabel }}</span>
+                    </div>
+                    <div style="display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--chs-black-10)">
+                      <div style="background:var(--chs-green);width:{{ utilOnLoan }}"></div>
+                      <div style="background:var(--chs-orange);width:{{ utilDueToday }}"></div>
+                      <div style="background:var(--status-critical);width:{{ utilOverdue }}"></div>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px">
+                      <sc-for list="{{ legend }}" as="g" hint-placeholder-count="4">
+                        <div style="display:flex;align-items:center;gap:6px">
+                          <div style="width:8px;height:8px;border-radius:2px;background:{{ g.c }}"></div>
+                          <span style="font-size:12px;color:var(--text-muted)">{{ g.l }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px">
+                    <sc-for list="{{ opsStats }}" as="s" hint-placeholder-count="4">
+                      <div style="background:var(--chs-white);border-radius:10px;padding:12px 14px;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                        <div style="font-family:var(--font-display);font-size:26px;font-weight:600;letter-spacing:-.03em;line-height:1;color:{{ s.fg }}">{{ s.v }}</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">{{ s.l }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Awaiting test &amp; sign-off</div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:20px">
+                    <sc-for list="{{ dispatchQueue }}" as="d" hint-placeholder-count="3">
+                      <button onClick="{{ goReadiness }}" style="text-align:left;width:100%;display:flex;align-items:center;gap:12px;background:transparent;border:none;border-top:1px solid var(--border-subtle);padding:12px 14px;min-height:60px;cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.cust }}</div>
+                          <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:2px">{{ d.sub }}</div>
+                          <div style="height:4px;border-radius:2px;background:var(--chs-black-10);overflow:hidden;margin-top:7px">
+                            <div style="height:100%;background:{{ d.barColor }};width:{{ d.pct }}"></div>
+                          </div>
+                        </div>
+                        <span style="font-family:var(--font-mono);font-size:12px;color:{{ d.barColor }};white-space:nowrap;flex-shrink:0">{{ d.done }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">By account manager</div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:20px">
+                    <sc-for list="{{ byManager }}" as="m" hint-placeholder-count="4">
+                      <button onClick="{{ m.on }}" style="text-align:left;width:100%;display:flex;align-items:center;gap:12px;background:transparent;border:none;border-top:1px solid var(--border-subtle);padding:11px 14px;min-height:52px;cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong)">{{ m.name }}</div>
+                          <div style="font-size:12.5px;font-weight:300;color:var(--text-muted);margin-top:1px">{{ m.region }}</div>
+                        </div>
+                        <sc-if value="{{ m.over }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:var(--status-critical-tint);color:var(--status-critical);flex-shrink:0">{{ m.over }}</span>
+                        </sc-if>
+                        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted);flex-shrink:0">{{ m.count }}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a7a9ac" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg>
+                      </button>
+                    </sc-for>
+                  </div>
+
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isLoans }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 24px">
+                  <div style="display:flex;background:var(--chs-black-10);border-radius:10px;padding:3px;gap:3px;margin-bottom:12px">
+                    <button onClick="{{ segActive }}" style="{{ segActiveStyle }}">{{ segLabelActive }}</button>
+                    <button onClick="{{ segUpcoming }}" style="{{ segUpcomingStyle }}">{{ segLabelUpcoming }}</button>
+                    <button onClick="{{ segOverdue }}" style="{{ segOverdueStyle }}">{{ segLabelOverdue }}</button>
+                  </div>
+
+                  <sc-if value="{{ canChangeScope }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ openScope }}" style="width:100%;display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;margin-bottom:14px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--chs-white);cursor:pointer;text-align:left" style-hover="background:var(--chs-purple-20)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#554596" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20a7 7 0 0 1 14 0"></path></svg>
+                      <span style="flex:1;font-size:14px;color:var(--text-strong)">{{ scopeLabel }}</span>
+                      <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">{{ scopeCount }}</span>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a7a9ac" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"></path></svg>
+                    </button>
+                  </sc-if>
+                  <sc-if value="{{ scopeLocked }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:10px;min-height:44px;padding:0 14px;margin-bottom:14px;border-radius:10px;background:var(--chs-purple-20)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#554596" stroke-width="2" stroke-linecap="round"><rect x="4" y="10" width="16" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+                      <span style="flex:1;font-size:13.5px;color:#3f3374">Your loans · Lee-Anne Higgins</span>
+                      <span style="font-family:var(--font-mono);font-size:12px;color:#3f3374">{{ scopeCount }}</span>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ noLoans }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:var(--chs-white);border-radius:10px;padding:28px 18px;text-align:center;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                      <div style="font-size:15px;font-weight:600;color:var(--text-strong);margin-bottom:4px">No loans in this view</div>
+                      <div style="font-size:13px;font-weight:300;color:var(--text-muted)">{{ emptySub }}</div>
+                    </div>
+                  </sc-if>
+
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ visibleLoans }}" as="l" hint-placeholder-count="4">
+                      <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                        <div style="height:4px;background:{{ l.bar }}"></div>
+                        <div style="display:flex;align-items:flex-start;gap:10px;padding:12px 14px">
+                          <button onClick="{{ l.toggle }}" style="flex:1;min-width:0;text-align:left;background:transparent;border:none;padding:0;cursor:pointer">
+                            <div style="font-size:15px;font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ l.cust }}</div>
+                            <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:3px">{{ l.meta }}</div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+                              <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:{{ l.tint }};color:{{ l.bar }}">{{ l.badge }}</span>
+                              <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">{{ l.n }} devices</span>
+                              <sc-if value="{{ l.tested }}" hint-placeholder-val="{{ false }}">
+                                <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:{{ l.testedBg }};color:{{ l.testedFg }}">{{ l.tested }}</span>
+                              </sc-if>
+                            </div>
+                            <sc-if value="{{ l.chain }}" hint-placeholder-val="{{ false }}">
+                              <div style="margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--chs-orange-20);font-size:12.5px;font-weight:300;line-height:1.4;color:#8a5400">{{ l.chain }}</div>
+                            </sc-if>
+                          </button>
+                          <button onClick="{{ l.actions }}" aria-label="Loan actions" style="width:44px;height:44px;margin:-8px -8px 0 0;border:none;background:transparent;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" style-hover="background:var(--chs-black-05)">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#747577"><circle cx="12" cy="5" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="12" cy="19" r="1.8"></circle></svg>
+                          </button>
+                        </div>
+                        <sc-if value="{{ l.open }}" hint-placeholder-val="{{ false }}">
+                          <div style="border-top:1px solid var(--border-subtle);background:var(--chs-black-05)">
+                            <sc-for list="{{ l.items }}" as="it" hint-placeholder-count="3">
+                              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border-subtle)">
+                                <span style="font-family:var(--font-mono);font-size:12px;color:var(--chs-purple);width:74px;flex-shrink:0">{{ it.asset }}</span>
+                                <span style="flex:1;font-size:13px;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.model }}</span>
+                                <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted)">{{ it.serial }}</span>
+                              </div>
+                            </sc-for>
+                            <div style="display:flex;gap:8px;padding:12px 14px">
+                              <button onClick="{{ goReturn }}" style="flex:1;min-height:44px;border-radius:6px;border:none;background:var(--chs-purple);color:#fff;font-size:14px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Return items</button>
+                              <button onClick="{{ l.actions }}" style="flex:1;min-height:44px;border-radius:6px;border:1px solid var(--border-hairline);background:var(--chs-white);color:var(--text-strong);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-purple-20)">Loan form</button>
+                            </div>
+                          </div>
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isBook1 }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 24px;display:flex;flex-direction:column;gap:14px">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--text-strong)">Book a demo</h2>
+                    <span style="font-size:12.5px;font-weight:600;color:var(--text-muted)">Step 1 of 3</span>
+                  </div>
+                  <div style="display:flex;gap:5px">
+                    <div style="flex:1;height:4px;border-radius:2px;background:var(--chs-purple)"></div>
+                    <div style="flex:1;height:4px;border-radius:2px;background:var(--chs-black-10)"></div>
+                    <div style="flex:1;height:4px;border-radius:2px;background:var(--chs-black-10)"></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Event and/or customer name <span style="color:var(--chs-orange)">*</span></label>
+                    <input value="Waitakere Hospital" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;outline:none;background:var(--chs-white)" />
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Location <span style="color:var(--chs-orange)">*</span></label>
+                    <input placeholder="City, site or address" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;outline:none;background:var(--chs-white)" />
+                  </div>
+                  <div style="display:flex;gap:10px">
+                    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                      <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Loan start date <span style="color:var(--chs-orange)">*</span></label>
+                      <div style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;display:flex;align-items:center;justify-content:space-between;font-size:16px;color:var(--text-strong);background:var(--chs-white)"><span>02/09/2026</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#747577" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18"></path></svg></div>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                      <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Loan end date <span style="color:var(--chs-orange)">*</span></label>
+                      <div style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;display:flex;align-items:center;justify-content:space-between;font-size:16px;color:var(--text-strong);background:var(--chs-white)"><span>18/09/2026</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#747577" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18"></path></svg></div>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Account manager <span style="color:var(--chs-orange)">*</span></label>
+                    <div style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;display:flex;align-items:center;justify-content:space-between;font-size:16px;color:var(--text-strong);background:var(--chs-white)"><span>{{ bookAmName }}</span><span style="color:var(--text-muted)">▾</span></div>
+                    <span style="font-size:12.5px;font-weight:300;color:var(--text-muted)">{{ bookAmHint }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Account manager email <span style="color:var(--chs-orange)">*</span></label>
+                    <input type="email" value="{{ bookAmEmail }}" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;outline:none;background:var(--chs-white)" />
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Contact number</label>
+                    <input type="tel" placeholder="Phone or contact number" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;outline:none;background:var(--chs-white)" />
+                  </div>
+                  <div style="display:flex;gap:10px">
+                    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                      <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Job type</label>
+                      <button onClick="{{ openJobType }}" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;display:flex;align-items:center;justify-content:space-between;font-size:16px;color:var(--text-strong);background:var(--chs-white);cursor:pointer;text-align:left" style-hover="background:var(--chs-purple-20)"><span>{{ jobType }}</span><span style="color:var(--text-muted)">▾</span></button>
+                    </div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+                      <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Demo type <span style="color:var(--chs-orange)">*</span></label>
+                      <button onClick="{{ openDemoType }}" style="min-height:48px;padding:0 14px;border:1px solid var(--border-hairline);border-radius:6px;display:flex;align-items:center;justify-content:space-between;font-size:16px;color:{{ demoTypeFg }};background:var(--chs-white);cursor:pointer;text-align:left" style-hover="background:var(--chs-purple-20)"><span>{{ demoType }}</span><span style="color:var(--text-muted)">▾</span></button>
+                    </div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Notes</label>
+                    <textarea placeholder="Anything dispatch or the ward should know" style="min-height:74px;padding:11px 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;line-height:1.45;outline:none;resize:none;background:var(--chs-white)"></textarea>
+                    <span style="font-size:12.5px;font-weight:300;color:var(--text-muted)">Appears on the loan form. Equipment notes stay against the device.</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Shipping details</label>
+                    <textarea placeholder="Courier, ward contact, delivery window" style="min-height:74px;padding:11px 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;line-height:1.45;outline:none;resize:none;background:var(--chs-white)"></textarea>
+                  </div>
+                  <div style="display:flex;gap:8px;align-items:center;padding:11px 13px;border-radius:8px;background:var(--chs-purple-20)">
+                    <span style="font-size:12.5px;font-weight:300;line-height:1.45;color:#3f3374">Fields marked <strong style="font-weight:600">*</strong> are required, the same as the web app. Devices are added on the next step.</span>
+                  </div>
+                  <button onClick="{{ goBook2 }}" style="min-height:50px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:15.5px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Choose equipment</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isBook2 }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 150px;display:flex;flex-direction:column;gap:13px">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--text-strong)">Equipment</h2>
+                    <span style="font-size:12.5px;font-weight:600;color:var(--text-muted)">Step 2 of 3</span>
+                  </div>
+                  <div style="display:flex;gap:5px">
+                    <div style="flex:1;height:4px;border-radius:2px;background:var(--chs-purple)"></div>
+                    <div style="flex:1;height:4px;border-radius:2px;background:var(--chs-purple)"></div>
+                    <div style="flex:1;height:4px;border-radius:2px;background:var(--chs-black-10)"></div>
+                  </div>
+                  <div style="font-size:13.5px;font-weight:300;color:var(--text-body)">Devices to include (asset numbers). Availability shown for <strong style="font-weight:600;color:var(--text-strong)">2 – 18 Sep</strong>.</div>
+                  <div style="display:flex;gap:8px">
+                    <div style="flex:1;display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border-radius:10px;background:var(--chs-white);border:1px solid var(--border-subtle)">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#747577" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                      <span style="font-size:14.5px;font-weight:300;color:var(--text-muted)">Asset no., model or serial</span>
+                    </div>
+                    <button onClick="{{ goScan }}" aria-label="Scan a device" style="width:46px;height:46px;border-radius:10px;border:1px solid var(--chs-purple);background:var(--chs-white);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--chs-purple-20)">
+                      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#554596" stroke-width="2" stroke-linecap="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"></path><path d="M4 12h16"></path></svg>
+                    </button>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <button onClick="{{ goEquipment }}" style="flex:1;min-height:44px;border-radius:6px;border:1px solid var(--chs-purple);background:var(--chs-white);color:var(--chs-purple);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-purple-20)">Browse database</button>
+                    <button style="flex:1;min-height:44px;border-radius:6px;border:1px solid var(--border-hairline);background:var(--chs-white);color:var(--text-strong);font-size:14px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-black-05)">Type manually</button>
+                  </div>
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Free for these dates</div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ freeItems }}" as="it" hint-placeholder-count="4">
+                      <button onClick="{{ it.toggle }}" style="text-align:left;width:100%;display:flex;gap:12px;align-items:center;background:var(--chs-white);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 13px;min-height:60px;cursor:pointer" style-hover="background:var(--chs-purple-20)">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong)">{{ it.model }}</div>
+                          <div style="font-size:12.5px;font-weight:300;color:var(--text-muted);margin-top:2px">{{ it.desc }}</div>
+                          <div style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);margin-top:3px">{{ it.asset }} · shelf {{ it.shelf }}</div>
+                        </div>
+                        <div style="flex-shrink:0;width:28px;height:28px;border-radius:6px;border:1px solid {{ it.boxBorder }};background:{{ it.boxBg }};display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:#fff">{{ it.tick }}</div>
+                      </button>
+                    </sc-for>
+                  </div>
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:#a85800;margin-top:4px">Booked over your dates</div>
+                  <button onClick="{{ openClash }}" style="text-align:left;width:100%;display:flex;gap:12px;align-items:center;background:var(--chs-white);border:1px solid #fddab4;border-radius:10px;padding:12px 13px;min-height:60px;cursor:pointer" style-hover="background:var(--chs-orange-20)">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:15px;font-weight:600;color:var(--text-strong)">BeneHeart D60</div>
+                      <div style="font-size:12.5px;font-weight:300;color:var(--text-muted);margin-top:2px">Defibrillator / monitor, 12-lead</div>
+                      <div style="font-size:12.5px;font-weight:300;color:#a85800;margin-top:3px">Held by Theresa Fogarty until 12 Sep · you cannot see her loan</div>
+                    </div>
+                    <div style="flex-shrink:0;width:28px;height:28px;border-radius:6px;border:1px solid var(--border-hairline)"></div>
+                  </button>
+                </div>
+                <div style="position:absolute;left:0;right:0;bottom:98px;padding:12px 16px 14px;background:rgba(255,255,255,.96);border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:12px">
+                  <div style="flex:1;font-size:14.5px;font-weight:600;color:var(--text-strong)">{{ basketLabel }}</div>
+                  <button onClick="{{ openClash }}" style="min-height:44px;padding:0 20px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:14.5px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Confirm loan</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isConfirm }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:20px 16px 24px;display:flex;flex-direction:column;gap:16px">
+                  <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:18px 0 4px">
+                    <div style="width:62px;height:62px;border-radius:50%;background:var(--chs-green-20);display:flex;align-items:center;justify-content:center">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#4a6f01" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4.5 4.5L19 7"></path></svg>
+                    </div>
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:23px;font-weight:600;letter-spacing:-.02em;color:var(--text-strong);text-align:center">Loan confirmed</h2>
+                    <div style="font-size:14.5px;font-weight:300;line-height:1.5;color:var(--text-body);text-align:center;max-width:270px">Waitakere Hospital · ED · 2 – 18 Sep. The loan form has been emailed to you, and it is now with the service team for test and sign-off.</div>
+                  </div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                    <div style="display:flex;height:4px"><div style="flex:1;background:var(--stripe-1)"></div><div style="flex:1;background:var(--stripe-2)"></div><div style="flex:1;background:var(--stripe-3)"></div></div>
+                    <div style="padding:14px;display:flex;flex-direction:column;gap:9px">
+                      <div style="display:flex;justify-content:space-between"><span style="font-size:14px;font-weight:300;color:var(--text-muted)">Loan</span><span style="font-family:var(--font-mono);font-size:13.5px;color:var(--text-strong)">CHS-L-1077</span></div>
+                      <div style="display:flex;justify-content:space-between"><span style="font-size:14px;font-weight:300;color:var(--text-muted)">Devices</span><span style="font-size:14px;font-weight:600;color:var(--text-strong)">3</span></div>
+                      <div style="display:flex;justify-content:space-between"><span style="font-size:14px;font-weight:300;color:var(--text-muted)">Status</span><span style="font-size:14px;font-weight:600;color:var(--chs-purple)">Scheduled</span></div>
+                    </div>
+                  </div>
+                  <button onClick="{{ goToday }}" style="min-height:50px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:15.5px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Back to today</button>
+                  <sc-if value="{{ canSignOff }}" hint-placeholder-val="{{ false }}"><button onClick="{{ goReadiness }}" style="width:100%;min-height:48px;border:1px solid var(--border-hairline);border-radius:6px;background:var(--chs-white);color:var(--text-strong);font-size:15px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-purple-20)">Test &amp; sign off now</button></sc-if>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isReadiness }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 150px;display:flex;flex-direction:column;gap:14px">
+                  <div>
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--text-strong)">Test &amp; sign-off</h2>
+                    <div style="font-size:13.5px;font-weight:300;color:var(--text-muted);margin-top:3px">Waitakere Hospital · ED · ships today</div>
+                  </div>
+                  <div style="display:flex;gap:10px;padding:11px 13px;border-radius:8px;background:var(--chs-purple-20)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3f3374" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v.01M12 11v5"></path></svg>
+                    <span style="font-size:13px;font-weight:300;line-height:1.45;color:#3f3374">{{ readyTestNote }}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:12px">
+                    <div style="flex:1;height:6px;border-radius:3px;background:var(--chs-black-10);overflow:hidden"><div style="height:100%;background:var(--chs-green);width:{{ readyPct }}"></div></div>
+                    <div style="font-size:13.5px;font-weight:600;color:var(--text-body)">{{ readyLabel }}</div>
+                  </div>
+                  <sc-for list="{{ checkGroups }}" as="g" hint-placeholder-count="2">
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <div style="display:flex;justify-content:space-between;align-items:baseline">
+                        <div style="font-size:15px;font-weight:600;color:var(--text-strong)">{{ g.model }}</div>
+                        <div style="font-family:var(--font-mono);font-size:12px;color:var(--chs-purple)">{{ g.asset }}</div>
+                      </div>
+                      <sc-for list="{{ g.checks }}" as="c" hint-placeholder-count="3">
+                        <button onClick="{{ c.toggle }}" style="text-align:left;width:100%;display:flex;gap:12px;align-items:center;background:var(--chs-white);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 13px;min-height:52px;cursor:{{ c.cursor }}">
+                          <div style="flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1px solid {{ c.ringBorder }};background:{{ c.ringBg }};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#fff">{{ c.tick }}</div>
+                          <div style="flex:1;min-width:0">
+                            <div style="font-size:15px;font-weight:400;color:var(--text-strong)">{{ c.label }}</div>
+                            <sc-if value="{{ c.hint }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;font-weight:300;color:var(--text-muted);margin-top:2px">{{ c.hint }}</div></sc-if>
+                          </div>
+                        </button>
+                      </sc-for>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="position:absolute;left:0;right:0;bottom:98px;padding:12px 16px 14px;background:rgba(255,255,255,.96);border-top:1px solid var(--border-subtle)">
+                  <button onClick="{{ markReady }}" style="width:100%;min-height:48px;border:none;border-radius:6px;background:{{ readyBtnBg }};color:#fff;font-size:15px;font-weight:600;cursor:pointer">{{ readyBtnLabel }}</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isScan }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 24px">
+                  <div style="position:relative;border-radius:14px;overflow:hidden;background:var(--chs-black);height:290px;display:flex;align-items:center;justify-content:center;margin-bottom:14px">
+                    <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,#1d1d1d 0 12px,#252525 12px 24px)"></div>
+                    <div style="position:relative;width:180px;height:180px;border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.45)"></div>
+                    <div style="position:absolute;width:180px;height:180px;border-radius:16px;border:2px solid rgba(255,255,255,.9)"></div>
+                    <div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;font-size:13px;font-weight:300;color:rgba(255,255,255,.86)">Point at the QR label on the device</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;min-height:48px;padding:0 14px;border-radius:10px;background:var(--chs-white);border:1px solid var(--border-subtle);margin-bottom:18px">
+                    <span style="font-family:var(--font-mono);font-size:14px;color:var(--text-muted)">Type CHS asset no.</span>
+                  </div>
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Basket · 3 items</div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:14px">
+                    <sc-for list="{{ basket }}" as="b" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--border-subtle)">
+                        <span style="font-family:var(--font-mono);font-size:12px;color:var(--chs-purple);width:74px;flex-shrink:0">{{ b.asset }}</span>
+                        <span style="flex:1;font-size:14px;color:var(--text-strong)">{{ b.model }}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a7a9ac" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;gap:8px">
+                    <button onClick="{{ goReturn }}" style="flex:1;min-height:48px;border-radius:6px;border:none;background:var(--chs-purple);color:#fff;font-size:15px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Check in</button>
+                    <button onClick="{{ goLoans }}" style="flex:1;min-height:48px;border-radius:6px;border:1px solid var(--chs-purple);background:var(--chs-white);color:var(--chs-purple);font-size:15px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-purple-20)">Check out</button>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isEquipment }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 0 24px">
+                  <div style="padding:0 16px">
+                    <div style="display:flex;gap:8px;margin-bottom:12px">
+                      <div style="flex:1;display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border-radius:10px;background:var(--chs-white);border:1px solid var(--border-subtle)">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#747577" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                        <span style="font-size:15px;font-weight:300;color:var(--text-muted)">Search 61 assets</span>
+                      </div>
+                      <button onClick="{{ openFilter }}" aria-label="Filter and sort" style="width:46px;height:46px;border-radius:10px;border:1px solid var(--border-subtle);background:var(--chs-white);display:flex;align-items:center;justify-content:center;cursor:pointer" style-hover="background:var(--chs-purple-20)">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#554596" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M6 12h12M10 18h4"></path></svg>
+                      </button>
+                    </div>
+                    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:12px">
+                      <sc-for list="{{ chips }}" as="c" hint-placeholder-count="5">
+                        <button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div style="background:var(--chs-white);box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                    <sc-for list="{{ equipment }}" as="e" hint-placeholder-count="6">
+                      <button onClick="{{ openItem }}" style="width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:11px 16px;min-height:60px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <div style="flex:1;min-width:0">
+                          <div style="display:flex;align-items:baseline;gap:8px">
+                            <span style="font-family:var(--font-mono);font-size:12px;color:var(--chs-purple)">{{ e.asset }}</span>
+                            <span style="font-size:15px;font-weight:600;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.model }}</span>
+                          </div>
+                          <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:2px">{{ e.sub }}</div>
+                        </div>
+                        <span style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:{{ e.tint }};color:{{ e.fg }};white-space:nowrap;flex-shrink:0">{{ e.status }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isAlerts }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 24px;display:flex;flex-direction:column;gap:14px">
+                  <div style="border-radius:14px;background:var(--chs-black);padding:13px 14px;display:flex;gap:12px">
+                    <div style="flex-shrink:0;width:32px;height:32px;border-radius:8px;display:flex;overflow:hidden">
+                      <div style="flex:1;background:var(--stripe-1)"></div><div style="flex:1;background:var(--stripe-2)"></div><div style="flex:1;background:var(--stripe-3)"></div>
+                    </div>
+                    <div style="flex:1;min-width:0">
+                      <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:13px;font-weight:600;color:#fff">Demo tracker</span><span style="font-size:11.5px;font-weight:300;color:rgba(255,255,255,.6)">now</span></div>
+                      <div style="font-size:14px;font-weight:600;color:#fff;margin-top:3px">{{ pushTitle }}</div>
+                      <div style="font-size:13.5px;font-weight:300;line-height:1.4;color:rgba(255,255,255,.84);margin-top:2px">{{ pushBody }}</div>
+                    </div>
+                  </div>
+                  <div style="font-size:12.5px;font-weight:300;line-height:1.45;color:var(--text-muted);margin-top:-4px">Installed to the home screen, the app can push on iOS 16.4+. Until then these mirror the emails the tracker already sends.</div>
+
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Recent</div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                    <sc-for list="{{ alerts }}" as="a" hint-placeholder-count="4">
+                      <button onClick="{{ a.on }}" style="width:100%;text-align:left;display:flex;gap:11px;align-items:flex-start;padding:12px 14px;min-height:52px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:{{ a.cursor }}" style-hover="background:var(--chs-black-05)">
+                        <div style="flex-shrink:0;width:8px;height:8px;border-radius:50%;background:{{ a.dot }};margin-top:6px"></div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:14.5px;font-weight:600;color:var(--text-strong)">{{ a.title }}</div>
+                          <div style="font-size:13px;font-weight:300;line-height:1.45;color:var(--text-muted);margin-top:2px">{{ a.body }}</div>
+                          <sc-if value="{{ a.cta }}" hint-placeholder-val="{{ false }}">
+                            <div style="font-size:13px;font-weight:600;color:var(--chs-purple);margin-top:5px">{{ a.cta }}</div>
+                          </sc-if>
+                        </div>
+                        <div style="flex-shrink:0;font-size:12px;font-weight:300;color:#a7a9ac">{{ a.when }}</div>
+                      </button>
+                    </sc-for>
+                  </div>
+
+                  <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-top:4px">Tell me about</div>
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                    <sc-for list="{{ prefs }}" as="p" hint-placeholder-count="4">
+                      <button onClick="{{ p.toggle }}" style="width:100%;text-align:left;display:flex;gap:12px;align-items:center;padding:11px 14px;min-height:52px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:400;color:var(--text-strong)">{{ p.label }}</div>
+                          <div style="font-size:12.5px;font-weight:300;color:var(--text-muted);margin-top:1px">{{ p.scope }}</div>
+                        </div>
+                        <div style="flex-shrink:0;width:44px;height:26px;border-radius:999px;background:{{ p.trackBg }};padding:3px;display:flex;justify-content:{{ p.knobPos }};box-sizing:border-box">
+                          <div style="width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)"></div>
+                        </div>
+                      </button>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isReturn }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 150px;display:flex;flex-direction:column;gap:13px">
+                  <div>
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--text-strong)">Return items</h2>
+                    <div style="font-size:13.5px;font-weight:300;color:var(--text-muted);margin-top:3px">Middlemore Hospital · ICU · overdue 2 days</div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ returnItems }}" as="it" hint-placeholder-count="3">
+                      <button onClick="{{ it.toggle }}" style="text-align:left;width:100%;display:flex;gap:12px;align-items:center;background:var(--chs-white);border:1px solid var(--border-subtle);border-radius:10px;padding:12px 13px;min-height:56px;cursor:pointer" style-hover="background:var(--chs-purple-20)">
+                        <div style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:1px solid {{ it.boxBorder }};background:{{ it.boxBg }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#fff">{{ it.tick }}</div>
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong)">{{ it.model }}</div>
+                          <div style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);margin-top:2px">{{ it.asset }} · SN {{ it.serial }}</div>
+                        </div>
+                      </button>
+                    </sc-for>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+                    <label style="font-size:13.5px;font-weight:600;color:var(--text-strong)">Condition on return</label>
+                    <textarea placeholder="Scuffed lid, SpO2 cable missing…" style="min-height:78px;padding:11px 14px;border:1px solid var(--border-hairline);border-radius:6px;font-size:16px;line-height:1.45;outline:none;resize:none;background:var(--chs-white)"></textarea>
+                    <span style="font-size:12.5px;font-weight:300;color:var(--text-muted)">Saved against the device, not the loan form.</span>
+                  </div>
+                </div>
+                <div style="position:absolute;left:0;right:0;bottom:98px;padding:12px 16px 14px;background:rgba(255,255,255,.96);border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:12px">
+                  <div style="flex:1;font-size:14.5px;font-weight:600;color:var(--text-strong)">{{ returnLabel }}</div>
+                  <button onClick="{{ goLoans }}" style="min-height:44px;padding:0 20px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:14.5px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Return</button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ isTransfer }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 150px;display:flex;flex-direction:column;gap:14px">
+                  <div>
+                    <h2 style="margin:0;font-family:var(--font-display);font-size:22px;font-weight:600;letter-spacing:-.02em;color:var(--text-strong)">Transfer items</h2>
+                    <div style="font-size:13.5px;font-weight:300;color:var(--text-muted);margin-top:3px">{{ transferSub }}</div>
+                  </div>
+
+                  <sc-if value="{{ transferDone }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                      <div style="height:4px;background:var(--chs-green)"></div>
+                      <div style="padding:15px;display:flex;flex-direction:column;gap:9px">
+                        <div style="font-size:16px;font-weight:600;color:var(--text-strong)">{{ transferDoneTitle }}</div>
+                        <div style="font-size:14px;font-weight:300;line-height:1.5;color:var(--text-body)">{{ transferDoneBody }}</div>
+                      </div>
+                    </div>
+                  </sc-if>
+
+                  <sc-if value="{{ transferPending }}" hint-placeholder-val="{{ true }}">
+                    <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06)">
+                      <div style="display:flex;height:4px"><div style="flex:1;background:var(--status-critical)"></div><div style="flex:1;background:var(--chs-purple)"></div></div>
+                      <div style="padding:14px;display:flex;flex-direction:column;gap:12px">
+                        <div style="display:flex;gap:11px;align-items:flex-start">
+                          <span style="width:34px;flex-shrink:0;font:var(--type-overline);letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding-top:3px">From</span>
+                          <div style="flex:1;min-width:0">
+                            <div style="font-size:15px;font-weight:600;color:var(--text-strong)">Middlemore Hospital ICU</div>
+                            <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:1px">Lee-Anne Higgins · was due back 4 Sep · overdue</div>
+                          </div>
+                        </div>
+                        <div style="height:1px;background:var(--border-subtle)"></div>
+                        <div style="display:flex;gap:11px;align-items:flex-start">
+                          <span style="width:34px;flex-shrink:0;font:var(--type-overline);letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);padding-top:3px">To</span>
+                          <div style="flex:1;min-width:0">
+                            <div style="font-size:15px;font-weight:600;color:var(--text-strong)">Waitakere Hospital ED</div>
+                            <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:1px">Lee-Anne Higgins · starts today · due back 18 Sep</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted)">Items to transfer</div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <sc-for list="{{ transferItems }}" as="t" hint-placeholder-count="3">
+                        <div style="background:var(--chs-white);border:1px solid var(--border-subtle);border-radius:10px;overflow:hidden">
+                          <button onClick="{{ t.toggle }}" style="width:100%;text-align:left;display:flex;gap:12px;align-items:center;background:transparent;border:none;padding:12px 13px;min-height:56px;cursor:pointer" style-hover="background:var(--chs-purple-20)">
+                            <div style="flex-shrink:0;width:26px;height:26px;border-radius:6px;border:1px solid {{ t.boxBorder }};background:{{ t.boxBg }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:#fff">{{ t.tick }}</div>
+                            <div style="flex:1;min-width:0">
+                              <div style="font-size:15px;font-weight:600;color:var(--text-strong)">{{ t.model }}</div>
+                              <div style="font-family:var(--font-mono);font-size:11.5px;color:var(--text-muted);margin-top:2px">{{ t.asset }} · SN {{ t.serial }}</div>
+                            </div>
+                            <span style="flex-shrink:0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:999px;background:{{ t.tint }};color:{{ t.fg }}">{{ t.state }}</span>
+                          </button>
+                          <sc-if value="{{ t.needsReason }}" hint-placeholder-val="{{ false }}">
+                            <button onClick="{{ t.pickReason }}" style="width:100%;text-align:left;display:flex;gap:10px;align-items:center;background:{{ t.reasonBg }};border:none;border-top:1px solid var(--border-subtle);padding:11px 13px;min-height:48px;cursor:pointer">
+                              <span style="flex:1;font-size:13.5px;font-weight:{{ t.reasonWeight }};color:{{ t.reasonFg }}">{{ t.reasonLabel }}</span>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a7a9ac" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg>
+                            </button>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+
+                    <div style="display:flex;gap:9px;padding:12px 13px;border-radius:8px;background:var(--chs-black-05)">
+                      <span style="font-size:13px;font-weight:300;line-height:1.5;color:var(--text-body);text-wrap:pretty">{{ transferExplain }}</span>
+                    </div>
+                  </sc-if>
+                </div>
+
+                <sc-if value="{{ transferPending }}" hint-placeholder-val="{{ true }}">
+                  <div style="position:absolute;left:0;right:0;bottom:98px;padding:12px 16px 14px;background:rgba(255,255,255,.96);border-top:1px solid var(--border-subtle);display:flex;align-items:center;gap:12px">
+                    <div style="flex:1;font-size:14.5px;font-weight:600;color:var(--text-strong)">{{ transferCount }}</div>
+                    <button onClick="{{ doTransfer }}" style="min-height:44px;padding:0 20px;border:none;border-radius:6px;background:{{ transferBtnBg }};color:#fff;font-size:14.5px;font-weight:600;cursor:pointer">Transfer</button>
+                  </div>
+                </sc-if>
+              </sc-if>
+
+              <sc-if value="{{ isMore }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:14px 16px 24px">
+                  <div style="background:var(--chs-white);border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.06);margin-bottom:18px">
+                    <sc-for list="{{ moreItems }}" as="m" hint-placeholder-count="5">
+                      <button onClick="{{ m.on }}" style="width:100%;text-align:left;display:flex;align-items:center;gap:12px;padding:0 14px;min-height:52px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:pointer;font-size:15px;color:var(--text-strong)" style-hover="background:var(--chs-black-05)">
+                        <span style="flex:1">{{ m.label }}</span>
+                        <span style="font-size:13px;font-weight:300;color:var(--text-muted)">{{ m.hint }}</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a7a9ac" stroke-width="2" stroke-linecap="round"><path d="m9 6 6 6-6 6"></path></svg>
+                      </button>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:13px;font-weight:300;color:var(--text-muted);line-height:1.55">{{ signedInAs }}<br>Connected Healthcare Systems · 0800 424 797</div>
+                  <button onClick="{{ signOut }}" style="margin-top:16px;width:100%;min-height:48px;border:1px solid var(--border-hairline);border-radius:6px;background:var(--chs-white);color:var(--text-strong);font-size:15px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-black-05)">Sign out</button>
+                </div>
+              </sc-if>
+
+            </div>
+
+            <sc-if value="{{ showChrome }}" hint-placeholder-val="{{ true }}">
+              <div style="flex-shrink:0;background:var(--chs-white);border-top:1px solid var(--border-subtle);padding:8px 4px 34px;display:flex;align-items:flex-end">
+                <button onClick="{{ goHome }}" style="{{ tabHomeStyle }}">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>
+                  <span style="font-size:10px;font-weight:600">{{ tabHomeLabel }}</span>
+                </button>
+                <button onClick="{{ goLoans }}" style="{{ tabLoansStyle }}">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"></rect><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  <span style="font-size:10px;font-weight:600">Loans</span>
+                </button>
+                <button onClick="{{ goCentre }}" aria-label="{{ tabCentreLabel }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:transparent;border:none;cursor:pointer;padding:0">
+                  <div style="width:52px;height:52px;border-radius:16px;background:var(--chs-purple);display:flex;align-items:center;justify-content:center;margin-top:-16px;box-shadow:0 6px 16px rgba(85,69,150,.35)" style-hover="background:#47397e">
+                    <sc-if value="{{ centreIsScan }}" hint-placeholder-val="{{ false }}">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"></path><path d="M4 12h16"></path></svg>
+                    </sc-if>
+                    <sc-if value="{{ centreIsBook }}" hint-placeholder-val="{{ true }}">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M8 3v4M16 3v4M3 11h18M12 15v4M10 17h4"></path></svg>
+                    </sc-if>
+                  </div>
+                  <span style="font-size:10px;font-weight:600;color:var(--chs-purple)">{{ tabCentreLabel }}</span>
+                </button>
+                <button onClick="{{ goFourth }}" style="{{ tabFourthStyle }}">
+                  <sc-if value="{{ fourthIsSearch }}" hint-placeholder-val="{{ false }}">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+                  </sc-if>
+                  <sc-if value="{{ fourthIsScan }}" hint-placeholder-val="{{ true }}">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"></path><path d="M4 12h16"></path></svg>
+                  </sc-if>
+                  <span style="font-size:10px;font-weight:600">{{ tabFourthLabel }}</span>
+                </button>
+                <button onClick="{{ goMore }}" style="{{ tabMoreStyle }}">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+                  <span style="font-size:10px;font-weight:600">More</span>
+                </button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:80"></div>
+              <div style="position:absolute;left:0;right:0;bottom:0;z-index:90;background:var(--chs-white);border-radius:20px 20px 0 0;padding:10px 16px 44px;box-shadow:0 -16px 48px rgba(0,0,0,.2)">
+                <div style="width:38px;height:4px;border-radius:2px;background:var(--chs-black-20);margin:0 auto 14px"></div>
+                <div style="font-family:var(--font-display);font-size:17px;font-weight:600;color:var(--text-strong);margin-bottom:2px">{{ sheetTitle }}</div>
+                <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-bottom:12px">{{ sheetSub }}</div>
+
+                <sc-if value="{{ sheetIsActions }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;max-height:400px;overflow:auto">
+                    <sc-for list="{{ sheetActions }}" as="a" hint-placeholder-count="5">
+                      <button onClick="{{ closeSheet }}" style="width:100%;text-align:left;min-height:52px;display:flex;align-items:center;gap:12px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:pointer;font-size:16px;color:{{ a.fg }}" style-hover="background:var(--chs-black-05)">{{ a.label }}</button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ sheetIsScope }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;max-height:400px;overflow:auto">
+                    <sc-for list="{{ scopeOptions }}" as="o" hint-placeholder-count="5">
+                      <button onClick="{{ o.on }}" style="width:100%;text-align:left;min-height:54px;display:flex;align-items:center;gap:12px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:16px;font-weight:{{ o.weight }};color:var(--text-strong)">{{ o.label }}</div>
+                          <div style="font-size:13px;font-weight:300;color:var(--text-muted);margin-top:1px">{{ o.sub }}</div>
+                        </div>
+                        <span style="font-family:var(--font-mono);font-size:12px;color:var(--text-muted)">{{ o.count }}</span>
+                        <span style="width:18px;font-size:16px;color:var(--chs-purple);text-align:center">{{ o.tick }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ sheetIsVisibility }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;max-height:360px;overflow:auto">
+                    <sc-for list="{{ teamVisibility }}" as="t" hint-placeholder-count="4">
+                      <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border-subtle)">
+                        <div style="flex:1;min-width:0">
+                          <div style="font-size:15px;font-weight:600;color:var(--text-strong)">{{ t.name }}</div>
+                          <div style="font-size:12px;font-weight:300;color:var(--text-muted);margin-top:1px">{{ t.role }}</div>
+                        </div>
+                        <div style="display:flex;background:var(--chs-black-10);border-radius:8px;padding:2px;gap:2px">
+                          <button onClick="{{ t.setOwn }}" style="{{ t.ownStyle }}">Own loans</button>
+                          <button onClick="{{ t.setAll }}" style="{{ t.allStyle }}">All loans</button>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:12px;font-weight:300;color:var(--text-muted);line-height:1.5;margin-top:12px;text-wrap:pretty">Own shows only loans where they are the account manager — the default for AMs. All shows every loan, for service and project staff.</div>
+                </sc-if>
+
+                <sc-if value="{{ sheetIsSelect }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;max-height:400px;overflow:auto">
+                    <sc-for list="{{ selectOptions }}" as="o" hint-placeholder-count="5">
+                      <button onClick="{{ o.on }}" style="width:100%;text-align:left;min-height:52px;display:flex;align-items:center;gap:12px;background:transparent;border:none;border-top:1px solid var(--border-subtle);cursor:pointer" style-hover="background:var(--chs-black-05)">
+                        <span style="flex:1;font-size:16px;font-weight:{{ o.weight }};color:var(--text-strong)">{{ o.label }}</span>
+                        <span style="width:18px;font-size:16px;color:var(--chs-purple);text-align:center">{{ o.tick }}</span>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ sheetIsClash }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:12px">
+                    <p style="margin:0;font-size:15px;font-weight:300;line-height:1.5;color:var(--text-body)">BeneHeart D60 (CHS-0501) is out until 12 Sep, which overlaps 2 – 18 Sep. Theresa Fogarty is holding it — you can see that, not her loan.</p>
+                    <div style="padding:11px 13px;background:var(--chs-black-05);border-radius:8px;font-size:13.5px;font-weight:300;line-height:1.5;color:var(--text-body)">Booking it anyway keeps both records. Theresa is notified that you have it booked from 12 Sep, and it activates when she transfers or returns it.</div>
+                    <button onClick="{{ bookAnyway }}" style="min-height:48px;border:none;border-radius:6px;background:var(--chs-purple);color:#fff;font-size:15.5px;font-weight:600;cursor:pointer" style-hover="background:#47397e">Book it anyway</button>
+                    <button onClick="{{ bookAnyway }}" style="min-height:46px;border:1px solid var(--border-hairline);border-radius:6px;background:var(--chs-white);color:var(--text-strong);font-size:15px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-black-05)">Skip this item</button>
+                  </div>
+                </sc-if>
+
+                <button onClick="{{ closeSheet }}" style="width:100%;min-height:50px;margin-top:14px;border-radius:6px;border:none;background:var(--chs-black-05);color:var(--text-strong);font-size:16px;font-weight:600;cursor:pointer" style-hover="background:var(--chs-black-10)">Close</button>
+              </div>
+            </sc-if>
+
+          </div>
+        </x-import>
+      </div>
+
+      <sc-if value="{{ showNotes }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-width:320px;max-width:440px;padding-top:6px">
+          <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px">Every screen · {{ jumpCount }}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:34px">
+            <sc-for list="{{ jumpList }}" as="j" hint-placeholder-count="16">
+              <button onClick="{{ j.on }}" style="{{ j.style }}">{{ j.label }}</button>
+            </sc-for>
+          </div>
+          <div style="font:var(--type-overline);letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);margin-bottom:18px">How the two roles differ</div>
+          <div style="display:flex;flex-direction:column;gap:24px">
+            <sc-for list="{{ notes }}" as="n" hint-placeholder-count="6">
+              <div style="display:flex;gap:14px">
+                <div style="width:26px;height:26px;flex-shrink:0;border-radius:50%;background:var(--chs-purple);color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-size:13px;font-weight:600">{{ n.i }}</div>
+                <div>
+                  <div style="font-size:16px;font-weight:600;color:var(--text-strong);margin-bottom:4px">{{ n.h }}</div>
+                  <div style="font-size:15px;font-weight:300;line-height:1.55;text-wrap:pretty">{{ n.b }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:32px;padding:18px 20px;background:var(--chs-white);border-radius:10px;box-shadow:0 1px 2px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.07)">
+            <div style="display:flex;gap:4px;margin-bottom:12px">
+              <div style="width:24px;height:4px;background:var(--stripe-1)"></div>
+              <div style="width:24px;height:4px;background:var(--stripe-2)"></div>
+              <div style="width:24px;height:4px;background:var(--stripe-3)"></div>
+            </div>
+            <div style="font-family:var(--font-display);font-size:18px;font-weight:600;color:var(--text-strong);margin-bottom:10px">Still open</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <sc-for list="{{ open }}" as="q" hint-placeholder-count="4">
+                <div style="font-size:14.5px;font-weight:300;line-height:1.5">{{ q }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1180,&quot;height&quot;:1020},&quot;showNotes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Presentation&quot;}}">
+const P = 'var(--chs-purple)', G = 'var(--chs-green)', O = 'var(--chs-orange)', R = 'var(--status-critical)';
+const ME = 'Lee-Anne Higgins';
+const MANAGERS = [
+  { name: 'Lee-Anne Higgins', region: 'Auckland & upper North' },
+  { name: 'Theresa Fogarty', region: 'Waikato & Bay of Plenty' },
+  { name: 'Anna Reid', region: 'Wellington & Canterbury' },
+  { name: 'Josh Tuilagi', region: 'Otago & Southland' }
+];
+
+class Component extends DCLogic {
+  state = {
+    role: 'am',
+    screen: 'today',
+    seg: 'active',
+    scope: ME,
+    open: null,
+    sheet: null,
+    jobType: 'Demo',
+    demoType: '',
+    xferSel: { 'CHS-0331': true, 'CHS-0455': true, 'CHS-0388': true },
+    xferReason: {},
+    xferDone: false,
+    chip: 'All',
+    basket: { 'CHS-0412': true, 'CHS-0388': true },
+    checks: { 'CHS-0331-est': true },
+    returnSel: {},
+    prefs: { xfer: true, due2: true, overdue: true, starting: true, confirm: false },
+    visibility: { 'Lee-Anne Higgins': 'own', 'Theresa Fogarty': 'own', 'Anna Reid': 'own', 'Josh Tuilagi': 'own' }
+  };
+
+  set = (k, v) => () => this.setState({ [k]: v });
+  goScreen = (screen) => () => this.setState({ screen, sheet: null });
+  toggleIn(key, id) { this.setState(s => ({ [key]: { ...s[key], [id]: !s[key][id] } })); }
+
+  tabStyle(on) {
+    return { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+      minHeight: 48, padding: '4px 0', background: 'transparent', border: 'none', cursor: 'pointer',
+      fontFamily: 'var(--font-body)', color: on ? P : 'var(--chs-black-60)' };
+  }
+  segStyle(on) {
+    return { flex: 1, minHeight: 38, borderRadius: 8, border: 'none', cursor: 'pointer',
+      fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600,
+      background: on ? 'var(--chs-white)' : 'transparent', color: on ? P : 'var(--chs-black-60)',
+      boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' };
+  }
+  chipStyle(on) {
+    return { flexShrink: 0, minHeight: 34, padding: '0 14px', borderRadius: 999, cursor: 'pointer',
+      fontFamily: 'var(--font-body)', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+      border: on ? '1px solid ' + P : '1px solid var(--border-hairline)',
+      background: on ? P : 'var(--chs-white)', color: on ? '#fff' : 'var(--chs-black-80)' };
+  }
+  pillStyle(on) {
+    return { minWidth: 44, minHeight: 30, padding: '0 9px', borderRadius: 6, border: 'none', cursor: 'pointer',
+      fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600,
+      background: on ? 'var(--chs-white)' : 'transparent', color: on ? P : 'var(--chs-black-60)',
+      boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' };
+  }
+  rolePickStyle(on) {
+    return { minHeight: 40, padding: '0 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+      fontFamily: 'var(--font-body)', fontSize: 14, fontWeight: 600,
+      background: on ? 'var(--chs-white)' : 'transparent', color: on ? P : 'var(--chs-black-60)',
+      boxShadow: on ? '0 1px 2px rgba(0,0,0,.08)' : 'none' };
+  }
+
+  becomeRole = (role) => () => this.setState({
+    role, screen: role === 'am' ? 'today' : 'overview',
+    scope: role === 'am' ? ME : 'all', sheet: null, open: null
+  });
+
+  renderVals() {
+    const s = this.state;
+    const isAm = s.role === 'am';
+    const sc = s.screen;
+
+    const items = [
+      { asset: 'CHS-0331', model: 'VS9 vital signs', serial: 'SN BE-92104471' },
+      { asset: 'CHS-0455', model: 'BeneHeart D30', serial: 'SN CD-88120033' },
+      { asset: 'CHS-0388', model: 'ePM 12M monitor', serial: 'SN AM-77410216' }
+    ];
+
+    const all = {
+      active: [
+        { id: 1, cust: 'Middlemore Hospital ICU', am: ME, meta: ME + ' · Otahuhu · 21 Aug – 4 Sep', n: 3, badge: 'Overdue 2 days', bar: R, tint: 'var(--status-critical-tint)', chain: '' },
+        { id: 2, cust: 'Tauranga Hospital Theatre 4', am: 'Theresa Fogarty', meta: 'Theresa Fogarty · Tauranga · 25 Aug – 2 Sep', n: 1, badge: 'Due today', bar: O, tint: 'var(--chs-orange-20)', chain: 'A9 is scheduled for Palmerston North from 15 Sep' },
+        { id: 3, cust: 'Christchurch Hospital CCU', am: ME, meta: ME + ' · Christchurch · 28 Aug – 30 Sep', n: 2, badge: 'Active', bar: G, tint: 'var(--chs-green-20)', chain: '' },
+        { id: 4, cust: 'Southern Cross North Harbour', am: 'Anna Reid', meta: 'Anna Reid · Auckland · 1 Sep – 22 Sep', n: 4, badge: 'Active', bar: G, tint: 'var(--chs-green-20)', chain: '' },
+        { id: 5, cust: 'Rotorua Hospital Theatre', am: 'Josh Tuilagi', meta: 'Josh Tuilagi · Rotorua · 26 Aug – 8 Sep', n: 3, badge: 'Active', bar: G, tint: 'var(--chs-green-20)', chain: '' }
+      ],
+      upcoming: [
+        { id: 6, cust: 'Waitakere Hospital ED', am: ME, meta: ME + ' · Henderson · Starts today, awaiting transfer', n: 3, badge: 'Starts today', bar: O, tint: 'var(--chs-orange-20)', chain: 'Gear is still on the Middlemore ICU loan — transfer to activate' },
+        { id: 7, cust: 'Palmerston North Anaesthesia', am: 'Theresa Fogarty', meta: 'Theresa Fogarty · Manawatū · Starts 15 Sep', n: 1, badge: 'Scheduled', bar: P, tint: 'var(--chs-purple-20)', chain: 'A9 is on loan to Tauranga, due back 12 Sep' },
+        { id: 8, cust: 'Dunedin Hospital Theatre', am: 'Josh Tuilagi', meta: 'Josh Tuilagi · Dunedin · Starts 29 Sep', n: 2, badge: 'Unconfirmed', bar: O, tint: 'var(--chs-orange-20)', chain: 'D60 currently at Tauranga, then Waitakere ED' }
+      ],
+      overdue: [
+        { id: 1, cust: 'Middlemore Hospital ICU', am: ME, meta: ME + ' · Otahuhu · Due 4 Sep', n: 3, badge: '2 days over', bar: R, tint: 'var(--status-critical-tint)', chain: '' },
+        { id: 9, cust: 'Whangārei Hospital ED', am: 'Anna Reid', meta: 'Anna Reid · Whangārei · Due 29 Aug', n: 1, badge: '4 days over', bar: R, tint: 'var(--status-critical-tint)', chain: '' },
+        { id: 10, cust: 'Invercargill Day Surgery', am: 'Josh Tuilagi', meta: 'Josh Tuilagi · Invercargill · Due 1 Sep', n: 2, badge: '1 day over', bar: R, tint: 'var(--status-critical-tint)', chain: '' }
+      ]
+    };
+
+    const rDemo = s.demoType || 'Clinical trial';
+    const needsPerf = rDemo !== 'Conference / presentation';
+    const testsFor = (a) => needsPerf
+      ? [{ id: a + '-est', label: 'Electrical safety test', hint: 'IEC 62353 · pass required' },
+         { id: a + '-perf', label: 'Performance check', hint: 'Against the manufacturer spec' }]
+      : [{ id: a + '-est', label: 'Electrical safety test', hint: 'IEC 62353 · pass required' }];
+    const checkDefs = [
+      { asset: 'CHS-0331', model: 'VS9 vital signs' },
+      { asset: 'CHS-0455', model: 'BeneHeart D30' },
+      { asset: 'CHS-0388', model: 'ePM 12M monitor' }
+    ].map(d => ({ ...d, checks: testsFor(d.asset) }));
+    let total = 0, done = 0;
+    const checkGroups = checkDefs.map(g => ({
+      model: g.model, asset: g.asset,
+      checks: g.checks.map(c => {
+        total++;
+        const on = !!s.checks[c.id];
+        if (on) done++;
+        return { label: c.label, hint: c.hint, tick: on ? '✓' : '',
+          ringBg: on ? G : 'var(--chs-white)', ringBorder: on ? G : 'var(--border-hairline)',
+          cursor: 'pointer', toggle: () => this.toggleIn('checks', c.id) };
+      })
+    }));
+    const allReady = done === total;
+
+    const dispatchQueue = [
+      { cust: 'Waitakere Hospital ED', sub: 'Ships today · Lee-Anne', done: done, tot: total },
+      { cust: 'Palmerston North Anaesthesia', sub: 'Ships Mon 15 Sep · Theresa', done: 1, tot: 2 },
+      { cust: 'Dunedin Hospital Theatre', sub: 'Ships Mon 29 Sep · Josh', done: 4, tot: 4 }
+    ].map(d => ({ cust: d.cust, sub: d.sub, done: d.done + '/' + d.tot,
+      pct: Math.round((d.done / d.tot) * 100) + '%',
+      barColor: d.done === d.tot ? G : (d.done / d.tot >= 0.6 ? O : R) }));
+    const awaitingSignOff = dispatchQueue.filter(d => d.barColor !== G).length;
+
+    const XFER_REASONS = ['Returning to CHS instead', 'Customer is keeping it longer',
+      'Item faulty, going to service', 'Not physically at the site', 'Other — add a note'];
+
+    const xferRaw = [
+      { asset: 'CHS-0331', model: 'VS9 vital signs', serial: 'BE-92104471' },
+      { asset: 'CHS-0455', model: 'BeneHeart D30', serial: 'CD-88120033' },
+      { asset: 'CHS-0388', model: 'ePM 12M monitor', serial: 'AM-77410216' }
+    ];
+    const transferItems = xferRaw.map(it => {
+      const on = s.xferSel[it.asset] !== false;
+      const reason = s.xferReason[it.asset];
+      return { ...it,
+        tick: on ? '✓' : '', boxBg: on ? P : 'var(--chs-white)', boxBorder: on ? P : 'var(--border-hairline)',
+        state: on ? 'Transfer' : 'Stays behind',
+        tint: on ? 'var(--chs-purple-20)' : 'var(--chs-black-10)',
+        fg: on ? '#3f3374' : 'var(--chs-black-60)',
+        needsReason: !on,
+        reasonLabel: reason || 'Add a reason — required',
+        reasonWeight: reason ? 400 : 600,
+        reasonFg: reason ? 'var(--text-body)' : '#8a5400',
+        reasonBg: reason ? 'var(--chs-black-05)' : 'var(--chs-orange-20)',
+        toggle: () => this.setState({ xferSel: { ...s.xferSel, [it.asset]: !on } }),
+        pickReason: () => this.setState({ sheet: 'xferReason', xferTarget: it.asset })
+      };
+    });
+    const xferOn = transferItems.filter(t => !t.needsReason).length;
+    const xferBlocked = transferItems.some(t => t.needsReason && !s.xferReason[t.asset]);
+
+    if (s.xferDone) {
+      const w = all.upcoming.find(l => l.id === 6);
+      all.active = all.active.filter(l => l.id !== 1);
+      all.overdue = all.overdue.filter(l => l.id !== 1);
+      all.upcoming = all.upcoming.filter(l => l.id !== 6);
+      if (w) all.active = [{ ...w, badge: 'Active', bar: G, tint: 'var(--chs-green-20)',
+        meta: ME + ' · Henderson · 2 – 18 Sep', n: xferOn, chain: '' }, ...all.active];
+    }
+
+    const inScope = l => s.scope === 'all' ? true : l.am === s.scope;
+    const countIn = name => ['active', 'upcoming', 'overdue']
+      .reduce((t, k) => t + all[k].filter(l => name === 'all' || l.am === name).length, 0);
+    const filtered = k => all[k].filter(inScope);
+
+    const openActions = (cust) => () => this.setState({ sheet: 'actions', sheetCust: cust });
+    const visibleLoans = filtered(s.seg).map(l => ({
+      ...l, items,
+      tested: l.id === 6 ? (allReady ? 'Tested' : 'Awaiting test') : '',
+      testedFg: allReady ? '#4a6f01' : '#8a5400',
+      testedBg: allReady ? 'var(--chs-green-20)' : 'var(--chs-orange-20)',
+      chain: isAm ? '' : l.chain,
+      open: s.open === l.id,
+      toggle: () => this.setState({ open: s.open === l.id ? null : l.id }),
+      actions: openActions(l.cust)
+    }));
+
+    const scopeOptions = [
+      { label: 'All account managers', sub: 'Every loan in the tracker', count: String(countIn('all')),
+        on: () => this.setState({ scope: 'all', sheet: null, open: null }),
+        tick: s.scope === 'all' ? '✓' : '', weight: s.scope === 'all' ? 600 : 400 },
+      ...MANAGERS.map(m => ({
+        label: m.name, sub: m.region, count: String(countIn(m.name)),
+        on: () => this.setState({ scope: m.name, sheet: null, open: null }),
+        tick: s.scope === m.name ? '✓' : '', weight: s.scope === m.name ? 600 : 400
+      }))
+    ];
+
+    const setVis = (name, v) => () => this.setState({ visibility: { ...s.visibility, [name]: v } });
+    const teamVisibility = MANAGERS.map(m => {
+      const v = s.visibility[m.name] === 'all' ? 'all' : 'own';
+      return { name: m.name === ME && isAm ? m.name + ' (you)' : m.name, role: m.region,
+        setOwn: setVis(m.name, 'own'), setAll: setVis(m.name, 'all'),
+        ownStyle: this.pillStyle(v === 'own'), allStyle: this.pillStyle(v === 'all') };
+    });
+
+    const freeRaw = [
+      { asset: 'CHS-0412', model: 'VS9', desc: 'Vital signs monitor, NIBP + SpO2', shelf: 'A2-3' },
+      { asset: 'CHS-0388', model: 'ePM 12M', desc: 'Patient monitor, 12.1 inch', shelf: 'A1-1' },
+      { asset: 'CHS-0455', model: 'BeneHeart D30', desc: 'Defibrillator / monitor', shelf: 'B4-2' },
+      { asset: 'CHS-0209', model: 'uMEC 12', desc: 'Patient monitor, transport', shelf: 'A3-4' }
+    ];
+    const freeItems = freeRaw.map(it => {
+      const on = !!s.basket[it.asset];
+      return { ...it, tick: on ? '✓' : '', boxBg: on ? P : 'var(--chs-white)', boxBorder: on ? P : 'var(--border-hairline)',
+        toggle: () => this.toggleIn('basket', it.asset) };
+    });
+    const basketCount = Object.keys(s.basket).filter(k => s.basket[k]).length;
+
+
+    const returnRaw = [
+      { asset: 'CHS-0331', model: 'VS9', serial: 'BE-92104471' },
+      { asset: 'CHS-0455', model: 'BeneHeart D30', serial: 'CD-88120033' },
+      { asset: 'CHS-0388', model: 'ePM 12M', serial: 'AM-77410216' }
+    ];
+    const returnItems = returnRaw.map(it => {
+      const on = !!s.returnSel[it.asset];
+      return { ...it, tick: on ? '✓' : '', boxBg: on ? P : 'var(--chs-white)', boxBorder: on ? P : 'var(--border-hairline)',
+        toggle: () => this.toggleIn('returnSel', it.asset) };
+    });
+    const returnCount = Object.keys(s.returnSel).filter(k => s.returnSel[k]).length;
+
+    const prefDefs = isAm
+      ? [ { id: 'xfer', label: 'Transfers due', scope: 'Heads-up the day before, then on the day' },
+          { id: 'due2', label: 'My loans due back in 2 days' },
+          { id: 'overdue', label: 'My loans overdue', scope: 'Daily until returned' },
+          { id: 'starting', label: 'My loans starting in 2 days' },
+          { id: 'confirm', label: 'Every loan I create' } ]
+      : [ { id: 'due2', label: 'Anything due back in 2 days', scope: 'All account managers' },
+          { id: 'overdue', label: 'Anything overdue', scope: 'All account managers, daily' },
+          { id: 'starting', label: 'Tests not signed off 24h before dispatch' },
+          { id: 'confirm', label: 'New loan created by any AM' } ];
+    const prefs = prefDefs.map(p => {
+      const on = !!s.prefs[p.id];
+      return { label: p.label, scope: p.scope || '', trackBg: on ? G : 'var(--chs-black-20)',
+        knobPos: on ? 'flex-end' : 'flex-start', toggle: () => this.toggleIn('prefs', p.id) };
+    });
+
+    const chipDefs = ['All', 'Available', 'On loan', 'Overdue', 'In service', 'Mindray', 'Vocera'];
+    const chips = chipDefs.map(label => ({ label, on: this.set('chip', label), style: this.chipStyle(s.chip === label) }));
+
+    const TITLES = { transfer: 'Loan transfer', readiness: 'Test & sign-off', signin: 'Sign in', today: 'Today', overview: 'Overview', loans: 'Loans', book1: 'Book a demo',
+      book2: 'Book a demo', confirm: 'Confirmed', scan: 'Scan', equipment: 'Equipment',
+      alerts: 'Alerts', more: 'More', return: 'Return items' };
+
+    const homeScreen = isAm ? 'today' : 'overview';
+    const centreScreen = isAm ? 'book1' : 'scan';
+    const fourthScreen = isAm ? 'scan' : 'equipment';
+    const bookScreens = ['book1', 'book2', 'confirm'];
+
+    const moreItems = isAm
+      ? [ { label: 'Transfers due', hint: s.xferDone ? 'None' : '1', go: 'transfer' },
+          { label: 'Calendar', hint: 'Sep 2026' }, { label: 'My loan history', hint: '' },
+          { label: 'Search equipment', hint: '61 assets', go: 'equipment' },
+          { label: 'Notifications', hint: '', go: 'alerts' }, { label: 'Settings', hint: '' } ]
+      : [ { label: 'Create a loan', hint: 'Any AM', go: 'book1' },
+          { label: 'Calendar', hint: 'All managers' },
+          { label: 'Test & sign-off queue', hint: '2 waiting', go: 'readiness' },
+          { label: 'Who sees which loans', hint: 'Admin', sheet: 'visibility' },
+          { label: 'Stocktake / count', hint: '61 assets' }, { label: 'Import', hint: 'xlsx, csv' },
+          { label: 'Sold / retired', hint: '9' }, { label: 'Settings', hint: '' } ];
+
+    const jumpDefs = isAm
+      ? [ ['signin', 'Sign in', null], ['today', 'Today', null], ['loans', 'Loans', null],
+          ['loans', 'Loan expanded', null, 1, 'active'], ['loans', 'Loan actions', 'actions'],
+          ['book1', 'Book · details', null], ['book2', 'Book · equipment', null],
+          ['book2', 'Clash warning', 'clash'], ['confirm', 'Confirmed', null],
+          ['scan', 'Scan', null],
+          ['transfer', 'Loan transfer', null], ['return', 'Return items', null], ['equipment', 'Equipment search', null],
+          ['alerts', 'Alerts', null], ['more', 'More', null] ]
+      : [ ['signin', 'Sign in', null], ['overview', 'Overview', null], ['loans', 'Loans · all AMs', null],
+          ['loans', 'Scope picker', 'scope'], ['loans', 'Loan actions', 'actions'],
+          ['book1', 'Book · details', null], ['book2', 'Book · equipment', null],
+          ['book2', 'Clash warning', 'clash'], ['confirm', 'Confirmed', null],
+          ['readiness', 'Test & sign-off', null], ['scan', 'Scan', null],
+          ['equipment', 'Equipment search', null], ['return', 'Return items', null],
+          ['alerts', 'Alerts', null], ['more', 'More', null], ['more', 'Who sees what', 'visibility'] ];
+
+    const jumpList = jumpDefs.map(([screen, label, sheet, openId, seg]) => {
+      const on = sc === screen && s.sheet === sheet
+        && (openId ? s.open === openId : !s.open)
+        && (seg ? s.seg === seg : true);
+      return { label, style: this.chipStyle(on),
+        on: () => this.setState({ screen, sheet, open: openId || null, seg: seg || s.seg }) };
+    });
+
+    return {
+      isTransfer: sc === 'transfer',
+      transferPending: !s.xferDone,
+      transferDone: s.xferDone,
+      transferSub: s.xferDone ? 'Middlemore Hospital ICU · closed 2 Sep'
+        : 'Middlemore Hospital ICU → Waitakere Hospital ED · starts today',
+      testedChip: allReady ? 'Tested' : '',
+      transferItems,
+      transferCount: xferOn === 0 ? 'Nothing selected'
+        : xferBlocked ? 'Reason needed to continue'
+        : xferOn + ' of 3 transferring',
+      transferBtnBg: (xferOn > 0 && !xferBlocked) ? P : 'var(--chs-black-20)',
+      transferExplain: 'A record change only — no scan, no signature, no new loan form. '
+        + 'Transferring closes the Middlemore loan and marks its items returned, and the items appear on the Waitakere loan. '
+        + 'Anything left behind is returned to CHS with the reason recorded against the device.',
+      doTransfer: (xferOn > 0 && !xferBlocked) ? (() => this.setState({ xferDone: true })) : (() => {}),
+      transferDoneTitle: xferOn + ' items now on the Waitakere ED loan',
+      transferDoneBody: 'Middlemore Hospital ICU is closed and marked returned. '
+        + (xferOn === 3 ? 'Nothing was left behind. ' : (3 - xferOn) + ' item returned to CHS with a reason recorded. ')
+        + 'Both account managers have been notified.',
+      goTransfer: () => this.setState({ screen: 'transfer', sheet: null }),
+      transferOpsSub: s.xferDone ? xferOn + ' devices moved · Middlemore closed'
+        : '3 devices · Lee-Anne Higgins · Waitakere starts today',
+      transferOpsTag: s.xferDone ? 'Done' : 'Waiting',
+
+      roleAmStyle: this.rolePickStyle(isAm),
+      roleOpsStyle: this.rolePickStyle(!isAm),
+      beAm: this.becomeRole('am'),
+      beOps: this.becomeRole('ops'),
+
+      screenTitle: TITLES[sc] || 'Tracker',
+      showChrome: sc !== 'signin',
+      roleChip: isAm ? 'Your loans' : 'All loans',
+      roleChipBg: isAm ? 'var(--chs-purple-20)' : 'var(--chs-green-20)',
+      roleChipDot: isAm ? P : G,
+      roleChipFg: isAm ? '#3f3374' : '#4a6f01',
+
+      isSignin: sc === 'signin', isToday: sc === 'today', isOverview: sc === 'overview',
+      isLoans: sc === 'loans', isBook1: sc === 'book1', isBook2: sc === 'book2', isConfirm: sc === 'confirm',
+      isReadiness: sc === 'readiness' && !isAm, isScan: sc === 'scan', isEquipment: sc === 'equipment',
+      isAlerts: sc === 'alerts', isMore: sc === 'more', isReturn: sc === 'return',
+
+      signIn: this.goScreen(homeScreen),
+      signOut: this.goScreen('signin'),
+      goHome: this.goScreen(homeScreen), goToday: this.goScreen(homeScreen),
+      goLoans: this.goScreen('loans'), goBook: this.goScreen('book1'), goBook2: this.goScreen('book2'),
+      goReadiness: this.goScreen('readiness'), goScan: this.goScreen('scan'),
+      goEquipment: this.goScreen('equipment'), goAlerts: this.goScreen('alerts'), goMore: this.goScreen('more'), goReturn: this.goScreen('return'),
+      goCentre: this.goScreen(centreScreen), goFourth: this.goScreen(fourthScreen),
+
+      tabHomeLabel: isAm ? 'Today' : 'Overview',
+      tabCentreLabel: isAm ? 'Book' : 'Scan',
+      tabFourthLabel: isAm ? 'Scan' : 'Equipment',
+      centreIsScan: !isAm, centreIsBook: isAm,
+      fourthIsScan: isAm, fourthIsSearch: !isAm,
+      tabHomeStyle: this.tabStyle(sc === homeScreen),
+      tabLoansStyle: this.tabStyle(sc === 'loans' || sc === 'return'),
+      tabFourthStyle: this.tabStyle(sc === fourthScreen),
+      tabMoreStyle: this.tabStyle(sc === 'more'),
+
+      segActive: this.set('seg', 'active'), segUpcoming: this.set('seg', 'upcoming'), segOverdue: this.set('seg', 'overdue'),
+      segActiveStyle: this.segStyle(s.seg === 'active'),
+      segUpcomingStyle: this.segStyle(s.seg === 'upcoming'),
+      segOverdueStyle: this.segStyle(s.seg === 'overdue'),
+      segLabelActive: 'Active ' + filtered('active').length,
+      segLabelUpcoming: 'Upcoming ' + filtered('upcoming').length,
+      segLabelOverdue: 'Overdue ' + filtered('overdue').length,
+
+      canChangeScope: !isAm, scopeLocked: isAm,
+      scopeLabel: s.scope === 'all' ? 'All account managers' : s.scope,
+      scopeCount: countIn(s.scope === 'all' ? 'all' : s.scope) + ' loans',
+      openScope: () => this.setState({ sheet: 'scope' }),
+      visibleLoans,
+      noLoans: visibleLoans.length === 0,
+      emptySub: 'Nothing in this segment.',
+
+      amStats: [
+        { v: String(filtered('active').length), l: 'Your loans out', fg: 'var(--text-strong)' },
+        { v: String(filtered('overdue').length), l: 'Overdue', fg: R },
+        { v: String(filtered('upcoming').length), l: 'Booked ahead', fg: P }
+      ],
+      amAttention: s.xferDone
+        ? [ { t: 'Done', cust: 'Middlemore ICU → Waitakere ED', sub: xferOn + ' devices transferred · Middlemore closed', bar: G, on: this.goScreen('transfer') },
+            { t: 'Live now', cust: 'Waitakere Hospital ED', sub: xferOn + ' devices · due back 18 Sep', bar: G, on: this.goScreen('loans') } ]
+        : [ { t: 'Transfer', cust: 'Middlemore ICU → Waitakere ED', sub: '3 devices · Waitakere starts today', bar: P, on: this.goScreen('transfer') },
+            { t: '2 days over', cust: 'Middlemore Hospital ICU', sub: '3 devices · due back 4 Sep', bar: R, on: this.goScreen('return') },
+            { t: allReady ? 'Tested' : 'Not tested', cust: 'Waitakere Hospital ED', sub: allReady ? 'Signed off by service today' : 'Service has not signed off the tests yet', bar: allReady ? G : O, on: this.goScreen('loans') } ],
+      amWeek: [
+        ...(s.xferDone ? [] : [{ dow: 'Today', day: '2', cust: 'Waitakere Hospital ED', sub: 'Starts today · transfer to activate', on: this.goScreen('transfer') }]),
+        { dow: 'Thu', day: '10', cust: 'Christchurch Hospital CCU', sub: 'Mid-loan check-in call', on: this.goScreen('loans') },
+        { dow: 'Fri', day: '18', cust: 'Waitakere Hospital ED', sub: 'Due back · ' + (s.xferDone ? xferOn : 3) + ' devices', on: this.goScreen('loans') }
+      ],
+
+      utilLabel: (n => n + ' of 61 out')(all.active.reduce((t, l) => t + l.n, 0)),
+      utilOnLoan: Math.round((all.active.reduce((t, l) => t + l.n, 0) / 61) * 100) + '%',
+      utilDueToday: Math.round((all.active.filter(l => l.badge === 'Due today').reduce((t, l) => t + l.n, 0) / 61) * 100) + '%',
+      utilOverdue: Math.round((all.overdue.reduce((t, l) => t + l.n, 0) / 61) * 100) + '%',
+      legend: [
+        { c: G, l: 'On loan' }, { c: O, l: 'Due today' },
+        { c: R, l: 'Overdue' }, { c: 'var(--chs-black-10)', l: 'Available' }
+      ],
+      opsStats: [
+        { v: String(all.active.length + all.upcoming.length), l: 'Loans active', fg: 'var(--text-strong)' },
+        { v: String(all.overdue.length), l: 'Overdue across all AMs', fg: R },
+        { v: String(awaitingSignOff), l: 'Awaiting sign-off', fg: P }
+      ],
+      dispatchQueue: dispatchQueue,      byManager: MANAGERS.map(m => ({
+        name: m.name, region: m.region, count: countIn(m.name) + ' loans',
+        over: (n => n ? n + ' overdue' : '')(all.overdue.filter(l => l.am === m.name).length),
+        on: () => this.setState({ role: 'ops', screen: 'loans', scope: m.name, sheet: null })
+      })),
+
+      bookAmName: isAm ? ME : 'Choose an account manager',
+      bookAmEmail: isAm ? 'lee-anne.higgins@chsnz.co.nz' : '',
+      bookAmHint: isAm ? 'The loan form is emailed to you once you confirm.'
+        : 'Service staff must name the account manager who owns the loan.',
+      freeItems,
+      basketLabel: basketCount === 1 ? '1 device selected' : basketCount + ' devices selected',
+      openClash: () => this.setState({ sheet: 'clash' }),
+      bookAnyway: () => this.setState({ screen: 'confirm', sheet: null }),
+
+      checkGroups,
+      readyDemoType: rDemo,
+      canSignOff: !isAm,
+      readyTestNote: needsPerf
+        ? rDemo + ' — electrical safety test and performance check required on every device.'
+        : rDemo + ' — electrical safety test only.',
+      readyPct: total ? Math.round((done / total) * 100) + '%' : '0%',
+      readyLabel: done + ' of ' + total,
+      readyBtnBg: allReady ? G : 'var(--chs-black-20)',
+      readyBtnLabel: allReady ? 'Sign off as tested' : 'Complete the tests to sign off',
+      markReady: allReady ? this.goScreen('overview') : (() => {}),
+
+      basket: [
+        { asset: 'CHS-0203', model: 'VS9 vital signs' },
+        { asset: 'CHS-0261', model: 'SV300 ventilator' },
+        { asset: 'CHS-0187', model: 'A9 anaesthesia' }
+      ],
+      chips,
+      equipment: [
+        { asset: 'CHS-0142', model: 'BeneVision N22', sub: 'Patient monitor · on loan to Middlemore ICU', status: 'On loan', fg: 'var(--chs-orange)', tint: 'var(--chs-orange-20)' },
+        { asset: 'CHS-0187', model: 'A9 anaesthesia', sub: 'Anaesthesia machine · bay 3', status: 'Available', fg: '#4a6f01', tint: 'var(--chs-green-20)' },
+        { asset: 'CHS-0203', model: 'VS9 vital signs', sub: 'Vital signs monitor · shelf B2', status: 'Available', fg: '#4a6f01', tint: 'var(--chs-green-20)' },
+        { asset: 'CHS-0219', model: 'D30 defibrillator', sub: 'Defibrillator · due back 4 Sep', status: 'Overdue', fg: R, tint: 'var(--status-critical-tint)' },
+        { asset: 'CHS-0244', model: 'TE7 ultrasound', sub: 'Ultrasound · shelf C1', status: 'Available', fg: '#4a6f01', tint: 'var(--chs-green-20)' },
+        { asset: 'CHS-0261', model: 'SV300 ventilator', sub: 'ICU ventilator · bay 1', status: 'Available', fg: '#4a6f01', tint: 'var(--chs-green-20)' }
+      ],
+      openItem: () => this.setState({ sheet: 'actions', sheetCust: 'CHS-0142 · BeneVision N22' }),
+      openFilter: () => this.setState({ sheet: 'actions', sheetCust: 'Filter and sort' }),
+
+      pushTitle: isAm
+        ? (s.xferDone ? xferOn + ' devices transferred to Waitakere ED' : '3 devices need transferring today')
+        : all.overdue.length + ' loans overdue across the fleet',
+      pushBody: isAm
+        ? (s.xferDone ? 'Middlemore Hospital ICU is closed and marked returned.'
+                      : 'Waitakere ED starts today, but the gear is still on the Middlemore ICU loan. Tap to transfer.')
+        : 'Middlemore, Whangārei and Invercargill. Waitakere is ' + done + ' of ' + total + ' tests, shipping today.',
+      alerts: (isAm
+        ? [ { dot: P, title: s.xferDone ? 'Transfer completed' : 'Transfer due today', cta: s.xferDone ? '' : 'Open transfer',
+              body: s.xferDone ? 'Middlemore ICU closed · ' + xferOn + ' devices now on Waitakere ED'
+                : 'Waitakere ED starts today · 3 devices still on the Middlemore ICU loan', when: '7:00', go: 'transfer' },
+            { dot: P, title: 'Transfer coming tomorrow', body: 'Heads-up: Waitakere ED starts 2 Sep, gear is at Middlemore ICU', when: 'Yesterday', go: 'transfer' },
+            { dot: R, title: 'Middlemore ICU is 2 days overdue', body: '3 devices · reminder also emailed to you', when: '8:02', go: 'return' },
+            { dot: O, title: 'Tauranga A9 due back today', body: 'Theatre 4 · contact CNM on 07 579 8000', when: 'Yesterday', go: 'loans' },
+            { dot: G, title: 'Christchurch CCU loan confirmed', body: 'Loan form emailed · CHS-L-1071', when: 'Fri', go: 'loans' } ]
+        : [ { dot: R, title: all.overdue.length + ' loans overdue', body: 'Middlemore (Lee-Anne), Whangārei (Anna), Invercargill (Josh)', when: '8:02', go: 'loans' },
+            { dot: P, title: 'Waitakere not signed off', body: done + ' of ' + total + ' tests done · ships today', when: 'Yesterday', go: 'readiness' },
+            { dot: G, title: 'Southern Cross loan created', body: 'Anna Reid · 4 devices · 1 – 22 Sep', when: 'Mon', go: 'loans' } ]
+      ).map(a => ({ ...a, cta: a.cta || '', cursor: 'pointer', on: this.goScreen(a.go) })),
+      prefs,
+
+      returnItems,
+      returnLabel: returnCount === 0 ? 'Nothing selected' : returnCount + ' of 3 selected',
+
+      moreItems: moreItems.map(m => ({ label: m.label, hint: m.hint,
+        on: m.sheet ? (() => this.setState({ sheet: m.sheet })) : (m.go ? this.goScreen(m.go) : (() => {})) })),
+      signedInAs: isAm ? 'Signed in as Lee-Anne Higgins · Account manager'
+        : 'Signed in as Dave Ngata · Service & projects',
+
+      jobType: s.jobType,
+      demoType: s.demoType || 'Select demo type…',
+      demoTypeFg: s.demoType ? 'var(--text-strong)' : 'var(--text-muted)',
+      openJobType: () => this.setState({ sheet: 'jobType' }),
+      openDemoType: () => this.setState({ sheet: 'demoType' }),
+      sheetIsSelect: s.sheet === 'jobType' || s.sheet === 'demoType' || s.sheet === 'xferReason',
+      selectOptions: (s.sheet === 'jobType'
+        ? ['Demo', 'Repair', 'PMV']
+        : s.sheet === 'xferReason' ? XFER_REASONS
+        : ['Conference / presentation', 'Clinical trial', 'Hotswap']
+      ).map(label => {
+        if (s.sheet === 'xferReason') {
+          const on = s.xferReason[s.xferTarget] === label;
+          return { label, tick: on ? '✓' : '', weight: on ? 600 : 400,
+            on: () => this.setState({ xferReason: { ...s.xferReason, [s.xferTarget]: label }, sheet: null }) };
+        }
+        const key = s.sheet === 'jobType' ? 'jobType' : 'demoType';
+        const on = s[key] === label;
+        return { label, tick: on ? '✓' : '', weight: on ? 600 : 400,
+          on: () => this.setState({ [key]: label, sheet: null }) };
+      }),
+
+      sheetOpen: !!s.sheet,
+      sheetIsActions: s.sheet === 'actions',
+      sheetIsScope: s.sheet === 'scope',
+      sheetIsVisibility: s.sheet === 'visibility',
+      sheetIsClash: s.sheet === 'clash',
+      closeSheet: () => this.setState({ sheet: null }),
+      sheetTitle: s.sheet === 'xferReason' ? 'Why is it staying behind?'
+        : s.sheet === 'jobType' ? 'Job type'
+        : s.sheet === 'demoType' ? 'Demo type'
+        : s.sheet === 'scope' ? 'Show loans for'
+        : s.sheet === 'visibility' ? 'Who sees which loans'
+        : s.sheet === 'clash' ? 'This one clashes'
+        : (s.sheetCust || 'Loan actions'),
+      sheetSub: s.sheet === 'xferReason' ? 'Recorded against the device, not the loan form'
+        : (s.sheet === 'jobType' || s.sheet === 'demoType') ? 'Applies to this loan and the loan form'
+        : s.sheet === 'scope' ? 'Applies to the Loans and Overview screens'
+        : s.sheet === 'visibility' ? 'Set the default view for each person'
+        : s.sheet === 'clash' ? 'Overlapping booking'
+        : 'Everything you can do to this loan',
+      sheetActions: isAm
+        ? [ { label: 'Transfer to another loan', fg: 'var(--text-strong)' },
+            { label: 'Return items', fg: 'var(--text-strong)' },
+            { label: 'Extend due date', fg: 'var(--text-strong)' },
+            { label: 'Add items to this loan', fg: 'var(--text-strong)' },
+            { label: 'View loan form', fg: 'var(--text-strong)' },
+            { label: 'Email the customer', fg: 'var(--text-strong)' } ]
+        : [ { label: 'Return items', fg: 'var(--text-strong)' },
+            { label: 'Extend due date', fg: 'var(--text-strong)' },
+            { label: 'Add items to this loan', fg: 'var(--text-strong)' },
+            { label: 'Reassign account manager', fg: 'var(--text-strong)' },
+            { label: 'Send to service', fg: 'var(--text-strong)' },
+            { label: 'View loan form', fg: 'var(--text-strong)' },
+            { label: 'Email the customer', fg: 'var(--text-strong)' },
+            { label: 'Delete loan', fg: R } ],
+      scopeOptions, teamVisibility,
+
+      jumpCount: jumpList.length + ' in this role',
+      jumpList,
+
+      showNotes: this.props.showNotes ?? true,
+      notes: [
+        { i: '1', h: 'Role decides the first screen', b: 'An account manager lands on Today — their loans, their week, one button to book. Service and projects land on Overview — utilisation, overdue across every manager, what is awaiting test and sign-off, and a breakdown by account manager.' },
+        { i: '2', h: 'An AM only ever sees their own loans', b: 'On Loans, an AM sees a locked chip and no picker — another manager\'s loan is never visible to them. When they try to book a device someone else is holding, they are told who holds it and until when, but not whose loan it is. Service and project staff get the scope button and can switch to any manager or to all loans.' },
+        { i: '3', h: 'The centre tab changes job', b: 'The prominent middle button is Book for an account manager, because booking is what they do between visits. For service it is Scan, because they are standing next to the device.' },
+        { i: '4', h: 'Two tests, and only the service team sees them', b: 'Electrical safety test on every device, plus a performance check when the demo type is a clinical trial or a hotswap — a conference needs the safety test alone. Account managers never see the test screen; their loan card simply reads Awaiting test, then Tested once service signs it off.' },
+        { i: '5', h: 'Transfers belong to the account manager', b: 'When an upcoming loan starts while the gear is still out, the AM gets a heads-up the day before and an alert on the day. The alert opens the transfer screen: tick the items moving, give a reason for anything staying behind. Transferring closes the old loan as returned and puts the items on the new one — a record change, no signature, no new loan form. The service team is not involved.' },
+      { i: '6', h: 'Notifications follow the role', b: 'An AM is told about their own loans. The service team is told about the fleet: anything overdue anywhere, tests not signed off, new loans created. Same triggers, different scope.' },
+        { i: '7', h: 'Both roles can create loans', b: 'Booking is the AM\'s centre tab; service and project staff reach the same three-step flow from More, and must name the account manager who will own the loan. Destructive actions stay with the team: reassign, send to service and delete only appear on their action sheet, and delete still asks for the admin password.' },
+        { i: '8', h: 'One admin screen decides the defaults', b: 'Under More, "Who sees which loans" sets each person to Own loans or All loans, so a new AM starts scoped to themselves without anyone editing code.' }
+      ],
+      open: [
+        'When an AM books a device someone else holds, how much do they see — name only, or name and dates?',
+        'Should the receiving AM be told once a transfer has happened, or is that noise?',
+        'If a transfer never happens and the old loan runs on, does anything chase it?',
+        'Does the service team need a view of transfers that are overdue?'
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

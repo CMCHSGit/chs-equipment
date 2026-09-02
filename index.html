@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
 <title>CMCHS Demo Equipment Tracker</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -43,6 +44,8 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Mobile app design system fonts — only loaded for #mobile-app, see mp-tokens style block -->
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f4f3f0;--surface:#fff;--surface2:#f9f8f6;--border:#e5e3de;--border2:#d4d1ca;--text:#1a1917;--text2:#6b6860;--text3:#9c9a94;--accent:#1d4ed8;--accent-light:#eff4ff;--green:#15803d;--green-light:#f0fdf4;--green-border:#bbf7d0;--red:#dc2626;--red-light:#fef2f2;--red-border:#fecaca;--amber:#d97706;--amber-light:#fffbeb;--amber-border:#fde68a;--radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.06)}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -431,6 +434,175 @@ tr.row-selected .col-sticky{background:var(--accent-light)!important}
 tr.clickable-row{cursor:pointer}
 tr.clickable-row:hover td{background:var(--accent-light)!important}
 .user-avatar-wrap{position:relative}.user-avatar-btn{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;transition:opacity .15s;flex-shrink:0;letter-spacing:.5px;font-family:'DM Sans',sans-serif}.user-avatar-btn:hover{opacity:.85}.user-avatar-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:220px;z-index:200;overflow:hidden;display:none}.user-avatar-dropdown.open{display:block}.user-av-dd-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.user-av-dd-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}.user-av-dd-info{min-width:0}.user-av-dd-name{font-size:13px;font-weight:600;color:var(--text)}.user-av-dd-sub{font-size:11px;color:var(--text2);margin-top:1px}.user-av-dd-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text);border:none;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif}.user-av-dd-item:hover{background:var(--surface2)}.user-select-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px}.user-select-card{background:var(--surface);border-radius:var(--radius-lg);padding:32px;max-width:420px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.18)}.user-select-title{font-size:20px;font-weight:700;color:var(--text);margin:0 0 6px}.user-select-sub{font-size:14px;color:var(--text2);margin:0 0 20px}.user-select-list{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto}.user-select-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif}.user-select-item:hover,.user-select-item:focus{border-color:var(--accent);background:var(--accent-light);outline:none}.user-select-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}.user-select-name{font-size:14px;font-weight:500;color:var(--text)}.user-select-footer{margin-top:20px;display:flex;justify-content:flex-end}
+</style>
+<!-- ══════════════════════════════════════════════════════════════════════
+     MOBILE APP (PWA) — separate design system, see design/README.md.
+     Everything below is scoped under #mobile-app so it can never collide
+     with or override the desktop app's tokens/classes above. Values copied
+     from design/_ds/.../tokens/*.css (colours, typography, radius, spacing,
+     motion, elevation) — that folder is a reference, not linked live.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style id="mp-styles">
+#mobile-app{
+  /* Brand */
+  --mp-purple:#554596;--mp-purple-60:#968ac1;--mp-purple-30:#cac4e3;--mp-purple-20:#dbd7ed;
+  --mp-green:#80bd01;--mp-green-60:#b3d767;--mp-green-30:#d9ebb2;--mp-green-20:#e9f2da;
+  --mp-orange:#ef7d00;--mp-orange-60:#f8b472;--mp-orange-30:#fddab4;--mp-orange-20:#fee7d1;
+  --mp-black:#1d1d1d;--mp-black-80:#575756;--mp-black-60:#747577;--mp-black-40:#a7a9ac;
+  --mp-black-20:#d1d3d4;--mp-black-10:#e8e9ea;--mp-black-05:#f4f4f5;--mp-white:#ffffff;
+  --mp-critical:#c8102e;--mp-critical-tint:#fbe3e7;
+  --mp-text-strong:var(--mp-black);--mp-text-body:var(--mp-black-80);--mp-text-muted:var(--mp-black-60);
+  --mp-border-hairline:var(--mp-black-20);--mp-border-subtle:var(--mp-black-10);
+  /* Type */
+  --mp-font-display:'Titillium Web',system-ui,sans-serif;
+  --mp-font-body:'Source Sans 3',system-ui,sans-serif;
+  --mp-font-mono:'IBM Plex Mono',ui-monospace,monospace;
+  /* Radius */
+  --mp-radius-sm:3px;--mp-radius-md:6px;--mp-radius-lg:10px;--mp-radius-card:10px;--mp-radius-pill:999px;
+  /* Spacing (4px ladder) */
+  --mp-space-1:4px;--mp-space-2:8px;--mp-space-3:12px;--mp-space-4:16px;--mp-space-5:20px;--mp-space-6:24px;
+  /* Motion */
+  --mp-ease:cubic-bezier(.2,.6,.2,1);--mp-fast:150ms;--mp-base:220ms;--mp-slow:400ms;
+  /* Elevation */
+  --mp-shadow-card:0 1px 2px rgba(29,29,29,.06),0 4px 12px rgba(29,29,29,.07);
+  --mp-shadow-card-hover:0 2px 4px rgba(29,29,29,.08),0 10px 24px rgba(29,29,29,.11);
+  --mp-shadow-overlay:0 -16px 48px rgba(29,29,29,.2);
+  --mp-focus-ring:0 0 0 3px rgba(85,69,150,.32);
+
+  position:fixed;inset:0;background:var(--mp-black-05);font-family:var(--mp-font-body);color:var(--mp-text-body);
+  display:flex;flex-direction:column;z-index:1;-webkit-font-smoothing:antialiased;
+}
+#mobile-app *{box-sizing:border-box}
+#mobile-app button,#mobile-app input,#mobile-app select,#mobile-app textarea{font-family:inherit}
+#mobile-app .mp-overline{font:600 11.5px/1.3 var(--mp-font-body);text-transform:uppercase;letter-spacing:.14em;color:var(--mp-text-muted)}
+#mobile-app .mp-h2{font:600 24px/1.2 var(--mp-font-display);letter-spacing:-.02em;color:var(--mp-text-strong)}
+#mobile-app .mp-h3{font:600 18px/1.2 var(--mp-font-display);letter-spacing:-.01em;color:var(--mp-text-strong)}
+#mobile-app .mp-mono{font-family:var(--mp-font-mono)}
+#mobile-app .mp-stripes{display:flex;gap:4px}
+#mobile-app .mp-stripes span{width:30px;height:5px;border-radius:2px}
+#mobile-app .mp-stripes span:nth-child(1){background:var(--mp-purple)}
+#mobile-app .mp-stripes span:nth-child(2){background:var(--mp-green)}
+#mobile-app .mp-stripes span:nth-child(3){background:var(--mp-orange)}
+#mobile-app .mp-stripes.mp-stripes-sm span{width:20px;height:3px}
+
+/* ── SIGN-IN ─────────────────────────────────────────────────────── */
+#mp-signin{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;background:var(--mp-white);gap:20px;text-align:center}
+#mp-signin .mp-signin-title{margin-top:4px}
+#mp-signin .mp-signin-body{font:300 15px/1.55 var(--mp-font-body);color:var(--mp-text-body);max-width:280px}
+.mp-input{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);font-size:16px;outline:none;background:var(--mp-white);color:var(--mp-text-strong);transition:border-color var(--mp-fast) var(--mp-ease),box-shadow var(--mp-fast) var(--mp-ease)}
+.mp-input:focus{border-color:var(--mp-purple);box-shadow:var(--mp-focus-ring)}
+.mp-btn{min-height:50px;width:100%;border-radius:var(--mp-radius-md);border:none;cursor:pointer;font:600 15px var(--mp-font-body);transition:background var(--mp-fast) var(--mp-ease),opacity var(--mp-fast) var(--mp-ease);display:flex;align-items:center;justify-content:center;gap:8px}
+.mp-btn-primary{background:var(--mp-purple);color:#fff}
+.mp-btn-primary:hover{background:#47397e}
+.mp-btn-primary:disabled{background:var(--mp-black-20);color:var(--mp-black-40);cursor:not-allowed}
+.mp-btn-secondary{background:var(--mp-purple-20);color:var(--mp-purple)}
+.mp-btn-secondary:hover{background:var(--mp-purple-30)}
+.mp-btn-ghost{background:transparent;color:var(--mp-text-body);border:1px solid var(--mp-border-hairline)}
+.mp-divider{display:flex;align-items:center;gap:12px;width:100%;color:var(--mp-text-muted);font-size:12.5px}
+.mp-divider::before,.mp-divider::after{content:'';flex:1;height:1px;background:var(--mp-border-hairline)}
+.mp-footnote{font:400 12.5px/1.4 var(--mp-font-body);color:var(--mp-text-muted);max-width:300px}
+.mp-err{color:var(--mp-critical);font-size:13px}
+
+/* ── HEADER + NAV ────────────────────────────────────────────────── */
+#mp-header{height:46px;flex-shrink:0;background:var(--mp-white);display:flex;align-items:center;justify-content:space-between;padding:0 var(--mp-space-4);position:relative}
+#mp-header::after{content:'';position:absolute;left:0;right:0;bottom:-3px;height:3px;display:flex}
+.mp-role-chip{font:600 11px var(--mp-font-body);padding:4px 10px;border-radius:var(--mp-radius-pill)}
+.mp-role-chip.mp-am{background:var(--mp-purple-20);color:var(--mp-purple)}
+.mp-role-chip.mp-service{background:var(--mp-green-20);color:#5c8a01}
+#mp-header-rule{height:3px;flex-shrink:0;display:flex}
+#mp-header-rule span{flex:1}
+#mp-header-rule span:nth-child(1){background:var(--mp-purple)}
+#mp-header-rule span:nth-child(2){background:var(--mp-green)}
+#mp-header-rule span:nth-child(3){background:var(--mp-orange)}
+#mp-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:24px}
+#mp-tabbar{height:78px;flex-shrink:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);display:flex;align-items:flex-start;padding-top:8px;position:relative;padding-bottom:env(safe-area-inset-bottom,0)}
+.mp-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:48px;padding:4px 0;background:transparent;border:none;cursor:pointer;color:var(--mp-black-60);font:400 10px var(--mp-font-body)}
+.mp-tab.mp-active{color:var(--mp-purple)}
+.mp-tab.mp-center{position:relative}
+.mp-tab.mp-center .mp-center-btn{width:52px;height:52px;border-radius:16px;background:var(--mp-purple);display:flex;align-items:center;justify-content:center;color:#fff;margin-top:-24px;box-shadow:0 6px 16px rgba(85,69,150,.35)}
+
+/* ── SCREENS ─────────────────────────────────────────────────────── */
+.mp-screen{display:none;padding:var(--mp-space-4)}
+.mp-screen.mp-active{display:block}
+.mp-greeting{font:600 24px/1.2 var(--mp-font-display);letter-spacing:-.02em;color:var(--mp-text-strong);margin-bottom:2px}
+.mp-subline{font:300 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:var(--mp-space-4)}
+.mp-stat-grid{display:grid;gap:var(--mp-space-2);margin-bottom:var(--mp-space-5)}
+.mp-stat-grid.mp-cols-3{grid-template-columns:repeat(3,1fr)}
+.mp-stat-grid.mp-cols-2{grid-template-columns:repeat(2,1fr)}
+.mp-stat-tile{background:var(--mp-white);border-radius:var(--mp-radius-card);box-shadow:var(--mp-shadow-card);padding:12px 10px;text-align:center}
+.mp-stat-val{font:600 24px var(--mp-font-display);color:var(--mp-text-strong);letter-spacing:-.01em}
+.mp-stat-val.mp-critical{color:var(--mp-critical)}
+.mp-stat-val.mp-brand{color:var(--mp-purple)}
+.mp-stat-label{font:400 11.5px var(--mp-font-body);color:var(--mp-text-muted);margin-top:2px}
+.mp-section-title{font:600 15px var(--mp-font-display);color:var(--mp-text-strong);margin:0 0 var(--mp-space-2)}
+.mp-alert-card{background:var(--mp-white);border-radius:var(--mp-radius-card);box-shadow:var(--mp-shadow-card);padding:12px 14px;min-height:58px;display:flex;align-items:center;gap:12px;margin-bottom:var(--mp-space-2);cursor:pointer}
+.mp-alert-bar{width:4px;align-self:stretch;border-radius:2px;flex-shrink:0}
+.mp-alert-body{flex:1;min-width:0}
+.mp-alert-title{font:600 15px var(--mp-font-body);color:var(--mp-text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mp-alert-sub{font:300 13px var(--mp-font-body);color:var(--mp-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mp-alert-tag{font:600 11px var(--mp-font-body);text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+.mp-card{background:var(--mp-white);border-radius:var(--mp-radius-card);box-shadow:var(--mp-shadow-card);padding:var(--mp-space-3) var(--mp-space-4);margin-bottom:var(--mp-space-4)}
+.mp-week-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--mp-border-subtle)}
+.mp-week-row:last-child{border-bottom:none}
+.mp-date-chip{width:34px;height:34px;border-radius:var(--mp-radius-md);background:var(--mp-purple-20);color:var(--mp-purple);display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+.mp-date-chip span:first-child{font-size:9px;font-weight:600;text-transform:uppercase}
+.mp-date-chip span:last-child{font-size:14px;font-weight:700}
+
+/* Utilisation bar (Overview) */
+.mp-util-bar{height:10px;border-radius:5px;background:var(--mp-black-10);overflow:hidden;display:flex;margin:10px 0}
+.mp-util-key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mp-text-muted)}
+.mp-util-key span{display:inline-flex;align-items:center;gap:5px}
+.mp-util-key i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.mp-progress-bar{height:4px;border-radius:2px;background:var(--mp-black-10);overflow:hidden;margin:6px 0}
+.mp-progress-fill{height:100%;border-radius:2px}
+.mp-am-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--mp-border-subtle);cursor:pointer}
+.mp-am-row:last-child{border-bottom:none}
+.mp-pill-red{background:var(--mp-critical-tint);color:var(--mp-critical);font:600 11px var(--mp-font-body);padding:2px 8px;border-radius:var(--mp-radius-pill)}
+
+/* ── SCOPE ROW / SEGMENTED CONTROL ──────────────────────────────── */
+.mp-scope-row{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:var(--mp-radius-card);margin-bottom:var(--mp-space-3)}
+.mp-scope-row.mp-locked{background:var(--mp-purple-20);color:var(--mp-purple)}
+.mp-scope-row.mp-tappable{background:var(--mp-white);box-shadow:var(--mp-shadow-card);cursor:pointer}
+.mp-seg{display:flex;background:var(--mp-black-10);border-radius:var(--mp-radius-md);padding:3px;gap:3px;margin-bottom:var(--mp-space-3)}
+.mp-seg-btn{flex:1;min-height:38px;border:none;border-radius:8px;background:transparent;cursor:pointer;font:600 13px var(--mp-font-body);color:var(--mp-black-60)}
+.mp-seg-btn.mp-active{background:var(--mp-white);color:var(--mp-purple);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+
+/* ── LOAN CARDS (mobile) ─────────────────────────────────────────── */
+.mp-loan-card{background:var(--mp-white);border-radius:var(--mp-radius-card);box-shadow:var(--mp-shadow-card);margin-bottom:var(--mp-space-3);overflow:hidden}
+.mp-loan-cap{height:4px;display:flex}
+.mp-loan-cap span{flex:1}
+.mp-loan-body{padding:12px 14px}
+.mp-loan-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.mp-loan-cust{font:600 15px var(--mp-font-body);color:var(--mp-text-strong)}
+.mp-loan-meta{font:300 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:2px}
+.mp-kebab{width:44px;height:44px;flex-shrink:0;border:none;background:transparent;cursor:pointer;color:var(--mp-black-60);display:flex;align-items:center;justify-content:center}
+.mp-pill-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mp-pill{font:600 11px var(--mp-font-body);padding:3px 9px;border-radius:var(--mp-radius-pill)}
+.mp-pill-status-active{background:var(--mp-green-20);color:#5c8a01}
+.mp-pill-status-overdue{background:var(--mp-critical-tint);color:var(--mp-critical)}
+.mp-pill-status-scheduled{background:var(--mp-purple-20);color:var(--mp-purple)}
+.mp-pill-status-due{background:var(--mp-orange-20);color:#a85800}
+.mp-pill-test-awaiting{background:var(--mp-orange-20);color:#a85800}
+.mp-pill-test-done{background:var(--mp-green-20);color:#5c8a01}
+.mp-chain-warn{background:var(--mp-orange-20);color:#a85800;border-radius:6px;padding:6px 10px;font-size:12px;margin-top:8px}
+.mp-loan-devices{border-top:1px solid var(--mp-border-subtle)}
+.mp-device-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--mp-border-subtle);font-size:13px}
+.mp-device-row:last-child{border-bottom:none}
+.mp-device-asset{font-family:var(--mp-font-mono);font-size:12px;width:74px;flex-shrink:0;color:var(--mp-purple)}
+.mp-device-model{flex:1;min-width:0}
+.mp-device-serial{font-family:var(--mp-font-mono);font-size:11px;color:var(--mp-text-muted)}
+.mp-empty{background:var(--mp-white);border-radius:var(--mp-radius-card);padding:24px;text-align:center;color:var(--mp-text-muted);font-size:14px}
+
+/* ── BOTTOM SHEET ────────────────────────────────────────────────── */
+#mp-sheet-scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:1500;display:none;align-items:flex-end}
+#mp-sheet-scrim.mp-open{display:flex}
+#mp-sheet{background:var(--mp-white);border-radius:20px 20px 0 0;box-shadow:var(--mp-shadow-overlay);width:100%;max-height:80vh;overflow-y:auto;padding:8px 20px 24px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0))}
+.mp-sheet-handle{width:38px;height:4px;border-radius:2px;background:var(--mp-black-20);margin:0 auto 16px}
+.mp-sheet-title{font:600 17px var(--mp-font-display);color:var(--mp-text-strong)}
+.mp-sheet-sub{font:300 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:2px;margin-bottom:12px}
+.mp-sheet-item{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--mp-border-subtle);cursor:pointer;background:none;border-left:none;border-right:none;border-top:none;width:100%;text-align:left;font:400 15px var(--mp-font-body);color:var(--mp-text-strong)}
+.mp-sheet-item:last-of-type{border-bottom:none}
+.mp-sheet-item.mp-danger{color:var(--mp-critical)}
 </style>
 </head>
 <body>
@@ -1606,7 +1778,7 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 41;
+const APP_VERSION = 42;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1724,6 +1896,27 @@ function doLogout() {
 }
 async function checkAuth() {
   await loadConfig();
+  // isMobilePWA()/mpResumeOrSignIn() below are defined in the mobile <script>
+  // block near the end of the file, AFTER this one — safe to call here only
+  // because loadConfig() always awaits a real fetch() first, which yields
+  // long enough for the browser to finish parsing/running that later script
+  // tag before this continuation resumes. If loadConfig() ever stops doing
+  // a real network call unconditionally, this ordering assumption breaks.
+  // Mobile PWA gets its own branded sign-in/resume flow (see the mobile
+  // <script> block near the end of the file) — never shows the desktop
+  // #login-wrap or #app at all.
+  if (isMobilePWA()) {
+    document.getElementById('login-wrap').style.display = 'none';
+    document.getElementById('mobile-app').style.display = 'flex';
+    if (sessionStorage.getItem('chs_auth') === '1') {
+      initOperator();
+      mpResumeOrSignIn();
+    } else {
+      document.getElementById('mp-signin').style.display = 'flex';
+      document.getElementById('mp-shell').style.display = 'none';
+    }
+    return;
+  }
   if (sessionStorage.getItem('chs_auth') === '1') {
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('app').style.display = 'block';
@@ -7606,7 +7799,10 @@ function renderAMList() {
         </div>
         <input type="email" value="${esc(am.email||'')}" placeholder="Email address"
           onchange="updateAMField(${i},'email',this.value)"
-          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;margin-bottom:6px">
+        <input type="text" inputmode="numeric" maxlength="6" value="${esc(am.passcode||'')}" placeholder="Mobile app passcode (4–6 digits)"
+          onchange="updateAMField(${i},'passcode',this.value)"
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:13px;outline:none">
       </div>`).join('')
     : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers yet</div>';
 }
@@ -10068,6 +10264,460 @@ function startAutoSync() {
       </div>
     </div>
   </div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     MOBILE APP (PWA) — see design/README.md. Separate experience, only
+     shown when isMobilePWA() is true (installed to home screen, or
+     ?mobile=1 for testing). Never touched by the desktop #app above.
+     ══════════════════════════════════════════════════════════════════════ -->
+<div id="mobile-app" style="display:none">
+
+  <!-- SIGN IN -->
+  <div id="mp-signin">
+    <div class="mp-stripes"><span></span><span></span><span></span></div>
+    <div class="mp-overline">CMCHS</div>
+    <div class="mp-h2 mp-signin-title">Demo equipment tracker</div>
+    <div class="mp-signin-body" id="mp-signin-hint">Enter the team password to continue.</div>
+    <input class="mp-input" type="password" id="mp-pw" placeholder="Team password" autocomplete="off" onkeydown="if(event.key==='Enter')mpSignInStep()">
+    <input class="mp-input" type="text" id="mp-passcode" inputmode="numeric" maxlength="6" placeholder="Your passcode" autocomplete="off" style="display:none;text-align:center;letter-spacing:.3em;font-family:var(--mp-font-mono)" onkeydown="if(event.key==='Enter')mpSignInStep()">
+    <div class="mp-err" id="mp-signin-err" style="display:none"></div>
+    <button class="mp-btn mp-btn-primary" id="mp-signin-btn" onclick="mpSignInStep()">Continue</button>
+    <div class="mp-footnote">The admin password is asked separately for delete / retire / edit actions.</div>
+  </div>
+
+  <!-- APP SHELL -->
+  <div id="mp-shell" style="display:none;flex-direction:column;height:100%">
+    <div id="mp-header">
+      <div class="mp-stripes mp-stripes-sm"><span></span><span></span><span></span></div>
+      <div class="mp-h3" id="mp-header-title">Today</div>
+      <div class="mp-role-chip mp-am" id="mp-role-chip">Your loans</div>
+    </div>
+    <div id="mp-header-rule"><span></span><span></span><span></span></div>
+    <div id="mp-body">
+      <div class="mp-screen" id="mp-screen-today"></div>
+      <div class="mp-screen" id="mp-screen-overview"></div>
+      <div class="mp-screen" id="mp-screen-loans"></div>
+    </div>
+    <div id="mp-tabbar"></div>
+  </div>
+
+  <!-- BOTTOM SHEET (shared) -->
+  <div id="mp-sheet-scrim" onmousedown="if(event.target===this)mpCloseSheet()">
+    <div id="mp-sheet">
+      <div class="mp-sheet-handle"></div>
+      <div id="mp-sheet-content"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// MOBILE APP (PWA) — see design/README.md for the full 15-screen spec. This
+// is Phase A+B only (shell, sign-in, Today/Overview home, Loans list) —
+// Book/Transfer/Test-signoff/Scan/Equipment search/Alerts are follow-up
+// phases. Deliberately in its own <script> tag rather than mixed into
+// the main one above — top-level declarations in classic (non-module)
+// scripts still share one global scope, so everything here can freely call
+// the desktop app's existing functions/globals (equipment, upcomingLoans,
+// getGroupAM, toggleReadiness, setOperator, etc.) without any wiring, as
+// long as this tag runs after they're defined (it does — it's after the
+// closing </script> of the main block).
+//
+// Design decisions made explicit in code, not just the plan doc:
+// - Test/Dispatch stays PER LOAN, reusing getLoanReadiness()/toggleReadiness()
+//   exactly as the desktop app does — no new per-device data model.
+// - Stuck-loan resolution reuses openStuckLoanReassign()/openReassignAMByKey()
+//   — the same functions the desktop Reassign modal calls — so "resolve on
+//   mobile or on PC" is genuinely the same code path, not a parallel one.
+// - Identity reuses setOperator()/currentOperator (chs_operator in
+//   localStorage) rather than a separate mobile-only identity store, so a
+//   phone and a desktop tab on the same device stay in sync.
+// ══════════════════════════════════════════════════════════════════════
+
+function isMobilePWA() {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true ||
+      new URLSearchParams(location.search).get('mobile') === '1';
+  } catch(e) { return false; }
+}
+
+let _mp = { screen: 'today', role: null, name: null, seg: 'active', scope: null, open: null };
+let _mpDataLoadPromise = null;
+
+// ── SIGN IN ─────────────────────────────────────────────────────────────
+async function mpSignInStep() {
+  const pwField   = document.getElementById('mp-pw');
+  const passField = document.getElementById('mp-passcode');
+  const err       = document.getElementById('mp-signin-err');
+  const btn       = document.getElementById('mp-signin-btn');
+  const hint      = document.getElementById('mp-signin-hint');
+  err.style.display = 'none';
+
+  if (passField.style.display === 'none') {
+    // Step 1: team password — same gate as the desktop app (APP_PASSWORD)
+    if (!APP_PASSWORD) await loadConfig();
+    if (pwField.value !== APP_PASSWORD) { err.textContent = 'Incorrect password.'; err.style.display = 'block'; return; }
+    sessionStorage.setItem('chs_auth', '1');
+    pwField.style.display = 'none';
+    passField.style.display = 'block';
+    passField.focus();
+    btn.textContent = 'Sign in';
+    if (hint) hint.textContent = 'Now enter your personal passcode.';
+    _mpDataLoadPromise = loadData(); // kick off in the background while they type
+    return;
+  }
+
+  // Step 2: personal passcode — resolves who's holding the phone
+  const code = passField.value.trim();
+  if (!code) return;
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  await (_mpDataLoadPromise || loadData());
+  const am = accountManagers.find(a => a.passcode && String(a.passcode) === code);
+  if (!am) {
+    err.textContent = 'Passcode not recognised.'; err.style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Sign in';
+    return;
+  }
+  document.getElementById('mp-signin').style.display = 'none';
+  document.getElementById('mp-shell').style.display = 'flex';
+  mpSetIdentity(am.name);
+  mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
+  setTimeout(handleReturnLink, 1200);
+}
+
+// Called once per page load when the PWA is opened in mobile mode — either
+// resumes a remembered identity (chs_operator, same key the desktop
+// "switch user" feature uses) or falls back to the sign-in screen.
+async function mpResumeOrSignIn() {
+  await loadData();
+  if (currentOperator && accountManagers.find(a => a.name === currentOperator)) {
+    mpSetIdentity(currentOperator);
+    document.getElementById('mp-signin').style.display = 'none';
+    document.getElementById('mp-shell').style.display = 'flex';
+    mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
+    setTimeout(handleReturnLink, 1200);
+  } else {
+    document.getElementById('mp-signin').style.display = 'flex';
+    document.getElementById('mp-shell').style.display = 'none';
+  }
+}
+
+function mpSetIdentity(name) {
+  setOperator(name); // reuses the desktop app's own persistence (chs_operator) + currentOperator
+  _mp.name = name;
+  _mp.role = SERVICE_TEAM_OPERATORS.includes(name) ? 'service' : 'am';
+  _mp.scope = _mp.role === 'am' ? name : 'all';
+}
+
+function mpSignOut() {
+  doLogout(); // shared with desktop — clears chs_auth and reloads
+}
+
+// ── NAV SHELL ───────────────────────────────────────────────────────────
+const MP_TABS = {
+  am:      [ { id: 'today',  label: 'Today',  icon: 'home' }, { id: 'loans', label: 'Loans', icon: 'list' }, { id: 'book',      label: 'Book',      icon: 'plus',   center: true }, { id: 'scan', label: 'Scan', icon: 'scan' }, { id: 'more', label: 'More', icon: 'more' } ],
+  service: [ { id: 'overview', label: 'Overview', icon: 'home' }, { id: 'loans', label: 'Loans', icon: 'list' }, { id: 'scan',      label: 'Scan',      icon: 'scan',   center: true }, { id: 'equipment', label: 'Equipment', icon: 'box' }, { id: 'more', label: 'More', icon: 'more' } ]
+};
+const MP_ICONS = {
+  home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>',
+  box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'
+};
+function mpIcon(name, size) {
+  return '<svg width="' + (size||22) + '" height="' + (size||22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (MP_ICONS[name]||'') + '</svg>';
+}
+
+function mpRenderTabbar() {
+  const tabs = MP_TABS[_mp.role] || MP_TABS.am;
+  document.getElementById('mp-tabbar').innerHTML = tabs.map(t => {
+    if (t.center) {
+      return '<button class="mp-tab mp-center" onclick="mpGoScreen(\'' + t.id + '\')"><span class="mp-center-btn">' + mpIcon(t.icon, 24) + '</span></button>';
+    }
+    return '<button class="mp-tab' + (_mp.screen === t.id ? ' mp-active' : '') + '" onclick="mpGoScreen(\'' + t.id + '\')">' + mpIcon(t.icon) + '<span>' + t.label + '</span></button>';
+  }).join('');
+}
+
+function mpGoScreen(screen) {
+  _mp.screen = screen;
+  document.querySelectorAll('#mp-body .mp-screen').forEach(el => el.classList.remove('mp-active'));
+  if (screen === 'today')    { document.getElementById('mp-screen-today').classList.add('mp-active'); mpRenderToday(); }
+  else if (screen === 'overview') { document.getElementById('mp-screen-overview').classList.add('mp-active'); mpRenderOverview(); }
+  else if (screen === 'loans')    { document.getElementById('mp-screen-loans').classList.add('mp-active'); mpRenderLoans(); }
+  else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
+  document.getElementById('mp-header-title').textContent =
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : 'Loans';
+  const chip = document.getElementById('mp-role-chip');
+  chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
+  chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
+  mpRenderTabbar();
+  document.getElementById('mp-body').scrollTop = 0;
+}
+
+// ── SHARED DATA HELPERS (read-only — same globals renderLoans() itself uses,
+// so a stat here can never drift from what the desktop Loans tab shows) ──
+function mpToday() { return nzDate(); }
+function mpActiveGroups() {
+  const today = mpToday();
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && !isHiddenTestLoan(e));
+  const grouped = {};
+  onLoan.forEach(e => {
+    const key = e.BatchID || (e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||''));
+    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], batchId: e.BatchID||null };
+    grouped[key].items.push(e);
+  });
+  return Object.values(grouped).map(g => ({ ...g, scheduled: g.startDate && g.startDate > today, overdue: g.endDate && g.endDate < today, am: getGroupAM(g) }));
+}
+function mpStuckLoans(forName) {
+  const today = mpToday();
+  return upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.startDate && u.startDate <= today && (!forName || u.accountManager === forName));
+}
+function mpUpcomingForName(forName) {
+  const today = mpToday();
+  const groups = mpActiveGroups().filter(g => g.scheduled && (!forName || g.am === forName));
+  const bookings = upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.startDate > today && (!forName || u.accountManager === forName))
+    .map(u => ({ loanTo: u.loanTo, startDate: u.startDate, endDate: u.endDate, am: u.accountManager }));
+  return [...groups.map(g => ({ loanTo: g.loanTo, startDate: g.startDate, endDate: g.endDate, am: g.am })), ...bookings]
+    .sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
+}
+
+// ── TODAY (AM home) ─────────────────────────────────────────────────────
+function mpRenderToday() {
+  const name = _mp.name;
+  const today = mpToday();
+  const mine = mpActiveGroups().filter(g => g.am === name && !g.scheduled);
+  const overdueCount = mine.filter(g => g.overdue).length;
+  const bookedAhead = mpUpcomingForName(name).length;
+
+  const alerts = [];
+  mpStuckLoans(name).forEach(u => alerts.push({
+    tag: 'Transfer due', color: 'var(--mp-purple)', tint: 'var(--mp-purple-20)',
+    title: u.loanTo, sub: u.items.length + ' device' + (u.items.length!==1?'s':'') + ' need transferring today',
+    onClick: () => openStuckLoanReassign(u.id)
+  }));
+  mine.filter(g => g.overdue).forEach(g => alerts.push({
+    tag: 'Overdue', color: 'var(--mp-critical)', tint: 'var(--mp-critical-tint)',
+    title: g.loanTo, sub: 'Due ' + formatDisplayDate(g.endDate),
+    onClick: () => { mpGoScreen('loans'); }
+  }));
+  mine.filter(g => {
+    const rKey = _readinessKey(g.batchId, g.loanTo, g.endDate);
+    const r = getLoanReadiness(rKey);
+    return g.startDate && g.startDate <= today && daysBetween(g.startDate, today) <= 7 && !r.tested && !r.noTestRequired;
+  }).forEach(g => alerts.push({
+    tag: 'Not tested', color: 'var(--mp-orange)', tint: 'var(--mp-orange-20)',
+    title: g.loanTo, sub: 'Awaiting test & sign-off',
+    onClick: () => { mpGoScreen('loans'); }
+  }));
+
+  const week = mpUpcomingForName(name).slice(0, 5);
+
+  document.getElementById('mp-screen-today').innerHTML = `
+    <div class="mp-greeting">Kia ora, ${esc(name.split(' ')[0])}</div>
+    <div class="mp-subline">${formatDisplayDate(today)} · your loans only</div>
+    <div class="mp-stat-grid mp-cols-3">
+      <div class="mp-stat-tile"><div class="mp-stat-val">${mine.length}</div><div class="mp-stat-label">Your loans out</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val${overdueCount?' mp-critical':''}">${overdueCount}</div><div class="mp-stat-label">Overdue</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${bookedAhead}</div><div class="mp-stat-label">Booked ahead</div></div>
+    </div>
+    ${alerts.length ? `<div class="mp-section-title">Needs you today</div>` + alerts.map((a,i) => `
+      <div class="mp-alert-card" onclick="mpTodayAlert(${i})">
+        <div class="mp-alert-bar" style="background:${a.color}"></div>
+        <div class="mp-alert-body"><div class="mp-alert-title">${esc(a.title)}</div><div class="mp-alert-sub">${esc(a.sub)}</div></div>
+        <div class="mp-alert-tag" style="color:${a.color}">${esc(a.tag)}</div>
+      </div>`).join('') : ''}
+    <div class="mp-section-title">Your week</div>
+    <div class="mp-card">
+      ${week.length ? week.map(w => `
+        <div class="mp-week-row">
+          <div class="mp-date-chip"><span>${new Date(w.startDate).toLocaleDateString('en-NZ',{weekday:'short'})}</span><span>${new Date(w.startDate).getDate()}</span></div>
+          <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;color:var(--mp-text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.loanTo)}</div><div style="font-size:12px;color:var(--mp-text-muted)">Starts ${formatDisplayDate(w.startDate)}</div></div>
+          <span style="color:var(--mp-black-40)">›</span>
+        </div>`).join('') : '<div style="text-align:center;padding:12px;color:var(--mp-text-muted);font-size:13px">Nothing scheduled this week</div>'}
+    </div>
+    <button class="mp-btn mp-btn-primary" onclick="showToast('info','Booking flow is coming in a later update — use the desktop site for now.')">+ Book a demo</button>
+  `;
+  window._mpTodayAlerts = alerts;
+}
+function mpTodayAlert(i) { const a = window._mpTodayAlerts && window._mpTodayAlerts[i]; if (a && a.onClick) a.onClick(); }
+
+// ── OVERVIEW (Service home) ─────────────────────────────────────────────
+function mpRenderOverview() {
+  const today = mpToday();
+  const totalAssets = equipment.filter(e => !isHiddenTestLoan(e)).length;
+  const groups = mpActiveGroups().filter(g => !g.scheduled);
+  const outCount = groups.reduce((n,g) => n + g.items.length, 0);
+  const overdueGroups = groups.filter(g => g.overdue);
+  const dueTodayGroups = groups.filter(g => !g.overdue && g.endDate === today);
+  const overdueOut = overdueGroups.reduce((n,g) => n + g.items.length, 0);
+  const dueTodayOut = dueTodayGroups.reduce((n,g) => n + g.items.length, 0);
+  const okOut = Math.max(0, outCount - overdueOut - dueTodayOut);
+  const pct = (n) => totalAssets ? Math.round(n / totalAssets * 100) : 0;
+
+  const notTested = groups.filter(g => {
+    const r = getLoanReadiness(_readinessKey(g.batchId, g.loanTo, g.endDate));
+    return !r.tested && !r.noTestRequired;
+  });
+  const stuckCount = mpStuckLoans(null).length;
+
+  const byAM = {};
+  groups.forEach(g => { const am = g.am || 'Unassigned'; if (!byAM[am]) byAM[am] = { n: 0, overdue: 0 }; byAM[am].n++; if (g.overdue) byAM[am].overdue++; });
+
+  document.getElementById('mp-screen-overview').innerHTML = `
+    <div class="mp-greeting" style="font-size:20px">Fleet overview</div>
+    <div class="mp-subline">${totalAssets} assets · all account managers · ${formatDisplayDate(today)}</div>
+    <div class="mp-card">
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--mp-text-muted)"><span>Utilisation</span><span class="mp-mono">${outCount} of ${totalAssets} out</span></div>
+      <div class="mp-util-bar">
+        <div style="width:${pct(okOut)}%;background:var(--mp-green)"></div>
+        <div style="width:${pct(dueTodayOut)}%;background:var(--mp-orange)"></div>
+        <div style="width:${pct(overdueOut)}%;background:var(--mp-critical)"></div>
+      </div>
+      <div class="mp-util-key">
+        <span><i style="background:var(--mp-green)"></i>On loan</span>
+        <span><i style="background:var(--mp-orange)"></i>Due today</span>
+        <span><i style="background:var(--mp-critical)"></i>Overdue</span>
+        <span><i style="background:var(--mp-black-10)"></i>Available</span>
+      </div>
+    </div>
+    <div class="mp-stat-grid mp-cols-2">
+      <div class="mp-stat-tile"><div class="mp-stat-val">${groups.length}</div><div class="mp-stat-label">Loans active</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val${overdueGroups.length?' mp-critical':''}">${overdueGroups.length}</div><div class="mp-stat-label">Overdue (all AMs)</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${notTested.length}</div><div class="mp-stat-label">Awaiting sign-off</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${stuckCount}</div><div class="mp-stat-label">Transfers due today</div></div>
+    </div>
+    ${notTested.length ? `<div class="mp-section-title">Awaiting test &amp; sign-off</div><div class="mp-card">` +
+      notTested.map(g => `<div class="mp-am-row" onclick="mpGoScreen('loans')" style="display:block">
+        <div style="display:flex;justify-content:space-between"><strong style="font-size:14px">${esc(g.loanTo)}</strong></div>
+        <div style="font-size:12px;color:var(--mp-text-muted)">Ships ${formatDisplayDate(g.endDate)} · ${esc(g.am||'—')}</div>
+      </div>`).join('') + `</div>` : ''}
+    <div class="mp-section-title">By account manager</div>
+    <div class="mp-card">
+      ${Object.keys(byAM).length ? Object.entries(byAM).map(([am, v]) => `
+        <div class="mp-am-row" onclick="mpScopeToAM('${esc(am).replace(/'/g,"\\'")}')">
+          <div style="flex:1"><div style="font-weight:600;font-size:14px">${esc(am)}</div></div>
+          ${v.overdue ? `<span class="mp-pill-red">${v.overdue} overdue</span>` : ''}
+          <span class="mp-mono" style="font-size:13px;color:var(--mp-text-muted)">${v.n}</span>
+          <span style="color:var(--mp-black-40)">›</span>
+        </div>`).join('') : '<div style="text-align:center;padding:12px;color:var(--mp-text-muted);font-size:13px">No active loans</div>'}
+    </div>
+  `;
+}
+function mpScopeToAM(am) { _mp.scope = am; mpGoScreen('loans'); }
+
+// ── LOANS ───────────────────────────────────────────────────────────────
+function mpRenderLoans() {
+  if (_mp.role === 'am') _mp.scope = _mp.name;
+  else if (!_mp.scope) _mp.scope = 'all';
+  const today = mpToday();
+  const groups = mpActiveGroups().filter(g => _mp.scope === 'all' || g.am === _mp.scope);
+  const active = groups.filter(g => !g.scheduled && !g.overdue);
+  const overdue = groups.filter(g => !g.scheduled && g.overdue);
+  const upcoming = [
+    ...groups.filter(g => g.scheduled),
+    ...mpStuckLoans(null).filter(u => _mp.scope === 'all' || u.accountManager === _mp.scope)
+      .map(u => ({ loanTo: u.loanTo, location: u.location||'', endDate: u.endDate||'', startDate: u.startDate||'', items: u.items, am: u.accountManager, isUpcoming: true, id: u.id }))
+  ];
+  const seg = _mp.seg;
+  const list = seg === 'active' ? active : seg === 'overdue' ? overdue : upcoming;
+
+  const scopeRow = _mp.role === 'am'
+    ? `<div class="mp-scope-row mp-locked">${mpIcon('list',16)}<span style="flex:1;font-weight:600;font-size:13px">Your loans · ${esc(_mp.name)}</span><span class="mp-mono" style="font-size:13px">${active.length + overdue.length}</span></div>`
+    : `<div class="mp-scope-row mp-tappable" onclick="mpOpenScopeSheet()">${mpIcon('list',16)}<span style="flex:1;font-weight:600;font-size:13px">${_mp.scope === 'all' ? 'All account managers' : esc(_mp.scope)}</span><span class="mp-mono" style="font-size:13px">${active.length + overdue.length}</span><span style="color:var(--mp-black-40)">›</span></div>`;
+
+  document.getElementById('mp-screen-loans').innerHTML = `
+    ${scopeRow}
+    <div class="mp-seg">
+      <button class="mp-seg-btn${seg==='active'?' mp-active':''}" onclick="mpSetSeg('active')">Active (${active.length})</button>
+      <button class="mp-seg-btn${seg==='upcoming'?' mp-active':''}" onclick="mpSetSeg('upcoming')">Upcoming (${upcoming.length})</button>
+      <button class="mp-seg-btn${seg==='overdue'?' mp-active':''}" onclick="mpSetSeg('overdue')">Overdue (${overdue.length})</button>
+    </div>
+    ${list.length ? list.map((g,i) => mpLoanCardHtml(g, seg, i)).join('') : '<div class="mp-empty">No loans in this view</div>'}
+  `;
+  window._mpLoanList = list;
+}
+function mpSetSeg(seg) { _mp.seg = seg; mpRenderLoans(); }
+
+function mpLoanCardHtml(g, seg, i) {
+  const capColor = g.isUpcoming ? 'var(--mp-orange)' : seg === 'overdue' ? 'var(--mp-critical)' : seg === 'upcoming' ? 'var(--mp-purple)' : 'var(--mp-green)';
+  const statusPill = g.isUpcoming ? '<span class="mp-pill mp-pill-status-due">Starts today</span>'
+    : seg === 'overdue' ? '<span class="mp-pill mp-pill-status-overdue">Overdue</span>'
+    : seg === 'upcoming' ? '<span class="mp-pill mp-pill-status-scheduled">Scheduled</span>'
+    : '<span class="mp-pill mp-pill-status-active">Active</span>';
+  let testPill = '';
+  if (!g.isUpcoming && seg !== 'upcoming') {
+    const r = getLoanReadiness(_readinessKey(g.batchId, g.loanTo, g.endDate));
+    if (!r.noTestRequired) testPill = r.tested ? '<span class="mp-pill mp-pill-test-done">Tested</span>' : '<span class="mp-pill mp-pill-test-awaiting">Awaiting test</span>';
+  }
+  const openId = 'mp-lc-' + i;
+  return `
+    <div class="mp-loan-card">
+      <div class="mp-loan-cap"><span style="background:${capColor}"></span></div>
+      <div class="mp-loan-body">
+        <div class="mp-loan-top" onclick="mpToggleCard('${openId}')" style="cursor:pointer">
+          <div style="min-width:0;flex:1"><div class="mp-loan-cust">${esc(g.loanTo)}</div><div class="mp-loan-meta">${esc(g.am||'—')} · ${esc(g.location)} · ${g.startDate?formatDisplayDate(g.startDate):''}${g.endDate?' – '+formatDisplayDate(g.endDate):''}</div></div>
+          <button class="mp-kebab" onclick="event.stopPropagation();mpOpenLoanActions(${i})">${mpIcon('more',20)}</button>
+        </div>
+        <div class="mp-pill-row">${statusPill}<span class="mp-pill mp-mono" style="background:var(--mp-black-10);color:var(--mp-text-body)">${g.items.length} device${g.items.length!==1?'s':''}</span>${testPill}</div>
+      </div>
+      <div class="mp-loan-devices" id="${openId}" style="display:none">
+        ${g.items.map(it => `<div class="mp-device-row"><span class="mp-device-asset">${esc(it.CHSAssetNo)}</span><span class="mp-device-model">${esc(it.Model||'')}</span><span class="mp-device-serial">${esc(it.SerialNo||'')}</span></div>`).join('')}
+      </div>
+    </div>`;
+}
+function mpToggleCard(id) { const el = document.getElementById(id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
+
+// ── SHEETS ──────────────────────────────────────────────────────────────
+function mpOpenSheet(titleHtml, bodyHtml) {
+  document.getElementById('mp-sheet-content').innerHTML = titleHtml + bodyHtml;
+  document.getElementById('mp-sheet-scrim').classList.add('mp-open');
+}
+function mpCloseSheet() { document.getElementById('mp-sheet-scrim').classList.remove('mp-open'); }
+
+function mpOpenScopeSheet() {
+  const ams = [...new Set(mpActiveGroups().map(g => g.am).filter(Boolean))].sort();
+  const rows = ['all', ...ams].map(am => {
+    const label = am === 'all' ? 'All account managers' : am;
+    const on = _mp.scope === am;
+    return `<button class="mp-sheet-item" onclick="mpChooseScope('${esc(am).replace(/'/g,"\\'")}')">${on ? '✓ ' : ''}${esc(label)}</button>`;
+  }).join('');
+  mpOpenSheet('<div class="mp-sheet-title">Scope</div>', rows);
+}
+function mpChooseScope(am) { _mp.scope = am; mpCloseSheet(); mpRenderLoans(); }
+
+// Reuses the SAME action handlers the desktop Loans tab buttons already call
+// — a mobile-styled menu over existing logic, not a second implementation.
+function mpOpenLoanActions(i) {
+  const g = (window._mpLoanList || [])[i];
+  if (!g) return;
+  let items;
+  if (g.isUpcoming) {
+    // Same function the in-app stuck-loan toast and the scheduled email
+    // reminder both use — resolving here is the identical code path.
+    items = [
+      ['Reassign / transfer', () => openStuckLoanReassign(g.id)],
+      ['Loan form', () => viewUpcomingLoanDoc(g.id)]
+    ];
+  } else {
+    const key = _loanKey(g);
+    items = _mp.role === 'am'
+      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
+      : [ ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
+  }
+  window._mpSheetActions = items;
+  mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
+    items.map((it, idx) => `<button class="mp-sheet-item${it[2]?' mp-danger':''}" onclick="mpRunSheetAction(${idx})">${esc(it[0])}</button>`).join(''));
+}
+function mpRunSheetAction(idx) {
+  mpCloseSheet();
+  const it = (window._mpSheetActions||[])[idx];
+  if (it && it[1]) setTimeout(it[1], 350); // let the sheet close before the next modal opens
+}
+</script>
 
 </body>
 </html>
