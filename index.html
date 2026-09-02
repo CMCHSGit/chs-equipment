@@ -523,6 +523,7 @@ html.mp-mode #mobile-app{display:flex!important}
 .mp-divider{display:flex;align-items:center;gap:12px;width:100%;color:var(--mp-text-muted);font-size:12.5px}
 .mp-divider::before,.mp-divider::after{content:'';flex:1;height:1px;background:var(--mp-border-hairline)}
 .mp-footnote{font:400 12.5px/1.4 var(--mp-font-body);color:var(--mp-text-muted);max-width:300px}
+.mp-linklike{cursor:pointer;color:var(--mp-purple);text-decoration:underline;max-width:none}
 .mp-err{color:var(--mp-critical);font-size:13px}
 
 /* ── HEADER + NAV ────────────────────────────────────────────────── */
@@ -1800,7 +1801,7 @@ html.mp-mode #mobile-app{display:flex!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 44;
+const APP_VERSION = 45;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10302,6 +10303,14 @@ function startAutoSync() {
     <div class="mp-signin-body" id="mp-signin-hint">Enter the team password to continue.</div>
     <input class="mp-input" type="password" id="mp-pw" placeholder="Team password" autocomplete="off" onkeydown="if(event.key==='Enter')mpSignInStep()">
     <input class="mp-input" type="text" id="mp-passcode" inputmode="numeric" maxlength="6" placeholder="Your passcode" autocomplete="off" style="display:none;text-align:center;letter-spacing:.3em;font-family:var(--mp-font-mono)" onkeydown="if(event.key==='Enter')mpSignInStep()">
+    <div class="mp-footnote mp-linklike" id="mp-firsttime-link" style="display:none" onclick="mpShowClaimPanel()">First time? Set up your passcode</div>
+    <div id="mp-claim-panel" style="display:none;width:100%;flex-direction:column;gap:14px">
+      <select class="mp-input" id="mp-claim-name"></select>
+      <input class="mp-input" type="text" id="mp-claim-code" inputmode="numeric" maxlength="6" placeholder="New passcode (4–6 digits)" autocomplete="off" style="text-align:center;letter-spacing:.3em;font-family:var(--mp-font-mono)">
+      <input class="mp-input" type="text" id="mp-claim-code2" inputmode="numeric" maxlength="6" placeholder="Confirm passcode" autocomplete="off" style="text-align:center;letter-spacing:.3em;font-family:var(--mp-font-mono)" onkeydown="if(event.key==='Enter')mpClaimPasscode()">
+      <button class="mp-btn mp-btn-primary" id="mp-claim-btn" onclick="mpClaimPasscode()">Set passcode &amp; continue</button>
+      <div class="mp-footnote mp-linklike" onclick="mpHideClaimPanel()">Back</div>
+    </div>
     <div class="mp-err" id="mp-signin-err" style="display:none"></div>
     <button class="mp-btn mp-btn-primary" id="mp-signin-btn" onclick="mpSignInStep()">Continue</button>
     <div class="mp-footnote">The admin password is asked separately for delete / retire / edit actions.</div>
@@ -10387,6 +10396,7 @@ async function mpSignInStep() {
     passField.focus();
     btn.textContent = 'Sign in';
     if (hint) hint.textContent = 'Now enter your personal passcode.';
+    document.getElementById('mp-firsttime-link').style.display = 'block';
     _mpDataLoadPromise = loadData(); // kick off in the background while they type
     return;
   }
@@ -10402,6 +10412,65 @@ async function mpSignInStep() {
     btn.disabled = false; btn.textContent = 'Sign in';
     return;
   }
+  document.getElementById('mp-signin').style.display = 'none';
+  document.getElementById('mp-shell').style.display = 'flex';
+  mpSetIdentity(am.name);
+  mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
+  setTimeout(handleReturnLink, 1200);
+}
+
+// First-time passcode self-setup — team password is the real security gate
+// (checked in step 1 above), so letting anyone pick an unclaimed name and
+// set their own passcode here is a low-risk convenience, not a new hole.
+async function mpPopulateClaimNames() {
+  await (_mpDataLoadPromise || loadData());
+  const sel = document.getElementById('mp-claim-name');
+  const unclaimed = accountManagers.filter(a => !a.passcode);
+  sel.innerHTML = unclaimed.length
+    ? unclaimed.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('')
+    : '<option value="">Everyone already has a passcode</option>';
+}
+
+function mpShowClaimPanel() {
+  document.getElementById('mp-passcode').style.display = 'none';
+  document.getElementById('mp-firsttime-link').style.display = 'none';
+  document.getElementById('mp-signin-btn').style.display = 'none';
+  document.getElementById('mp-signin-err').style.display = 'none';
+  document.getElementById('mp-claim-panel').style.display = 'flex';
+  document.getElementById('mp-signin-hint').textContent = 'Pick your name and choose a passcode.';
+  mpPopulateClaimNames();
+}
+
+function mpHideClaimPanel() {
+  document.getElementById('mp-claim-panel').style.display = 'none';
+  document.getElementById('mp-passcode').style.display = 'block';
+  document.getElementById('mp-firsttime-link').style.display = 'block';
+  document.getElementById('mp-signin-btn').style.display = 'flex';
+  document.getElementById('mp-signin-err').style.display = 'none';
+  document.getElementById('mp-signin-hint').textContent = 'Now enter your personal passcode.';
+  document.getElementById('mp-passcode').focus();
+}
+
+async function mpClaimPasscode() {
+  const err   = document.getElementById('mp-signin-err');
+  const name  = document.getElementById('mp-claim-name').value;
+  const code  = document.getElementById('mp-claim-code').value.trim();
+  const code2 = document.getElementById('mp-claim-code2').value.trim();
+  err.style.display = 'none';
+  if (!name) { err.textContent = 'Pick your name first.'; err.style.display = 'block'; return; }
+  if (!/^\d{4,6}$/.test(code)) { err.textContent = 'Passcode must be 4–6 digits.'; err.style.display = 'block'; return; }
+  if (code !== code2) { err.textContent = "Passcodes don't match."; err.style.display = 'block'; return; }
+  const am = accountManagers.find(a => a.name === name);
+  if (!am || am.passcode) {
+    err.textContent = am ? 'Someone already claimed that name — ask an admin to reset it.' : 'Could not find that name.';
+    err.style.display = 'block';
+    mpPopulateClaimNames();
+    return;
+  }
+  const btn = document.getElementById('mp-claim-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  am.passcode = code;
+  await saveAccountManagers();
   document.getElementById('mp-signin').style.display = 'none';
   document.getElementById('mp-shell').style.display = 'flex';
   mpSetIdentity(am.name);
