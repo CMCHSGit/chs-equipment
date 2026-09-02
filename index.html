@@ -1800,7 +1800,7 @@ html.mp-mode #mobile-app{display:flex!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 47;
+const APP_VERSION = 48;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10336,6 +10336,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-today"></div>
       <div class="mp-screen" id="mp-screen-overview"></div>
       <div class="mp-screen" id="mp-screen-loans"></div>
+      <div class="mp-screen" id="mp-screen-more"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10484,9 +10485,10 @@ function mpGoScreen(screen) {
   if (screen === 'today')    { document.getElementById('mp-screen-today').classList.add('mp-active'); mpRenderToday(); }
   else if (screen === 'overview') { document.getElementById('mp-screen-overview').classList.add('mp-active'); mpRenderOverview(); }
   else if (screen === 'loans')    { document.getElementById('mp-screen-loans').classList.add('mp-active'); mpRenderLoans(); }
+  else if (screen === 'more')     { document.getElementById('mp-screen-more').classList.add('mp-active'); mpRenderMore(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -10724,6 +10726,57 @@ function mpOpenScopeSheet() {
   mpOpenSheet('<div class="mp-sheet-title">Scope</div>', rows);
 }
 function mpChooseScope(am) { _mp.scope = am; mpCloseSheet(); mpRenderLoans(); }
+
+// ── MORE (Phase E is otherwise deferred — this is just enough to reach
+// sign-out and the role admin, both of which already exist elsewhere) ──
+function mpRenderMore() {
+  document.getElementById('mp-screen-more').innerHTML = `
+    <div style="padding:24px 20px 0">
+      <div class="mp-h3">${esc(_mp.name || '')}</div>
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin:4px 0 24px">${_mp.role === 'service' ? 'Service & Projects' : 'Account Manager'}</div>
+      <button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>
+      <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
+    </div>`;
+}
+
+// Same accountManagers[].role field, updateAMField()/saveAccountManagers()
+// the desktop Settings → Account Managers dropdown uses — this is a
+// mobile-styled sheet over the identical data, not a parallel admin path.
+function mpOpenTeamRolesSheet() {
+  mpOpenSheet('<div class="mp-sheet-title">Team roles</div>',
+    `<div style="font:400 14px/1.5 var(--mp-font-body);color:var(--mp-text-body);margin-bottom:14px">Enter the admin password to manage roles.</div>
+     <input class="mp-input" type="password" id="mp-admin-pw" placeholder="Admin password" autocomplete="off" onkeydown="if(event.key==='Enter')mpUnlockTeamRoles()">
+     <div class="mp-err" id="mp-admin-pw-err" style="display:none;margin-top:8px">Incorrect password.</div>
+     <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpUnlockTeamRoles()">Unlock</button>`);
+  setTimeout(() => { const el = document.getElementById('mp-admin-pw'); if (el) el.focus(); }, 150);
+}
+
+async function mpUnlockTeamRoles() {
+  if (!ADMIN_PASSWORD) await loadConfig();
+  const val = document.getElementById('mp-admin-pw').value;
+  if (val !== ADMIN_PASSWORD) { document.getElementById('mp-admin-pw-err').style.display = 'block'; return; }
+  mpRenderTeamRolesSheet();
+}
+
+function mpRenderTeamRolesSheet() {
+  const rows = accountManagers.map((am, i) => {
+    const role = amEffectiveRole(am);
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--mp-border-hairline)">
+      <span style="font:400 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(am.name)}</span>
+      <select onchange="mpSetAMRole(${i}, this.value)" style="padding:6px 10px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);font:400 14px var(--mp-font-body);background:var(--mp-white);color:var(--mp-text-strong)">
+        <option value="am"${role === 'am' ? ' selected' : ''}>Account Manager</option>
+        <option value="service"${role === 'service' ? ' selected' : ''}>Service &amp; Projects</option>
+      </select>
+    </div>`;
+  }).join('');
+  mpOpenSheet('<div class="mp-sheet-title">Team roles</div>', rows || '<div style="font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No account managers yet.</div>');
+}
+
+function mpSetAMRole(i, role) {
+  updateAMField(i, 'role', role); // shared with the desktop Account Managers admin UI
+  if (accountManagers[i] && accountManagers[i].name === _mp.name) _mp.role = role;
+  showToast('success', 'Role updated');
+}
 
 // Reuses the SAME action handlers the desktop Loans tab buttons already call
 // — a mobile-styled menu over existing logic, not a second implementation.
