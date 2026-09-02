@@ -1800,7 +1800,7 @@ html.mp-mode #mobile-app{display:flex!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 46;
+const APP_VERSION = 47;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6842,10 +6842,22 @@ function findLoansMissingSimproJob() {
 // long as it stays stuck, and simply stops nudging once resolved — no
 // separate dismiss/snooze tracking needed.
 const SERVICE_TEAM_OPERATORS = ['Peter Lin', 'Jonathan Nasrun'];
+
+// A person's role is an explicit field on their accountManagers record
+// (set via Settings → Account Managers), falling back to the legacy
+// hardcoded list above for anyone who hasn't had a role set yet.
+function amEffectiveRole(am) {
+  return am.role || (SERVICE_TEAM_OPERATORS.includes(am.name) ? 'service' : 'am');
+}
+function isServiceTeamMember(name) {
+  const am = accountManagers.find(a => a.name === name);
+  return am ? amEffectiveRole(am) === 'service' : SERVICE_TEAM_OPERATORS.includes(name);
+}
+
 function checkStuckLoansForAM() {
   if (!currentOperator) return;
   const today = nzDate();
-  const isServiceTeam = SERVICE_TEAM_OPERATORS.includes(currentOperator);
+  const isServiceTeam = isServiceTeamMember(currentOperator);
   const stuck = upcomingLoans.filter(u =>
     (TEST_MODE || !isTestBatch(u.id)) &&
     u.startDate && u.startDate <= today && (isServiceTeam || u.accountManager === currentOperator)
@@ -7809,7 +7821,9 @@ function sortAMList() {
 
 function renderAMList() {
   document.getElementById('am-list').innerHTML = accountManagers.length
-    ? accountManagers.map((am, i) => `
+    ? accountManagers.map((am, i) => {
+      const role = amEffectiveRole(am);
+      return `
       <div style="background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);padding:10px 12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="flex:1">
@@ -7821,8 +7835,14 @@ function renderAMList() {
         </div>
         <input type="email" value="${esc(am.email||'')}" placeholder="Email address"
           onchange="updateAMField(${i},'email',this.value)"
-          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
-      </div>`).join('')
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;margin-bottom:6px">
+        <select onchange="updateAMField(${i},'role',this.value)"
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
+          <option value="am"${role==='am'?' selected':''}>Account Manager</option>
+          <option value="service"${role==='service'?' selected':''}>Service &amp; Projects</option>
+        </select>
+      </div>`;
+    }).join('')
     : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers yet</div>';
 }
 
@@ -10423,7 +10443,7 @@ async function mpResumeOrSignIn() {
 function mpSetIdentity(name) {
   setOperator(name); // reuses the desktop app's own persistence (chs_operator) + currentOperator
   _mp.name = name;
-  _mp.role = SERVICE_TEAM_OPERATORS.includes(name) ? 'service' : 'am';
+  _mp.role = isServiceTeamMember(name) ? 'service' : 'am';
   _mp.scope = _mp.role === 'am' ? name : 'all';
 }
 
