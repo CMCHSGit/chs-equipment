@@ -465,6 +465,13 @@ tr.clickable-row:hover td{background:var(--accent-light)!important}
 html.mp-mode #login-wrap,
 html.mp-mode #app{display:none!important}
 html.mp-mode #mobile-app{display:flex!important}
+/* .mobile-bottom-nav / .mobile-menu are desktop's own small-screen
+   responsive nav — they're top-level siblings of #app (not descendants),
+   so hiding #app above doesn't hide them, and their own @media rule
+   turns .mobile-bottom-nav on for any phone-width viewport regardless of
+   mp-mode. Without this they show up stacked underneath #mp-tabbar. */
+html.mp-mode .mobile-bottom-nav,
+html.mp-mode .mobile-menu{display:none!important}
 #mobile-app{
   /* Brand */
   --mp-purple:#554596;--mp-purple-60:#968ac1;--mp-purple-30:#cac4e3;--mp-purple-20:#dbd7ed;
@@ -1800,7 +1807,7 @@ html.mp-mode #mobile-app{display:flex!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 48;
+const APP_VERSION = 49;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
