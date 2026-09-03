@@ -1843,7 +1843,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 61;
+const APP_VERSION = 62;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11081,22 +11081,24 @@ function mpRenderBookDeviceList() {
   const matches = equipment.filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q));
   const free = matches.filter(e => mpBookIsFree(e, b.startDate, b.endDate));
   const busy = matches.filter(e => !mpBookIsFree(e, b.startDate, b.endDate));
-  const freeRow = e => {
+  // Both free and busy devices are selectable — matches submitBatchLoan()'s
+  // actual behaviour: a device already on loan isn't rejected, it's queued
+  // as an upcoming loan that activates once the current one returns
+  // (submitBatchLoan() only ever skips one outright, with its own toast,
+  // if it's genuinely locked to an overlapping Simpro job).
+  const row = (e, busyNote) => {
     const checked = b.selected.includes(e.CHSAssetNo);
-    return `<div onclick="mpBookToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
+    return `<div onclick="mpBookToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer${busyNote ? ';border-left:3px solid var(--mp-orange)' : ''}">
       <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
-      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div></div>
+      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div>
+      ${busyNote ? `<div style="font:400 12px var(--mp-font-body);color:var(--mp-orange);margin-top:2px">${busyNote}</div>` : ''}</div>
       <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:15px">${checked?'✓':''}</div>
     </div>`;
   };
-  const busyRow = e => `<div style="padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);border-left:3px solid var(--mp-orange)">
-    <div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)} <span style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}</span></div>
-    <div style="font:400 12px var(--mp-font-body);color:var(--mp-orange)">Held by ${esc(e.OnLoanTo)}${e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : ''}</div>
-  </div>`;
   document.getElementById('mp-book-device-list').innerHTML = `
     <div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
-    <div>${free.length ? free.map(freeRow).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
-    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Booked over your dates</div><div>${busy.map(busyRow).join('')}</div>` : ''}`;
+    <div>${free.length ? free.map(e => row(e)).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
+    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : '') + ' — picking this queues your loan to start once it comes back')).join('')}</div>` : ''}`;
   const btn = document.getElementById('mp-book-confirm-btn');
   if (btn) btn.textContent = b.selected.length + ' device' + (b.selected.length===1?'':'s') + ' selected · Confirm loan';
 }
