@@ -1807,7 +1807,7 @@ html.mp-mode .mobile-menu{display:none!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 51;
+const APP_VERSION = 52;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10335,6 +10335,10 @@ function startAutoSync() {
     <div class="mp-signin-body" id="mp-signin-hint">Enter the team password to continue.</div>
     <input class="mp-input" type="password" id="mp-pw" placeholder="Team password" autocomplete="off" onkeydown="if(event.key==='Enter')mpSignInStep()">
     <select class="mp-input" id="mp-name-select" style="display:none" onkeydown="if(event.key==='Enter')mpSignInStep()"></select>
+    <label id="mp-remember-row" style="display:none;align-items:center;gap:8px;width:100%;font:400 13px var(--mp-font-body);color:var(--mp-text-body);cursor:pointer;text-align:left">
+      <input type="checkbox" id="mp-remember-me" checked style="width:18px;height:18px;accent-color:var(--mp-purple);flex-shrink:0">
+      Remember me on this device
+    </label>
     <div class="mp-err" id="mp-signin-err" style="display:none"></div>
     <button class="mp-btn mp-btn-primary" id="mp-signin-btn" onclick="mpSignInStep()">Continue</button>
     <div class="mp-footnote">The admin password is asked separately for delete / retire / edit actions.</div>
@@ -10418,25 +10422,30 @@ async function mpSignInStep() {
     // Step 1: team password — same gate as the desktop app (APP_PASSWORD)
     if (!APP_PASSWORD) await loadConfig();
     if (pwField.value !== APP_PASSWORD) { err.textContent = 'Incorrect password.'; err.style.display = 'block'; return; }
-    try { localStorage.setItem('chs_mobile_auth', '1'); } catch (e) {}
     btn.disabled = true; btn.textContent = 'Loading…';
     await loadData();
     pwField.style.display = 'none';
     nameField.innerHTML = '<option value="">Select your name…</option>' +
       accountManagers.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
     nameField.style.display = 'block';
+    document.getElementById('mp-remember-row').style.display = 'flex';
     nameField.focus();
     btn.disabled = false; btn.textContent = 'Sign in';
     if (hint) hint.textContent = 'Now pick your name.';
     return;
   }
 
-  // Step 2: pick name — resolves who's holding the phone
+  // Step 2: pick name — resolves who's holding the phone. "Remember me"
+  // (checked by default) is what makes checkAuth() skip straight back in
+  // next launch — unchecked, nothing is persisted so it asks again.
   const name = nameField.value;
   if (!name) { err.textContent = 'Pick your name.'; err.style.display = 'block'; return; }
+  const remember = document.getElementById('mp-remember-me').checked;
+  if (remember) { try { localStorage.setItem('chs_mobile_auth', '1'); } catch (e) {} }
   document.getElementById('mp-signin').style.display = 'none';
   document.getElementById('mp-shell').style.display = 'flex';
-  mpSetIdentity(name);
+  mpSetIdentity(name); // always sets chs_operator too, for this session's use
+  if (!remember) { try { localStorage.removeItem('chs_operator'); } catch (e) {} }
   mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
   setTimeout(handleReturnLink, 1200);
 }
