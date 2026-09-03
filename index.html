@@ -476,7 +476,8 @@ html.mp-mode #mobile-app{display:flex!important}
    turns .mobile-bottom-nav on for any phone-width viewport regardless of
    mp-mode. Without this they show up stacked underneath #mp-tabbar. */
 html.mp-mode .mobile-bottom-nav,
-html.mp-mode .mobile-menu{display:none!important}
+html.mp-mode .mobile-menu,
+html.mp-mode #loading-overlay{display:none!important}
 /* A remembered login (chs_mobile_auth + chs_operator both set) shows the
    branded "signing you back in" screen instead of the blank sign-in form
    while checkAuth()'s async work resolves. checkAuth() still personalizes
@@ -1832,7 +1833,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 54;
+const APP_VERSION = 55;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10500,6 +10501,11 @@ async function mpSignInStep() {
 // "switch user" feature uses) or falls back to the sign-in screen.
 async function mpResumeOrSignIn() {
   await loadData();
+  // html.mp-resuming forces #mp-resume visible with !important (see
+  // #mp-styles) so it shows pre-paint — it MUST come off here, in both
+  // branches, or that !important keeps #mp-resume showing forever
+  // regardless of the plain inline style.display below.
+  document.documentElement.classList.remove('mp-resuming');
   if (currentOperator && accountManagers.find(a => a.name === currentOperator)) {
     mpSetIdentity(currentOperator);
     document.getElementById('mp-resume').style.display = 'none';
