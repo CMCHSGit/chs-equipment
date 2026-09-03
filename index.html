@@ -5,14 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
 // Runs synchronously, before anything renders, so the mobile PWA never
-// flashes the desktop login screen while checkAuth()'s async loadConfig()
-// is still in flight — see html.mp-mode rule in the #mp-styles block.
+// flashes the desktop login screen (or, for a remembered user, the blank
+// sign-in form) while checkAuth()'s async loadConfig()/loadData() is
+// still in flight — see html.mp-mode / html.mp-resuming rules in the
+// #mp-styles block.
 (function(){
   try {
     if (window.matchMedia('(display-mode: standalone)').matches ||
         navigator.standalone === true ||
         new URLSearchParams(location.search).get('mobile') === '1') {
       document.documentElement.classList.add('mp-mode');
+      if (localStorage.getItem('chs_mobile_auth') === '1' && localStorage.getItem('chs_operator')) {
+        document.documentElement.classList.add('mp-resuming');
+      }
     }
   } catch (e) {}
 })();
@@ -472,6 +477,14 @@ html.mp-mode #mobile-app{display:flex!important}
    mp-mode. Without this they show up stacked underneath #mp-tabbar. */
 html.mp-mode .mobile-bottom-nav,
 html.mp-mode .mobile-menu{display:none!important}
+/* A remembered login (chs_mobile_auth + chs_operator both set) shows the
+   branded "signing you back in" screen instead of the blank sign-in form
+   while checkAuth()'s async work resolves. checkAuth() still personalizes
+   #mp-resume-body's text and swaps to #mp-shell/#mp-signin once it knows
+   whether the resume actually succeeded — this class only prevents the
+   pre-paint flash, it isn't the source of truth for the outcome. */
+html.mp-mode.mp-resuming #mp-signin{display:none!important}
+html.mp-mode.mp-resuming #mp-resume{display:flex!important}
 #mobile-app{
   /* Brand */
   --mp-purple:#554596;--mp-purple-60:#968ac1;--mp-purple-30:#cac4e3;--mp-purple-20:#dbd7ed;
@@ -515,9 +528,9 @@ html.mp-mode .mobile-menu{display:none!important}
 #mobile-app .mp-stripes.mp-stripes-sm span{width:20px;height:3px}
 
 /* ── SIGN-IN ─────────────────────────────────────────────────────── */
-#mp-signin{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;background:var(--mp-white);gap:20px;text-align:center}
-#mp-signin .mp-signin-title{margin-top:4px}
-#mp-signin .mp-signin-body{font:300 15px/1.55 var(--mp-font-body);color:var(--mp-text-body);max-width:280px}
+#mp-signin,#mp-resume{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;background:var(--mp-white);gap:20px;text-align:center}
+#mp-signin .mp-signin-title,#mp-resume .mp-signin-title{margin-top:4px}
+#mp-signin .mp-signin-body,#mp-resume .mp-signin-body{font:300 15px/1.55 var(--mp-font-body);color:var(--mp-text-body);max-width:280px}
 .mp-input{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);font-size:16px;outline:none;background:var(--mp-white);color:var(--mp-text-strong);transition:border-color var(--mp-fast) var(--mp-ease),box-shadow var(--mp-fast) var(--mp-ease)}
 .mp-input:focus{border-color:var(--mp-purple);box-shadow:var(--mp-focus-ring)}
 .mp-btn{min-height:50px;width:100%;border-radius:var(--mp-radius-md);border:none;cursor:pointer;font:600 15px var(--mp-font-body);transition:background var(--mp-fast) var(--mp-ease),opacity var(--mp-fast) var(--mp-ease);display:flex;align-items:center;justify-content:center;gap:8px}
@@ -1807,7 +1820,7 @@ html.mp-mode .mobile-menu{display:none!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 52;
+const APP_VERSION = 53;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1943,9 +1956,17 @@ async function checkAuth() {
     // only needs to be entered once per device install, not once per open.
     if (localStorage.getItem('chs_mobile_auth') === '1') {
       initOperator();
+      // #mp-resume is already showing pre-paint (html.mp-resuming, set
+      // synchronously in <head>) — just personalize its text now that
+      // currentOperator is available.
+      const resumeBody = document.getElementById('mp-resume-body');
+      if (resumeBody && currentOperator) resumeBody.textContent = currentOperator + ' is logging back in…';
+      document.getElementById('mp-signin').style.display = 'none';
+      document.getElementById('mp-resume').style.display = 'flex';
       mpResumeOrSignIn();
     } else {
       document.getElementById('mp-signin').style.display = 'flex';
+      document.getElementById('mp-resume').style.display = 'none';
       document.getElementById('mp-shell').style.display = 'none';
     }
     return;
@@ -10344,6 +10365,17 @@ function startAutoSync() {
     <div class="mp-footnote">The admin password is asked separately for delete / retire / edit actions.</div>
   </div>
 
+  <!-- RESUME (remembered login) — shown instead of #mp-signin while
+       checkAuth()/mpResumeOrSignIn() are still confirming who's coming
+       back; html.mp-resuming (set synchronously in <head>) shows this
+       pre-paint so a remembered user never sees the blank sign-in form. -->
+  <div id="mp-resume" style="display:none">
+    <div class="mp-stripes"><span></span><span></span><span></span></div>
+    <div class="mp-overline">CMCHS</div>
+    <div class="mp-h2 mp-signin-title">Demo equipment tracker</div>
+    <div class="mp-signin-body" id="mp-resume-body">Signing you back in…</div>
+  </div>
+
   <!-- APP SHELL -->
   <div id="mp-shell" style="display:none;flex-direction:column;height:100%">
     <div id="mp-header">
@@ -10457,11 +10489,15 @@ async function mpResumeOrSignIn() {
   await loadData();
   if (currentOperator && accountManagers.find(a => a.name === currentOperator)) {
     mpSetIdentity(currentOperator);
-    document.getElementById('mp-signin').style.display = 'none';
+    document.getElementById('mp-resume').style.display = 'none';
     document.getElementById('mp-shell').style.display = 'flex';
     mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
     setTimeout(handleReturnLink, 1200);
   } else {
+    // Remembered name no longer resolves (e.g. removed from
+    // accountManagers) — fall back to a fresh sign-in instead of being
+    // stuck on the resume screen forever.
+    document.getElementById('mp-resume').style.display = 'none';
     document.getElementById('mp-signin').style.display = 'flex';
     document.getElementById('mp-shell').style.display = 'none';
   }
