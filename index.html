@@ -1843,7 +1843,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 60;
+const APP_VERSION = 61;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11253,8 +11253,26 @@ function mpScanCheckOut(assetNo) {
 
 // ── MORE (Phase E is otherwise deferred — this is just enough to reach
 // sign-out and the role admin, both of which already exist elsewhere) ──
+// Quick links are limited to things that already have a real mobile
+// screen to land on — Calendar, My loan history, Notifications, Who sees
+// which loans, Stocktake/count, Import and Sold/Retired from the design
+// mockup's list are desktop-only admin/bulk features or tied to Alerts
+// (deferred), so they're left off rather than linking to a dead end.
+function mpMoreQuickLinks() {
+  if (_mp.role === 'am') {
+    return [
+      ['Transfers due', () => { _mp.seg = 'upcoming'; mpGoScreen('loans'); }],
+      ['Search equipment', () => mpGoScreen('equipment')]
+    ];
+  }
+  return [
+    ['Create a loan', () => mpGoScreen('book')],
+    ['Test & sign-off queue', () => mpGoScreen('loans')]
+  ];
+}
 function mpRenderMore() {
   const canToggleView = _mp.realRole === 'service';
+  const links = mpMoreQuickLinks();
   document.getElementById('mp-screen-more').innerHTML = `
     <div style="padding:24px 20px 0">
       <div class="mp-h3">${esc(_mp.name || '')}</div>
@@ -11267,9 +11285,17 @@ function mpRenderMore() {
         </div>
         <button class="mp-btn mp-btn-secondary" style="width:auto;min-height:36px;padding:0 14px;flex:none" onclick="mpToggleViewRole()">Switch</button>
       </div>` : ''}
+      <div class="mp-card" style="padding:0;overflow:hidden;margin-bottom:16px">
+        ${links.map(([label], i) => `<button onclick="mpRunMoreLink(${i})" style="width:100%;text-align:left;background:none;border:none;padding:14px 16px;font:500 14px var(--mp-font-body);color:var(--mp-text-strong);display:flex;align-items:center;justify-content:space-between;cursor:pointer${i < links.length - 1 ? ';border-bottom:1px solid var(--mp-border-hairline)' : ''}">${esc(label)}<span style="color:var(--mp-black-40)">›</span></button>`).join('')}
+      </div>
       <button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>
       <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
     </div>`;
+  window._mpMoreLinks = links;
+}
+function mpRunMoreLink(i) {
+  const link = (window._mpMoreLinks || [])[i];
+  if (link && link[1]) link[1]();
 }
 
 // Same accountManagers[].role field, updateAMField()/saveAccountManagers()
