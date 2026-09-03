@@ -69,3 +69,39 @@ self.addEventListener('fetch', event => {
       )
   );
 });
+
+// Push notifications (Firebase Cloud Messaging) — a device gets here after
+// opting in via the mobile app's "Enable push notifications" toggle
+// (index.html's mpEnablePush()); actual sends happen server-side from
+// .gas-proxy/Code.js's sendPushToPerson_(). Deliberately a plain push
+// listener rather than Firebase's own background-message handler, so the
+// payload shape below (notification.title/body, data.url) is one we
+// control end-to-end on both the sending and receiving side.
+self.addEventListener('push', event => {
+  let payload = {};
+  try { payload = event.data ? event.data.json() : {}; } catch (e) {}
+  const title = (payload.notification && payload.notification.title) || 'CHS Equipment Tracker';
+  const body = (payload.notification && payload.notification.body) || '';
+  const url = (payload.data && payload.data.url) || '/?mobile=1';
+  event.waitUntil(self.registration.showNotification(title, { body, data: { url } }));
+});
+
+// Tapping the notification focuses an already-open tab (navigating it to
+// the target URL) or opens a new one — the URL is the same ?reassign=<id>
+// deep link the equivalent email already uses, so it lands in the same
+// place (handleReturnLink() in index.html).
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/?mobile=1';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if ('focus' in client) {
+          if ('navigate' in client) client.navigate(url);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
+});

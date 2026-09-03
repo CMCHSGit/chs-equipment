@@ -33,6 +33,10 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then(reg => {
+      // Exposed so mpEnablePush() (mobile push notification opt-in) can
+      // register against THIS registration rather than letting Firebase
+      // Messaging create a second, separate one of its own.
+      window._swRegistration = reg;
       // When a new SW is found, wait for it to install then reload
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
@@ -62,6 +66,12 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- Firebase compat SDK (classic script tags, not the ES-module build) —
+     used only by the mobile app's push-notification opt-in
+     (mpEnablePush()). Compat build to match this file's existing
+     all-classic-script convention. -->
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-messaging-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!-- Mobile app design system fonts — only loaded for #mobile-app, see mp-tokens style block -->
 <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1843,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 62;
+const APP_VERSION = 63;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10471,6 +10481,60 @@ function isMobilePWA() {
 
 let _mp = { screen: 'today', role: null, name: null, seg: 'active', scope: null, open: null };
 
+// ── PUSH NOTIFICATIONS (Firebase Cloud Messaging) ───────────────────────
+// Fill these in from the Firebase console — see plan notes / setup guide
+// for exactly where. Neither is secret: the web config is normal to ship
+// client-side, and the VAPID key here is Firebase's own public "Web Push
+// certificate" key (not something we generate ourselves).
+const FIREBASE_CONFIG = {
+  apiKey: 'REPLACE_ME',
+  authDomain: 'REPLACE_ME',
+  projectId: 'REPLACE_ME',
+  storageBucket: 'REPLACE_ME',
+  messagingSenderId: 'REPLACE_ME',
+  appId: 'REPLACE_ME'
+};
+const FCM_VAPID_KEY = 'REPLACE_ME';
+
+function mpPushSupported() {
+  return 'Notification' in window && 'serviceWorker' in navigator && FIREBASE_CONFIG.apiKey !== 'REPLACE_ME';
+}
+function mpPushEnabled() {
+  const am = accountManagers.find(a => a.name === _mp.name);
+  return !!(am && Array.isArray(am.fcmTokens) && am.fcmTokens.length);
+}
+// Requests Notification permission, registers with FCM against the SAME
+// service worker registration the app already uses for offline/update
+// handling (window._swRegistration, set where sw.js is registered near
+// the top of <head>) rather than letting Firebase create a second one,
+// and saves the resulting token onto the signed-in person's
+// accountManagers record via the existing saveAccountManagers() write
+// path. Actual sending happens server-side — see .gas-proxy/Code.js's
+// sendPushToPerson_(), and sw.js's push/notificationclick listeners for
+// how a delivered notification is shown and what tapping it does.
+async function mpEnablePush() {
+  if (!mpPushSupported()) { showToast('error', 'Push notifications are not supported on this device, or are not configured yet.'); return; }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') { showToast('error', 'Notification permission was not granted.'); mpRenderMore(); return; }
+    const reg = window._swRegistration || await navigator.serviceWorker.ready;
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    const messaging = firebase.messaging();
+    const token = await messaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) { showToast('error', 'Could not get a notification token.'); return; }
+    const am = accountManagers.find(a => a.name === _mp.name);
+    if (!am) { showToast('error', 'Could not find your account manager record.'); return; }
+    am.fcmTokens = Array.isArray(am.fcmTokens) ? am.fcmTokens : [];
+    if (!am.fcmTokens.includes(token)) am.fcmTokens.push(token);
+    await saveAccountManagers();
+    showToast('success', 'Push notifications enabled');
+    mpRenderMore();
+  } catch (e) {
+    console.warn('mpEnablePush failed:', e);
+    showToast('error', 'Could not enable push notifications.');
+  }
+}
+
 // ── SIGN IN ─────────────────────────────────────────────────────────────
 // Identity is just "pick your name" — no passcode. The team password is
 // the only real gate; the name select purely resolves who's holding the
@@ -11290,6 +11354,11 @@ function mpRenderMore() {
       <div class="mp-card" style="padding:0;overflow:hidden;margin-bottom:16px">
         ${links.map(([label], i) => `<button onclick="mpRunMoreLink(${i})" style="width:100%;text-align:left;background:none;border:none;padding:14px 16px;font:500 14px var(--mp-font-body);color:var(--mp-text-strong);display:flex;align-items:center;justify-content:space-between;cursor:pointer${i < links.length - 1 ? ';border-bottom:1px solid var(--mp-border-hairline)' : ''}">${esc(label)}<span style="color:var(--mp-black-40)">›</span></button>`).join('')}
       </div>
+      ${!mpPushSupported() ? '' : Notification.permission === 'denied'
+        ? '<div class="mp-footnote" style="margin-bottom:16px">Notifications are blocked in your browser settings for this app.</div>'
+        : mpPushEnabled()
+          ? '<div class="mp-footnote" style="margin-bottom:16px">✓ Push notifications are on for this device.</div>'
+          : '<button class="mp-btn mp-btn-secondary" style="margin-bottom:16px" onclick="mpEnablePush()">Enable push notifications</button>'}
       <button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>
       <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
     </div>`;
