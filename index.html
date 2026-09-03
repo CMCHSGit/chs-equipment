@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 65;
+const APP_VERSION = 66;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10665,6 +10665,10 @@ function mpRenderTabbar() {
 }
 
 function mpGoScreen(screen) {
+  // Stop the camera whenever navigating away from Scan — otherwise it
+  // keeps running (battery + a very unwelcome privacy surprise) in the
+  // background on every other screen.
+  if (screen !== 'scan' && typeof mpCloseScan === 'function') mpCloseScan();
   _mp.screen = screen;
   document.querySelectorAll('#mp-body .mp-screen').forEach(el => el.classList.remove('mp-active'));
   if (screen === 'today')    { document.getElementById('mp-screen-today').classList.add('mp-active'); mpRenderToday(); }
@@ -11242,23 +11246,97 @@ function mpRenderBookConfirmed() {
 }
 
 // ── SCAN (both roles — see MP_TABS) ─────────────────────────────────────
-// Real camera QR decoding is out of scope (design/README.md's own note);
-// this is the manual-entry fallback it describes. Check-in reuses the
-// desktop scan tab's exact submitReturn() (same currentItem global, no
-// parallel return logic); check-out hands the asset number to the
-// Book-a-demo wizard rather than reimplementing a new-loan flow here.
+// Real camera QR decoding turned out to already exist on desktop
+// (openQR()/handleNativeQR() at index.html:3372, getUserMedia + jsQR —
+// jsQR is already loaded via CDN for every page load) — an earlier
+// assumption here that it was out of scope was wrong. mpOpenScan()/
+// mpCloseScan() mirror that exact getUserMedia+jsQR polling technique
+// with mobile's own DOM (deliberately not a refactor of openQR() itself,
+// since that's tightly coupled to the desktop #qr-modal elements) rather
+// than duplicating desktop's UI. A manual entry field stays as the
+// fallback for cameras that fail/are denied. Check-in reuses the desktop
+// scan tab's exact submitReturn() (same currentItem global, no parallel
+// return logic); check-out hands the asset number to the Book-a-demo
+// wizard rather than reimplementing a new-loan flow here.
 function mpRenderScan() {
+  // Re-entering this screen while the camera is already running would
+  // otherwise tear down its DOM (video/button elements) out from under
+  // the still-running stream + polling interval, leaking both.
+  if (typeof mpCloseScan === 'function') mpCloseScan();
   document.getElementById('mp-screen-scan').innerHTML = `
     <div style="padding:16px 20px">
-      <div style="background:repeating-linear-gradient(135deg,#2a2a2a,#2a2a2a 8px,#1d1d1d 8px,#1d1d1d 16px);border-radius:var(--mp-radius-lg);height:180px;display:flex;align-items:center;justify-content:center;margin-bottom:10px">
-        <div style="width:140px;height:140px;border:2px solid #fff;border-radius:12px"></div>
+      <div id="mp-scan-camera" style="position:relative;border-radius:var(--mp-radius-lg);overflow:hidden;height:220px;background:#1d1d1d;margin-bottom:10px;display:flex;align-items:center;justify-content:center">
+        <video id="mp-scan-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;display:none"></video>
+        <div id="mp-scan-camera-frame" style="position:absolute;width:160px;height:160px;border:2px solid #fff;border-radius:12px;display:none;pointer-events:none"></div>
+        <button class="mp-btn mp-btn-primary" id="mp-scan-start-btn" style="width:auto;padding:0 24px" onclick="mpOpenScan()">Start camera</button>
       </div>
-      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px">Camera scanning isn't available yet — enter the asset number below.</div>
+      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">Point the camera at the QR label, or enter the asset number below.</div>
       <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters"
         oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
       <div id="mp-scan-result" style="margin-top:16px"></div>
     </div>`;
   setTimeout(() => { const el = document.getElementById('mp-scan-input'); if (el) el.focus(); }, 100);
+}
+
+let _mpQrStream = null, _mpQrInterval = null;
+async function mpOpenScan() {
+  const video = document.getElementById('mp-scan-video');
+  if (!video) return;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showToast('error', 'Camera access is not supported on this device/browser.');
+    return;
+  }
+  try {
+    _mpQrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } });
+    video.srcObject = _mpQrStream;
+    video.style.display = 'block';
+    const frame = document.getElementById('mp-scan-camera-frame');
+    if (frame) frame.style.display = 'block';
+    const startBtn = document.getElementById('mp-scan-start-btn');
+    if (startBtn) startBtn.style.display = 'none';
+    await video.play();
+    const canvas = document.createElement('canvas');
+    _mpQrInterval = setInterval(() => {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0);
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+      if (code && code.data) {
+        const val = code.data.trim().replace(/[^\x20-\x7E]/g, '');
+        if (val.length > 0) {
+          mpCloseScan();
+          const inputEl = document.getElementById('mp-scan-input');
+          if (inputEl) inputEl.value = val;
+          mpScanLookup(val);
+        }
+      }
+    }, 300);
+  } catch (e) {
+    mpCloseScan();
+    console.warn('mpOpenScan failed:', e);
+    if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+      showToast('error', 'Camera permission denied — check your browser/app settings, or enter the number manually.');
+    } else {
+      // Surface the real error (name/message) rather than a generic
+      // message — the desktop camera button has a similar failure mode
+      // that's never been root-caused, so this is the diagnostic info
+      // needed to actually fix it if it happens here too.
+      showToast('error', 'Camera error (' + (e.name || 'unknown') + '): ' + (e.message || e) + ' — enter the number manually below.');
+    }
+  }
+}
+function mpCloseScan() {
+  clearInterval(_mpQrInterval); _mpQrInterval = null;
+  if (_mpQrStream) { _mpQrStream.getTracks().forEach(t => t.stop()); _mpQrStream = null; }
+  const video = document.getElementById('mp-scan-video');
+  if (video) { video.style.display = 'none'; video.srcObject = null; }
+  const frame = document.getElementById('mp-scan-camera-frame');
+  if (frame) frame.style.display = 'none';
+  const startBtn = document.getElementById('mp-scan-start-btn');
+  if (startBtn) startBtn.style.display = 'flex';
 }
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
