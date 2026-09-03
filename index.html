@@ -485,6 +485,18 @@ html.mp-mode .mobile-menu{display:none!important}
    pre-paint flash, it isn't the source of truth for the outcome. */
 html.mp-mode.mp-resuming #mp-signin{display:none!important}
 html.mp-mode.mp-resuming #mp-resume{display:flex!important}
+/* #loan-doc-modal (like .mobile-bottom-nav) is a top-level sibling of #app,
+   not a descendant, so it isn't covered by #app's mp-mode hiding — that's
+   fine and wanted for "View loan form" mobile actions, which deliberately
+   reuse this exact modal. The mobile Book-a-demo wizard is different: it
+   drives submitBatchLoan() headlessly and doesn't want the desktop
+   print-doc editor to flash on screen before it auto-closes itself again
+   (see mpBookConfirm()). Pushed off-screen rather than display:none —
+   closeLoanDoc()/createSimproJob() read .innerText out of this doc's
+   cells, and .innerText returns '' for anything with display:none on it
+   or an ancestor (unlike textContent), so that would silently blank out
+   the confirmation email and Simpro job instead of just hiding a flash. */
+html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!important;top:-9999px!important;pointer-events:none!important}
 #mobile-app{
   /* Brand */
   --mp-purple:#554596;--mp-purple-60:#968ac1;--mp-purple-30:#cac4e3;--mp-purple-20:#dbd7ed;
@@ -1820,7 +1832,7 @@ html.mp-mode.mp-resuming #mp-resume{display:flex!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 53;
+const APP_VERSION = 54;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10390,6 +10402,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-loans"></div>
       <div class="mp-screen" id="mp-screen-more"></div>
       <div class="mp-screen" id="mp-screen-equipment"></div>
+      <div class="mp-screen" id="mp-screen-book"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10557,9 +10570,10 @@ function mpGoScreen(screen) {
   else if (screen === 'loans')    { document.getElementById('mp-screen-loans').classList.add('mp-active'); mpRenderLoans(); }
   else if (screen === 'more')     { document.getElementById('mp-screen-more').classList.add('mp-active'); mpRenderMore(); }
   else if (screen === 'equipment') { document.getElementById('mp-screen-equipment').classList.add('mp-active'); mpRenderEquipment(); }
+  else if (screen === 'book')     { document.getElementById('mp-screen-book').classList.add('mp-active'); mpResetBookWizard(); mpRenderBook(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -10648,7 +10662,7 @@ function mpRenderToday() {
           <span style="color:var(--mp-black-40)">›</span>
         </div>`).join('') : '<div style="text-align:center;padding:12px;color:var(--mp-text-muted);font-size:13px">Nothing scheduled this week</div>'}
     </div>
-    <button class="mp-btn mp-btn-primary" onclick="showToast('info','Booking flow is coming in a later update — use the desktop site for now.')">+ Book a demo</button>
+    <button class="mp-btn mp-btn-primary" onclick="mpGoScreen('book')">+ Book a demo</button>
   `;
   window._mpTodayAlerts = alerts;
 }
@@ -10878,6 +10892,214 @@ function mpOpenEquipmentActions(assetId) {
   }
   mpOpenSheet('<div class="mp-sheet-title">' + esc(e.CHSAssetNo) + ' · ' + esc(e.Model) + '</div>',
     '<button class="mp-sheet-item" onclick="mpCloseSheet();setTimeout(()=>openDetail(\'' + e.id + '\'),350)">View details</button>');
+}
+
+// ── BOOK A DEMO (AM only — see MP_TABS) ─────────────────────────────────
+// 3-step wizard: details, then devices, then a confirmation screen. The
+// actual write is NOT reimplemented here — mpBookConfirm() drives the
+// exact same submitBatchLoan()/closeLoanDoc() path the desktop Scan/Loan
+// form uses, by populating its (present but hidden under mp-mode) fields
+// and calling it directly, so equipment writes, the loan doc, the
+// confirmation email and the Simpro job all stay the one code path
+// instead of a second, driftable implementation.
+function mpResetBookWizard() {
+  const isAM = _mp.role === 'am';
+  const self = isAM ? accountManagers.find(a => a.name === _mp.name) : null;
+  _mp.book = {
+    step: 1,
+    loanTo: '', location: '',
+    startDate: nzDate(), endDate: '',
+    am: isAM ? _mp.name : '',
+    email: isAM && self ? (self.email || '') : '',
+    contact: '', jobType: 'Demo', demoType: '',
+    notes: '', shipping: '',
+    deviceQuery: '', selected: [],
+    confirmed: null
+  };
+}
+function mpRenderBook() {
+  if (!_mp.book) mpResetBookWizard();
+  const step = _mp.book.step;
+  if (step === 2) return mpRenderBookStep2();
+  if (step === 3) return mpRenderBookConfirmed();
+  return mpRenderBookStep1();
+}
+function mpBookProgressHtml() {
+  const step = Math.min(_mp.book.step, 3);
+  return `<div style="display:flex;gap:4px;padding:16px 20px 0">${[1,2,3].map(n =>
+    `<div style="flex:1;height:4px;border-radius:2px;background:${n<=step?'var(--mp-purple)':'var(--mp-black-10)'}"></div>`).join('')}</div>`;
+}
+function mpFieldLabel() { return 'display:block;font:600 12px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:6px'; }
+
+function mpRenderBookStep1() {
+  const b = _mp.book;
+  const isAM = _mp.role === 'am';
+  const amOptions = accountManagers.map(a => `<option value="${esc(a.name)}"${b.am===a.name?' selected':''}>${esc(a.name)}</option>`).join('');
+  document.getElementById('mp-screen-book').innerHTML = `
+    ${mpBookProgressHtml()}
+    <div style="padding:16px 20px 100px;display:flex;flex-direction:column;gap:14px">
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-purple);background:var(--mp-purple-20);padding:10px 14px;border-radius:var(--mp-radius-md)">Fields marked * are required. Devices come next.</div>
+      <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${esc(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${esc(b.location)}" oninput="_mp.book.location=this.value"></div>
+      <div style="display:flex;gap:10px">
+        <div style="flex:1"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${esc(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
+        <div style="flex:1"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${esc(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
+      </div>
+      ${isAM
+        ? `<div><label style="${mpFieldLabel()}">Account manager</label><div class="mp-input" style="display:flex;align-items:center;color:var(--mp-text-muted);background:var(--mp-black-05)">${esc(b.am)}</div></div>`
+        : `<div><label style="${mpFieldLabel()}">Account manager *</label><select class="mp-input" onchange="mpBookSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>`}
+      <div><label style="${mpFieldLabel()}">Account manager email *</label><input class="mp-input" type="email" value="${esc(b.email)}" oninput="_mp.book.email=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${esc(b.contact)}" oninput="_mp.book.contact=this.value"></div>
+      <div onclick="mpOpenJobTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Job type</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between">${esc(b.jobType)}<span style="color:var(--mp-black-40)">›</span></div></div>
+      <div onclick="mpOpenDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(b.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>
+      <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.notes=this.value">${esc(b.notes)}</textarea></div>
+      <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.shipping=this.value">${esc(b.shipping)}</textarea></div>
+    </div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0))">
+      <button class="mp-btn mp-btn-primary" onclick="mpBookGoStep2()">Next: devices</button>
+    </div>`;
+}
+function mpBookSetAM(name) {
+  _mp.book.am = name;
+  const am = accountManagers.find(a => a.name === name);
+  _mp.book.email = (am && am.email) || '';
+  mpRenderBookStep1();
+}
+function mpOpenJobTypeSheet() {
+  const opts = ['Demo', 'PMV', 'Repair'];
+  mpOpenSheet('<div class="mp-sheet-title">Job type</div>',
+    opts.map(o => `<button class="mp-sheet-item" onclick="mpBookSetJobType('${o}')">${_mp.book.jobType===o?'✓ ':''}${o}</button>`).join(''));
+}
+function mpBookSetJobType(v) { _mp.book.jobType = v; mpCloseSheet(); mpRenderBookStep1(); }
+function mpOpenDemoTypeSheet() {
+  const opts = ['Conference/Presentation', 'Clinical Trial', 'Hotswap'];
+  mpOpenSheet('<div class="mp-sheet-title">Demo type</div>',
+    opts.map((o, i) => `<button class="mp-sheet-item" onclick="mpBookSetDemoType(${i})">${_mp.book.demoType===o?'✓ ':''}${esc(o)}</button>`).join(''));
+  window._mpDemoTypeOpts = opts;
+}
+function mpBookSetDemoType(i) { _mp.book.demoType = (window._mpDemoTypeOpts||[])[i] || ''; mpCloseSheet(); mpRenderBookStep1(); }
+function mpBookGoStep2() {
+  const b = _mp.book;
+  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || !b.demoType) {
+    showToast('error', 'Fill in all required fields first.'); return;
+  }
+  if (b.endDate <= b.startDate) { showToast('error', 'End date must be after the start date.'); return; }
+  b.step = 2;
+  mpRenderBook();
+}
+
+// Mirrors the overlap check inside submitBatchLoan()'s isDateConflict() —
+// free = the existing loan (if any) doesn't overlap the requested dates.
+function mpBookIsFree(e, startDate, endDate) {
+  if (!e.OnLoanTo || e.Returned === 'Yes') return true;
+  const existingStart = e.LoanStartDate || '', existingEnd = e.LoanEndDate || '';
+  if (existingEnd && existingEnd <= startDate) return true;
+  if (existingStart && endDate && existingStart >= endDate) return true;
+  return false;
+}
+function mpRenderBookStep2() {
+  const b = _mp.book;
+  const q = (b.deviceQuery || '').trim().toLowerCase();
+  const matches = equipment.filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q));
+  const free = matches.filter(e => mpBookIsFree(e, b.startDate, b.endDate));
+  const busy = matches.filter(e => !mpBookIsFree(e, b.startDate, b.endDate));
+  const freeRow = e => {
+    const checked = b.selected.includes(e.CHSAssetNo);
+    return `<div onclick="mpBookToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
+      <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div></div>
+      <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:15px">${checked?'✓':''}</div>
+    </div>`;
+  };
+  const busyRow = e => `<div style="padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);border-left:3px solid var(--mp-orange)">
+    <div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)} <span style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}</span></div>
+    <div style="font:400 12px var(--mp-font-body);color:var(--mp-orange)">Held by ${esc(e.OnLoanTo)}${e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : ''}</div>
+  </div>`;
+  document.getElementById('mp-screen-book').innerHTML = `
+    ${mpBookProgressHtml()}
+    <div style="padding:16px 20px 10px">
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:10px">Devices to include. Availability shown for ${esc(b.startDate)} – ${esc(b.endDate)}.</div>
+      <input class="mp-input" placeholder="Search assets" value="${esc(b.deviceQuery)}" oninput="_mp.book.deviceQuery=this.value;mpRenderBookStep2()">
+    </div>
+    <div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
+    <div>${free.length ? free.map(freeRow).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
+    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Booked over your dates</div><div>${busy.map(busyRow).join('')}</div>` : ''}
+    <div style="height:90px"></div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="_mp.book.step=1;mpRenderBook()">Back</button>
+      <button class="mp-btn mp-btn-primary" onclick="mpBookConfirm()">${b.selected.length} device${b.selected.length===1?'':'s'} selected · Confirm loan</button>
+    </div>`;
+}
+function mpBookToggleDevice(assetNo) {
+  const i = _mp.book.selected.indexOf(assetNo);
+  if (i >= 0) _mp.book.selected.splice(i, 1); else _mp.book.selected.push(assetNo);
+  mpRenderBookStep2();
+}
+
+async function mpBookConfirm() {
+  const b = _mp.book;
+  if (b._submitting) return;
+  if (!b.selected.length) { showToast('error', 'Select at least one device.'); return; }
+  b._submitting = true;
+  const btnEl = document.querySelector('#mp-screen-book .mp-btn-primary');
+  if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Booking…'; }
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  setVal('b-loan-to', b.loanTo);
+  setVal('b-location', b.location);
+  setVal('b-start-date', b.startDate);
+  setVal('b-end-date', b.endDate);
+  setVal('b-account-manager', b.am);
+  setVal('b-email', b.email);
+  setVal('b-contact-number', b.contact);
+  setVal('b-job-type', b.jobType);
+  setVal('b-demo-type', b.demoType);
+  setVal('b-notes', b.notes);
+  setVal('b-shipping-details', b.shipping);
+  batchDevices = b.selected.map((v, i) => ({ id: 'mpbd_' + i, value: v }));
+  const desktopBtn = document.getElementById('btn-batch');
+  if (desktopBtn) { desktopBtn.disabled = false; desktopBtn.textContent = 'Confirm Loan'; }
+  // #loan-doc-modal is a top-level element (not nested under #app), so it
+  // isn't covered by mp-mode's usual hiding — suppress it for this one
+  // headless round trip so the desktop print-doc editor never flashes on
+  // screen before closeLoanDoc() closes it again below.
+  document.documentElement.classList.add('mp-suppress-loan-doc');
+  try {
+    await submitBatchLoan();
+    const feedback = document.getElementById('batch-feedback');
+    if (feedback && feedback.style.display === 'block') {
+      showToast('error', (feedback.textContent || '').trim() || 'Could not create the booking.');
+      b._submitting = false;
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = b.selected.length + ' device' + (b.selected.length===1?'':'s') + ' selected · Confirm loan'; }
+      return;
+    }
+    // submitBatchLoan() -> doLoan() already opened the desktop loan-doc modal
+    // (generateLoanDoc()) as part of confirming — closeLoanDoc() is what
+    // actually fires the confirmation email + creates the Simpro job (same
+    // as a desktop user closing that modal), so call it now.
+    try { await closeLoanDoc(); } catch (e) { console.warn('closeLoanDoc after mobile booking failed:', e); }
+  } finally {
+    document.documentElement.classList.remove('mp-suppress-loan-doc');
+  }
+  b._submitting = false;
+  _mp.book.confirmed = { loanTo: b.loanTo, startDate: b.startDate, endDate: b.endDate, count: b.selected.length };
+  _mp.book.step = 3;
+  mpRenderBook();
+}
+
+function mpRenderBookConfirmed() {
+  const c = _mp.book.confirmed || {};
+  document.getElementById('mp-screen-book').innerHTML = `
+    <div style="padding:40px 24px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px">
+      <div style="width:62px;height:62px;border-radius:50%;background:var(--mp-green-20);display:flex;align-items:center;justify-content:center;color:#4d7a00;font-size:30px">✓</div>
+      <div class="mp-h2">Loan confirmed</div>
+      <div style="font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">${esc(c.startDate||'')} – ${esc(c.endDate||'')}</div>
+      <div style="font:400 13px/1.5 var(--mp-font-body);color:var(--mp-text-muted);max-width:280px">The loan form has been emailed and this loan is now with the service team for test and sign-off.</div>
+      <div class="mp-card" style="width:100%;text-align:left">
+        <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(c.loanTo||'')}</div>
+        <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:4px">${c.count||0} device${c.count===1?'':'s'} · Scheduled</div>
+      </div>
+      <button class="mp-btn mp-btn-primary" style="margin-top:10px" onclick="_mp.book=null;mpGoScreen(_mp.role==='am'?'today':'overview')">Back to today</button>
+    </div>`;
 }
 
 // ── MORE (Phase E is otherwise deferred — this is just enough to reach
