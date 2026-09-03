@@ -1843,7 +1843,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 58;
+const APP_VERSION = 59;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10414,6 +10414,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-more"></div>
       <div class="mp-screen" id="mp-screen-equipment"></div>
       <div class="mp-screen" id="mp-screen-book"></div>
+      <div class="mp-screen" id="mp-screen-scan"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10607,9 +10608,10 @@ function mpGoScreen(screen) {
   else if (screen === 'more')     { document.getElementById('mp-screen-more').classList.add('mp-active'); mpRenderMore(); }
   else if (screen === 'equipment') { document.getElementById('mp-screen-equipment').classList.add('mp-active'); mpRenderEquipment(); }
   else if (screen === 'book')     { document.getElementById('mp-screen-book').classList.add('mp-active'); mpResetBookWizard(); mpRenderBook(); }
+  else if (screen === 'scan')     { document.getElementById('mp-screen-scan').classList.add('mp-active'); mpRenderScan(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -10951,6 +10953,10 @@ function mpOpenEquipmentActions(assetId) {
 function mpResetBookWizard() {
   const isAM = _mp.role === 'am';
   const self = isAM ? accountManagers.find(a => a.name === _mp.name) : null;
+  // Scan's "Check out" hands off a single asset number here rather than
+  // going through mpGoScreen('book')'s normal empty start — consumed once.
+  const preSelected = window._mpPendingBookAsset ? [window._mpPendingBookAsset] : [];
+  window._mpPendingBookAsset = null;
   _mp.book = {
     step: 1,
     loanTo: '', location: '',
@@ -10959,7 +10965,7 @@ function mpResetBookWizard() {
     email: isAM && self ? (self.email || '') : '',
     contact: '', jobType: 'Demo', demoType: '',
     notes: '', shipping: '',
-    deviceQuery: '', selected: [],
+    deviceQuery: '', selected: preSelected,
     confirmed: null
   };
 }
@@ -11166,6 +11172,83 @@ function mpRenderBookConfirmed() {
       </div>
       <button class="mp-btn mp-btn-primary" style="margin-top:10px" onclick="_mp.book=null;mpGoScreen(_mp.role==='am'?'today':'overview')">Back to today</button>
     </div>`;
+}
+
+// ── SCAN (both roles — see MP_TABS) ─────────────────────────────────────
+// Real camera QR decoding is out of scope (design/README.md's own note);
+// this is the manual-entry fallback it describes. Check-in reuses the
+// desktop scan tab's exact submitReturn() (same currentItem global, no
+// parallel return logic); check-out hands the asset number to the
+// Book-a-demo wizard rather than reimplementing a new-loan flow here.
+function mpRenderScan() {
+  document.getElementById('mp-screen-scan').innerHTML = `
+    <div style="padding:16px 20px">
+      <div style="background:repeating-linear-gradient(135deg,#2a2a2a,#2a2a2a 8px,#1d1d1d 8px,#1d1d1d 16px);border-radius:var(--mp-radius-lg);height:180px;display:flex;align-items:center;justify-content:center;margin-bottom:10px">
+        <div style="width:140px;height:140px;border:2px solid #fff;border-radius:12px"></div>
+      </div>
+      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px">Camera scanning isn't available yet — enter the asset number below.</div>
+      <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters"
+        oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
+      <div id="mp-scan-result" style="margin-top:16px"></div>
+    </div>`;
+  setTimeout(() => { const el = document.getElementById('mp-scan-input'); if (el) el.focus(); }, 100);
+}
+let _mpScanTimer = null;
+function mpScanDebounce(v) {
+  clearTimeout(_mpScanTimer);
+  _mpScanTimer = setTimeout(() => { if (v.trim().length >= 3) mpScanLookup(v); }, 400);
+}
+function mpScanLookup(val) {
+  val = (val || '').trim();
+  const box = document.getElementById('mp-scan-result');
+  if (!box) return;
+  if (!val) { box.innerHTML = ''; return; }
+  const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+  if (!item) {
+    box.innerHTML = `<div class="mp-err">"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.</div>`;
+    return;
+  }
+  const today = mpToday();
+  const status = mpEquipmentStatus(item, today);
+  const actionBtn = (status.key === 'on-loan' || status.key === 'overdue')
+    ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}')">Check in</button>`
+    : status.key === 'available'
+      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckOut('${esc(item.CHSAssetNo)}')">Check out</button>`
+      : `<div class="mp-footnote" style="margin-top:12px">This item is booked ahead — use the Loans tab to manage it.</div>`;
+  box.innerHTML = `
+    <div class="mp-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div style="min-width:0">
+          <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(item.Model)}</div>
+          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(item.CHSAssetNo)}</div>
+        </div>
+        <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
+      </div>
+      ${(status.key === 'on-loan' || status.key === 'overdue') ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(item.LoanEndDate) : ''}</div>` : ''}
+      ${actionBtn}
+    </div>`;
+}
+async function mpScanCheckIn(assetId) {
+  const item = equipment.find(e => e.id === assetId);
+  if (!item) return;
+  // currentItem is a top-level `let` in the desktop script, not a window
+  // property (window.currentItem would silently miss the binding
+  // submitReturn() actually reads) — classic <script> tags share one
+  // lexical global scope, so a plain assignment reaches it directly,
+  // same as batchDevices is set directly in mpBookConfirm() above.
+  currentItem = item;
+  mpShowBlockingLoader('Checking in…', "Please don't close the app or navigate away.");
+  // submitReturn() already shows its own success toast ("X returned") —
+  // no need to add a second one here.
+  try { await submitReturn(); } finally { mpHideBlockingLoader(); }
+  const input = document.getElementById('mp-scan-input');
+  if (input) { input.value = ''; input.focus(); }
+  const box = document.getElementById('mp-scan-result');
+  if (box) box.innerHTML = '';
+}
+function mpScanCheckOut(assetNo) {
+  window._mpPendingBookAsset = assetNo;
+  mpGoScreen('book');
 }
 
 // ── MORE (Phase E is otherwise deferred — this is just enough to reach
