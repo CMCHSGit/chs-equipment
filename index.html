@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 66;
+const APP_VERSION = 67;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11295,6 +11295,40 @@ async function mpOpenScan() {
     const startBtn = document.getElementById('mp-scan-start-btn');
     if (startBtn) startBtn.style.display = 'none';
     await video.play();
+
+    const handleDecoded = raw => {
+      const val = String(raw || '').trim().replace(/[^\x20-\x7E]/g, '');
+      if (!val) return;
+      mpCloseScan();
+      const inputEl = document.getElementById('mp-scan-input');
+      if (inputEl) inputEl.value = val;
+      mpScanLookup(val);
+    };
+
+    // BarcodeDetector (hardware-accelerated, well-supported on Android
+    // Chrome — not on iOS Safari at all) is tried first: it's noticeably
+    // more reliable at picking a QR code out of a live video frame than
+    // jsQR's plain canvas-pixel scanning below, which is exactly why
+    // desktop's own file-upload scanner (handleNativeQR()) already
+    // prefers it over jsQR. The live-camera path here previously only
+    // ever used jsQR, which is why the camera opened fine but never
+    // actually captured anything on Android.
+    if ('BarcodeDetector' in window) {
+      try {
+        const detector = new BarcodeDetector({ formats: ['qr_code'] });
+        _mpQrInterval = setInterval(async () => {
+          if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+          try {
+            const codes = await detector.detect(video);
+            if (codes.length > 0 && codes[0].rawValue) handleDecoded(codes[0].rawValue);
+          } catch (e) { /* transient per-frame failure — next tick retries */ }
+        }, 300);
+        return;
+      } catch (e) {
+        console.warn('BarcodeDetector unavailable, falling back to jsQR:', e);
+      }
+    }
+
     const canvas = document.createElement('canvas');
     _mpQrInterval = setInterval(() => {
       if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
@@ -11304,15 +11338,7 @@ async function mpOpenScan() {
       ctx.drawImage(video, 0, 0);
       const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
-      if (code && code.data) {
-        const val = code.data.trim().replace(/[^\x20-\x7E]/g, '');
-        if (val.length > 0) {
-          mpCloseScan();
-          const inputEl = document.getElementById('mp-scan-input');
-          if (inputEl) inputEl.value = val;
-          mpScanLookup(val);
-        }
-      }
+      if (code && code.data) handleDecoded(code.data);
     }, 300);
   } catch (e) {
     mpCloseScan();
