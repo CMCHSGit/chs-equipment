@@ -1833,7 +1833,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 55;
+const APP_VERSION = 56;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10526,7 +10526,19 @@ function mpSetIdentity(name) {
   setOperator(name); // reuses the desktop app's own persistence (chs_operator) + currentOperator
   _mp.name = name;
   _mp.role = isServiceTeamMember(name) ? 'service' : 'am';
+  _mp.realRole = _mp.role; // actual role — mpToggleViewRole() only ever changes _mp.role
   _mp.scope = _mp.role === 'am' ? name : 'all';
+}
+
+// Service & Projects staff can preview the AM view for testing without it
+// affecting their real role (accountManagers[].role is untouched) — gated
+// on _mp.realRole so someone can't reach a service-only view by switching
+// away from 'am' and back.
+function mpToggleViewRole() {
+  if (_mp.realRole !== 'service') return;
+  _mp.role = _mp.role === 'service' ? 'am' : 'service';
+  _mp.scope = _mp.role === 'am' ? _mp.name : 'all';
+  mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
 }
 
 function mpSignOut() {
@@ -11111,10 +11123,19 @@ function mpRenderBookConfirmed() {
 // ── MORE (Phase E is otherwise deferred — this is just enough to reach
 // sign-out and the role admin, both of which already exist elsewhere) ──
 function mpRenderMore() {
+  const canToggleView = _mp.realRole === 'service';
   document.getElementById('mp-screen-more').innerHTML = `
     <div style="padding:24px 20px 0">
       <div class="mp-h3">${esc(_mp.name || '')}</div>
       <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin:4px 0 24px">${_mp.role === 'service' ? 'Service & Projects' : 'Account Manager'}</div>
+      ${canToggleView ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--mp-black-05);border-radius:var(--mp-radius-md);margin-bottom:16px">
+        <div style="min-width:0">
+          <div style="font:600 13px var(--mp-font-body);color:var(--mp-text-strong)">Viewing as ${_mp.role === 'am' ? 'Account Manager' : 'Service & Projects'}</div>
+          <div style="font:400 12px var(--mp-font-body);color:var(--mp-text-muted)">For testing — your real role stays Service &amp; Projects</div>
+        </div>
+        <button class="mp-btn mp-btn-secondary" style="width:auto;min-height:36px;padding:0 14px;flex:none" onclick="mpToggleViewRole()">Switch</button>
+      </div>` : ''}
       <button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>
       <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
     </div>`;
