@@ -1843,7 +1843,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 59;
+const APP_VERSION = 60;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11328,9 +11328,20 @@ function mpOpenLoanActionsForGroup(g) {
     ];
   } else {
     const key = _loanKey(g);
+    // Test & sign-off is per LOAN, not per device — the design mockup's
+    // per-device checklist was explicitly descoped in favour of the
+    // existing loanMeta[readinessKey].tested flag both desktop and the
+    // loan card pill already use. Service-only, exactly like the website
+    // (toggleReadiness() opens the same date-confirm modal desktop uses
+    // to mark tested; un-marking is instant either way).
+    const rKey = _readinessKey(g.batchId, g.loanTo, g.endDate);
+    const readiness = getLoanReadiness(rKey);
+    const testItem = (_mp.role === 'service' && !readiness.noTestRequired)
+      ? [[readiness.tested ? '✓ Tested — tap to un-mark' : 'Mark as tested', () => toggleReadiness(rKey, 'tested')]]
+      : [];
     items = _mp.role === 'am'
       ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
-      : [ ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
+      : [ ...testItem, ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
   }
   window._mpSheetActions = items;
   mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
