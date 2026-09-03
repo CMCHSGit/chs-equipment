@@ -1807,7 +1807,7 @@ html.mp-mode .mobile-menu{display:none!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 50;
+const APP_VERSION = 51;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10353,6 +10353,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-overview"></div>
       <div class="mp-screen" id="mp-screen-loans"></div>
       <div class="mp-screen" id="mp-screen-more"></div>
+      <div class="mp-screen" id="mp-screen-equipment"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10486,7 +10487,8 @@ const MP_ICONS = {
   plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
   scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>',
   box: '<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
-  more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'
+  more: '<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>',
+  search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
 };
 function mpIcon(name, size) {
   return '<svg width="' + (size||22) + '" height="' + (size||22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (MP_ICONS[name]||'') + '</svg>';
@@ -10509,9 +10511,10 @@ function mpGoScreen(screen) {
   else if (screen === 'overview') { document.getElementById('mp-screen-overview').classList.add('mp-active'); mpRenderOverview(); }
   else if (screen === 'loans')    { document.getElementById('mp-screen-loans').classList.add('mp-active'); mpRenderLoans(); }
   else if (screen === 'more')     { document.getElementById('mp-screen-more').classList.add('mp-active'); mpRenderMore(); }
+  else if (screen === 'equipment') { document.getElementById('mp-screen-equipment').classList.add('mp-active'); mpRenderEquipment(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -10750,6 +10753,88 @@ function mpOpenScopeSheet() {
 }
 function mpChooseScope(am) { _mp.scope = am; mpCloseSheet(); mpRenderLoans(); }
 
+// ── EQUIPMENT (service role only — see MP_TABS) ─────────────────────────
+// Same status derivation buildStatusCell()/renderTable() use on desktop —
+// booked/scheduled beats on-loan, overdue is on-loan past its end date.
+function mpEquipmentStatus(e, today) {
+  const hidden = isHiddenTestLoan(e);
+  const isScheduled = !hidden && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
+  const upcoming = !isScheduled && getUpcomingLoanForItem(e.id);
+  if (isScheduled || upcoming) return { key: 'booked', label: 'Booked', bg: 'var(--mp-purple-20)', fg: 'var(--mp-purple)' };
+  const on = !hidden && e.OnLoanTo && e.Returned !== 'Yes';
+  const od = on && e.LoanEndDate && e.LoanEndDate < today;
+  if (od) return { key: 'overdue', label: 'Overdue', bg: 'var(--mp-critical-tint)', fg: 'var(--mp-critical)' };
+  if (on) return { key: 'on-loan', label: 'On loan', bg: 'var(--mp-orange-20)', fg: 'var(--mp-orange)' };
+  return { key: 'available', label: 'Available', bg: 'var(--mp-green-20)', fg: '#4d7a00' };
+}
+
+function mpRenderEquipment() {
+  if (_mp.eqFilter === undefined) _mp.eqFilter = 'all';
+  if (_mp.eqQuery === undefined) _mp.eqQuery = '';
+  document.getElementById('mp-screen-equipment').innerHTML = `
+    <div style="padding:16px 20px 12px">
+      <div style="position:relative;display:flex;align-items:center">
+        <span style="position:absolute;left:14px;color:var(--mp-text-muted);display:flex;pointer-events:none">${mpIcon('search',18)}</span>
+        <input class="mp-input" id="mp-eq-search" type="search" placeholder="Search ${equipment.length} assets" value="${esc(_mp.eqQuery)}" oninput="mpSetEquipmentQuery(this.value)" style="padding-left:40px">
+      </div>
+    </div>
+    <div id="mp-eq-pills" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
+    <div id="mp-eq-list"></div>`;
+  mpRenderEquipmentPills();
+  mpRenderEquipmentList();
+}
+
+function mpRenderEquipmentPills() {
+  const filters = [['all','All'],['available','Available'],['on-loan','On loan'],['overdue','Overdue'],['booked','Booked']];
+  document.getElementById('mp-eq-pills').innerHTML = filters.map(([key,label]) => {
+    const active = _mp.eqFilter === key;
+    return `<button onclick="mpSetEquipmentFilter('${key}')" style="flex:none;padding:9px 16px;border-radius:var(--mp-radius-pill);border:1px solid ${active?'var(--mp-purple)':'var(--mp-border-hairline)'};background:${active?'var(--mp-purple)':'var(--mp-white)'};color:${active?'#fff':'var(--mp-text-body)'};font:600 13px var(--mp-font-body);white-space:nowrap;cursor:pointer">${esc(label)}</button>`;
+  }).join('');
+}
+
+function mpRenderEquipmentList() {
+  const q = _mp.eqQuery.trim().toLowerCase();
+  const today = mpToday();
+  const rows = equipment
+    .filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q))
+    .map(e => ({ e, status: mpEquipmentStatus(e, today) }))
+    .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter);
+  document.getElementById('mp-eq-list').innerHTML = rows.length ? rows.map(({e, status}) => `
+    <div onclick="mpOpenEquipmentActions('${e.id}')" style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:14px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
+      <div style="min-width:0">
+        <div style="font:400 12px var(--mp-font-mono);color:var(--mp-purple);margin-bottom:2px">${esc(e.CHSAssetNo)}</div>
+        <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+        <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.Description || '')}${e.Location ? ' · ' + esc(e.Location) : ''}</div>
+      </div>
+      <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
+    </div>`).join('') : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>';
+}
+
+function mpSetEquipmentQuery(v) { _mp.eqQuery = v; mpRenderEquipmentList(); }
+function mpSetEquipmentFilter(key) { _mp.eqFilter = key; mpRenderEquipmentPills(); mpRenderEquipmentList(); }
+
+// Tapping an asset resolves the loan it belongs to (if any) and opens the
+// SAME actions sheet the Loans screen uses for that loan — not a separate
+// equipment-specific action set.
+function mpOpenEquipmentActions(assetId) {
+  const e = equipment.find(x => x.id === assetId);
+  if (!e) return;
+  const today = mpToday();
+  const status = mpEquipmentStatus(e, today);
+  if (status.key === 'on-loan' || status.key === 'overdue') {
+    const g = mpActiveGroups().find(gr => gr.items.some(it => it.id === e.id));
+    if (g) return mpOpenLoanActionsForGroup(g);
+  }
+  if (status.key === 'booked') {
+    const g = mpActiveGroups().find(gr => gr.scheduled && gr.items.some(it => it.id === e.id));
+    if (g) return mpOpenLoanActionsForGroup(g);
+    const u = getUpcomingLoanForItem(e.id);
+    if (u) return mpOpenLoanActionsForGroup({ isUpcoming: true, id: u.id, loanTo: u.loanTo });
+  }
+  mpOpenSheet('<div class="mp-sheet-title">' + esc(e.CHSAssetNo) + ' · ' + esc(e.Model) + '</div>',
+    '<button class="mp-sheet-item" onclick="mpCloseSheet();setTimeout(()=>openDetail(\'' + e.id + '\'),350)">View details</button>');
+}
+
 // ── MORE (Phase E is otherwise deferred — this is just enough to reach
 // sign-out and the role admin, both of which already exist elsewhere) ──
 function mpRenderMore() {
@@ -10805,7 +10890,9 @@ function mpSetAMRole(i, role) {
 // — a mobile-styled menu over existing logic, not a second implementation.
 function mpOpenLoanActions(i) {
   const g = (window._mpLoanList || [])[i];
-  if (!g) return;
+  if (g) mpOpenLoanActionsForGroup(g);
+}
+function mpOpenLoanActionsForGroup(g) {
   let items;
   if (g.isUpcoming) {
     // Same function the in-app stuck-loan toast and the scheduled email
