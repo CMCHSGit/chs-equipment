@@ -1807,7 +1807,7 @@ html.mp-mode .mobile-menu{display:none!important}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 49;
+const APP_VERSION = 50;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1937,7 +1937,11 @@ async function checkAuth() {
   if (isMobilePWA()) {
     document.getElementById('login-wrap').style.display = 'none';
     document.getElementById('mobile-app').style.display = 'flex';
-    if (sessionStorage.getItem('chs_auth') === '1') {
+    // localStorage, not sessionStorage — a PWA launch from the home screen
+    // is a fresh top-level context each time (especially on iOS), so
+    // sessionStorage never survives a full close/reopen. The team password
+    // only needs to be entered once per device install, not once per open.
+    if (localStorage.getItem('chs_mobile_auth') === '1') {
       initOperator();
       mpResumeOrSignIn();
     } else {
@@ -5346,8 +5350,13 @@ function checkOverdueNotifications() {
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
   if (!params.toString()) return; // nothing to handle
-  // Clear URL params after handling so they don't fire again on refresh
-  window.history.replaceState({}, '', window.location.pathname);
+  // Clear URL params after handling so they don't fire again on refresh —
+  // but keep ?mobile=1 if it was there. isMobilePWA() falls back to that
+  // param for any Android install that isn't a true standalone-display
+  // WebAPK, so stripping it silently dropped the next refresh/sign-out
+  // reload back to the desktop site.
+  const keepMobile = params.get('mobile') === '1';
+  window.history.replaceState({}, '', window.location.pathname + (keepMobile ? '?mobile=1' : ''));
   // Handle direct tab link e.g. ?tab=loans
   const tabParam = params.get('tab');
   if (tabParam) { switchTab(tabParam); return; }
@@ -10408,7 +10417,7 @@ async function mpSignInStep() {
     // Step 1: team password — same gate as the desktop app (APP_PASSWORD)
     if (!APP_PASSWORD) await loadConfig();
     if (pwField.value !== APP_PASSWORD) { err.textContent = 'Incorrect password.'; err.style.display = 'block'; return; }
-    sessionStorage.setItem('chs_auth', '1');
+    try { localStorage.setItem('chs_mobile_auth', '1'); } catch (e) {}
     btn.disabled = true; btn.textContent = 'Loading…';
     await loadData();
     pwField.style.display = 'none';
@@ -10456,7 +10465,14 @@ function mpSetIdentity(name) {
 }
 
 function mpSignOut() {
-  doLogout(); // shared with desktop — clears chs_auth and reloads
+  // Mobile has its own persisted auth (chs_mobile_auth, in localStorage —
+  // see checkAuth()'s mobile branch), not the desktop's session-scoped
+  // chs_auth, so this clears its own state rather than calling doLogout().
+  // Also drops the remembered operator so sign-out actually returns to the
+  // name picker instead of silently resuming as the same person.
+  try { localStorage.removeItem('chs_mobile_auth'); } catch (e) {}
+  try { localStorage.removeItem('chs_operator'); } catch (e) {}
+  location.reload();
 }
 
 // ── NAV SHELL ───────────────────────────────────────────────────────────
