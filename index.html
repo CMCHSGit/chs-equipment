@@ -1833,7 +1833,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 56;
+const APP_VERSION = 57;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10852,7 +10852,7 @@ function mpRenderEquipment() {
     <div style="padding:16px 20px 12px">
       <div style="position:relative;display:flex;align-items:center">
         <span style="position:absolute;left:14px;color:var(--mp-text-muted);display:flex;pointer-events:none">${mpIcon('search',18)}</span>
-        <input class="mp-input" id="mp-eq-search" type="search" placeholder="Search ${equipment.length} assets" value="${esc(_mp.eqQuery)}" oninput="mpSetEquipmentQuery(this.value)" style="padding-left:40px">
+        <input class="mp-input" id="mp-eq-search" type="search" placeholder="Search ${equipment.length} assets" value="${mpFormVal(_mp.eqQuery)}" oninput="mpSetEquipmentQuery(this.value)" style="padding-left:40px">
       </div>
     </div>
     <div id="mp-eq-pills" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
@@ -10948,6 +10948,11 @@ function mpBookProgressHtml() {
     `<div style="flex:1;height:4px;border-radius:2px;background:${n<=step?'var(--mp-purple)':'var(--mp-black-10)'}"></div>`).join('')}</div>`;
 }
 function mpFieldLabel() { return 'display:block;font:600 12px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:6px'; }
+// Plain HTML-attribute escaping for editable form values. Unlike esc()'s
+// table-cell convention of rendering '' as '—', an empty field here must
+// stay truly empty — otherwise every input starts with a stray "—" the
+// user has to delete before they can type.
+function mpFormVal(v) { return String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function mpRenderBookStep1() {
   const b = _mp.book;
@@ -10957,21 +10962,21 @@ function mpRenderBookStep1() {
     ${mpBookProgressHtml()}
     <div style="padding:16px 20px 100px;display:flex;flex-direction:column;gap:14px">
       <div style="font:400 13px var(--mp-font-body);color:var(--mp-purple);background:var(--mp-purple-20);padding:10px 14px;border-radius:var(--mp-radius-md)">Fields marked * are required. Devices come next.</div>
-      <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${esc(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
-      <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${esc(b.location)}" oninput="_mp.book.location=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${mpFormVal(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${mpFormVal(b.location)}" oninput="_mp.book.location=this.value"></div>
       <div style="display:flex;gap:10px">
-        <div style="flex:1"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${esc(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
-        <div style="flex:1"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${esc(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
+        <div style="flex:1"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
+        <div style="flex:1"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
       </div>
       ${isAM
         ? `<div><label style="${mpFieldLabel()}">Account manager</label><div class="mp-input" style="display:flex;align-items:center;color:var(--mp-text-muted);background:var(--mp-black-05)">${esc(b.am)}</div></div>`
         : `<div><label style="${mpFieldLabel()}">Account manager *</label><select class="mp-input" onchange="mpBookSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>`}
-      <div><label style="${mpFieldLabel()}">Account manager email *</label><input class="mp-input" type="email" value="${esc(b.email)}" oninput="_mp.book.email=this.value"></div>
-      <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${esc(b.contact)}" oninput="_mp.book.contact=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Account manager email *</label><input class="mp-input" type="email" value="${mpFormVal(b.email)}" oninput="_mp.book.email=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${mpFormVal(b.contact)}" oninput="_mp.book.contact=this.value"></div>
       <div onclick="mpOpenJobTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Job type</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between">${esc(b.jobType)}<span style="color:var(--mp-black-40)">›</span></div></div>
       <div onclick="mpOpenDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(b.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>
-      <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.notes=this.value">${esc(b.notes)}</textarea></div>
-      <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.shipping=this.value">${esc(b.shipping)}</textarea></div>
+      <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.notes=this.value">${mpFormVal(b.notes)}</textarea></div>
+      <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.shipping=this.value">${mpFormVal(b.shipping)}</textarea></div>
     </div>
     <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0))">
       <button class="mp-btn mp-btn-primary" onclick="mpBookGoStep2()">Next: devices</button>
@@ -11015,7 +11020,28 @@ function mpBookIsFree(e, startDate, endDate) {
   if (existingStart && endDate && existingStart >= endDate) return true;
   return false;
 }
+// Shell (incl. the search <input>) is rendered ONCE; typing only
+// re-renders #mp-book-device-list below, so the input never gets
+// recreated mid-keystroke — recreating it on every oninput (the original
+// bug here) drops focus and garbles what's typed, same failure mode
+// avoided on the Equipment screen's search box.
 function mpRenderBookStep2() {
+  const b = _mp.book;
+  document.getElementById('mp-screen-book').innerHTML = `
+    ${mpBookProgressHtml()}
+    <div style="padding:16px 20px 10px">
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:10px">Devices to include. Availability shown for ${esc(b.startDate)} – ${esc(b.endDate)}.</div>
+      <input class="mp-input" id="mp-book-search" placeholder="Search assets" value="${mpFormVal(b.deviceQuery)}" oninput="_mp.book.deviceQuery=this.value;mpRenderBookDeviceList()">
+    </div>
+    <div id="mp-book-device-list"></div>
+    <div style="height:90px"></div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="_mp.book.step=1;mpRenderBook()">Back</button>
+      <button class="mp-btn mp-btn-primary" id="mp-book-confirm-btn" onclick="mpBookConfirm()"></button>
+    </div>`;
+  mpRenderBookDeviceList();
+}
+function mpRenderBookDeviceList() {
   const b = _mp.book;
   const q = (b.deviceQuery || '').trim().toLowerCase();
   const matches = equipment.filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q));
@@ -11033,25 +11059,17 @@ function mpRenderBookStep2() {
     <div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)} <span style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}</span></div>
     <div style="font:400 12px var(--mp-font-body);color:var(--mp-orange)">Held by ${esc(e.OnLoanTo)}${e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : ''}</div>
   </div>`;
-  document.getElementById('mp-screen-book').innerHTML = `
-    ${mpBookProgressHtml()}
-    <div style="padding:16px 20px 10px">
-      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:10px">Devices to include. Availability shown for ${esc(b.startDate)} – ${esc(b.endDate)}.</div>
-      <input class="mp-input" placeholder="Search assets" value="${esc(b.deviceQuery)}" oninput="_mp.book.deviceQuery=this.value;mpRenderBookStep2()">
-    </div>
+  document.getElementById('mp-book-device-list').innerHTML = `
     <div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
     <div>${free.length ? free.map(freeRow).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
-    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Booked over your dates</div><div>${busy.map(busyRow).join('')}</div>` : ''}
-    <div style="height:90px"></div>
-    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
-      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="_mp.book.step=1;mpRenderBook()">Back</button>
-      <button class="mp-btn mp-btn-primary" onclick="mpBookConfirm()">${b.selected.length} device${b.selected.length===1?'':'s'} selected · Confirm loan</button>
-    </div>`;
+    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Booked over your dates</div><div>${busy.map(busyRow).join('')}</div>` : ''}`;
+  const btn = document.getElementById('mp-book-confirm-btn');
+  if (btn) btn.textContent = b.selected.length + ' device' + (b.selected.length===1?'':'s') + ' selected · Confirm loan';
 }
 function mpBookToggleDevice(assetNo) {
   const i = _mp.book.selected.indexOf(assetNo);
   if (i >= 0) _mp.book.selected.splice(i, 1); else _mp.book.selected.push(assetNo);
-  mpRenderBookStep2();
+  mpRenderBookDeviceList();
 }
 
 async function mpBookConfirm() {
