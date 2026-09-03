@@ -648,6 +648,16 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 .mp-device-serial{font-family:var(--mp-font-mono);font-size:11px;color:var(--mp-text-muted)}
 .mp-empty{background:var(--mp-white);border-radius:var(--mp-radius-card);padding:24px;text-align:center;color:var(--mp-text-muted);font-size:14px}
 
+/* ── BLOCKING LOADER (mpShowBlockingLoader/mpHideBlockingLoader) ────
+   Above everything, incl. bottom sheets — used for async actions like
+   Book-a-demo's confirm step where leaving mid-write could half-apply
+   a booking. No tap-to-dismiss on the scrim, deliberately. */
+#mp-loading-overlay{position:fixed;inset:0;background:rgba(29,29,29,.55);z-index:2000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:0 32px}
+.mp-spinner{width:38px;height:38px;border-radius:50%;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;animation:mp-spin .8s linear infinite}
+@keyframes mp-spin{to{transform:rotate(360deg)}}
+#mp-loading-text{font:600 15px var(--mp-font-body);color:#fff}
+#mp-loading-subtext{font:400 13px/1.5 var(--mp-font-body);color:rgba(255,255,255,.8);max-width:260px}
+
 /* ── BOTTOM SHEET ────────────────────────────────────────────────── */
 #mp-sheet-scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);z-index:1500;display:none;align-items:flex-end}
 #mp-sheet-scrim.mp-open{display:flex}
@@ -1833,7 +1843,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 57;
+const APP_VERSION = 58;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10416,6 +10426,14 @@ function startAutoSync() {
     </div>
   </div>
 
+  <!-- BLOCKING LOADER — no scrim-tap-to-dismiss, no close button; only
+       mpHideBlockingLoader() (called when the action finishes) removes it. -->
+  <div id="mp-loading-overlay">
+    <div class="mp-spinner"></div>
+    <div id="mp-loading-text">Working…</div>
+    <div id="mp-loading-subtext">Please don't close the app or navigate away.</div>
+  </div>
+
 </div>
 
 <script>
@@ -10819,6 +10837,16 @@ function mpOpenSheet(titleHtml, bodyHtml) {
 }
 function mpCloseSheet() { document.getElementById('mp-sheet-scrim').classList.remove('mp-open'); }
 
+// Full-screen, non-dismissible loader for async writes where leaving
+// mid-flight could half-apply something (e.g. Book-a-demo's confirm step).
+// Always pair with mpHideBlockingLoader() in a finally block.
+function mpShowBlockingLoader(text, subtext) {
+  document.getElementById('mp-loading-text').textContent = text || 'Working…';
+  document.getElementById('mp-loading-subtext').textContent = subtext || "Please don't close the app or navigate away.";
+  document.getElementById('mp-loading-overlay').style.display = 'flex';
+}
+function mpHideBlockingLoader() { document.getElementById('mp-loading-overlay').style.display = 'none'; }
+
 function mpOpenScopeSheet() {
   const ams = [...new Set(mpActiveGroups().map(g => g.am).filter(Boolean))].sort();
   const rows = ['all', ...ams].map(am => {
@@ -11099,6 +11127,7 @@ async function mpBookConfirm() {
   // headless round trip so the desktop print-doc editor never flashes on
   // screen before closeLoanDoc() closes it again below.
   document.documentElement.classList.add('mp-suppress-loan-doc');
+  mpShowBlockingLoader('Confirming your booking…', "Please don't close the app or navigate away.");
   try {
     await submitBatchLoan();
     const feedback = document.getElementById('batch-feedback');
@@ -11115,6 +11144,7 @@ async function mpBookConfirm() {
     try { await closeLoanDoc(); } catch (e) { console.warn('closeLoanDoc after mobile booking failed:', e); }
   } finally {
     document.documentElement.classList.remove('mp-suppress-loan-doc');
+    mpHideBlockingLoader();
   }
   b._submitting = false;
   _mp.book.confirmed = { loanTo: b.loanTo, startDate: b.startDate, endDate: b.endDate, count: b.selected.length };
