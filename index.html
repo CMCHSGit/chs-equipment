@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 63;
+const APP_VERSION = 64;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10487,17 +10487,18 @@ let _mp = { screen: 'today', role: null, name: null, seg: 'active', scope: null,
 // client-side, and the VAPID key here is Firebase's own public "Web Push
 // certificate" key (not something we generate ourselves).
 const FIREBASE_CONFIG = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME',
-  projectId: 'REPLACE_ME',
-  storageBucket: 'REPLACE_ME',
-  messagingSenderId: 'REPLACE_ME',
-  appId: 'REPLACE_ME'
+  apiKey: 'AIzaSyB-A5wIEoqD9SBQPJnc6bs_qjHytZFDaBA',
+  authDomain: 'chs-equipment.firebaseapp.com',
+  databaseURL: 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app',
+  projectId: 'chs-equipment',
+  storageBucket: 'chs-equipment.firebasestorage.app',
+  messagingSenderId: '464938502823',
+  appId: '1:464938502823:web:b01ce1570e90efbd72e982'
 };
-const FCM_VAPID_KEY = 'REPLACE_ME';
+const FCM_VAPID_KEY = 'REPLACE_ME'; // Cloud Messaging tab → Web Push certificates — still needed
 
 function mpPushSupported() {
-  return 'Notification' in window && 'serviceWorker' in navigator && FIREBASE_CONFIG.apiKey !== 'REPLACE_ME';
+  return 'Notification' in window && 'serviceWorker' in navigator && FIREBASE_CONFIG.apiKey !== 'REPLACE_ME' && FCM_VAPID_KEY !== 'REPLACE_ME';
 }
 function mpPushEnabled() {
   const am = accountManagers.find(a => a.name === _mp.name);
