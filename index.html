@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 75;
+const APP_VERSION = 76;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10729,6 +10729,23 @@ function mpUpcomingForName(forName) {
     .sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
 }
 
+// Every "not yet active" booking, full shape (items/isUpcoming included) —
+// used by the Loans screen's Upcoming segment and Overview's Upcoming
+// tile/list. mpActiveGroups()'s own .scheduled flag only catches a
+// booking that's already had specific equipment reserved for it; a
+// booking still purely sitting in upcomingLoans with no equipment
+// assigned yet (the normal state for almost anything booked more than a
+// few days out) was previously invisible in both places. Deliberately
+// includes ones whose startDate has already passed (stuck) too, unlike
+// mpUpcomingForName() above, since this feeds a single combined
+// "everything not active yet" segment rather than a strictly-future list.
+function mpAllUpcoming(forAM) {
+  const groups = mpActiveGroups().filter(g => g.scheduled && (!forAM || g.am === forAM));
+  const bookings = upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.startDate && u.items && u.items.length && (!forAM || u.accountManager === forAM))
+    .map(u => ({ loanTo: u.loanTo, location: u.location||'', endDate: u.endDate||'', startDate: u.startDate||'', items: u.items, am: u.accountManager, isUpcoming: true, id: u.id }));
+  return [...groups, ...bookings];
+}
+
 // ── TODAY (AM home) ─────────────────────────────────────────────────────
 function mpRenderToday() {
   const name = _mp.name;
@@ -10787,8 +10804,14 @@ function mpRenderOverview() {
   const allGroups = mpActiveGroups();
   const groups = allGroups.filter(g => !g.scheduled);
   // Not-yet-started bookings, across every AM — service staff need to see
-  // and test these before they actually go out on loan.
-  const upcomingGroups = allGroups.filter(g => g.scheduled);
+  // and test these before they actually go out on loan. mpAllUpcoming()
+  // (not just allGroups' own .scheduled flag) so a booking still purely
+  // in upcomingLoans with no equipment reserved yet — the normal state
+  // for most things booked more than a few days out — isn't invisible
+  // here. Excludes anything already due/stuck (startDate <= today) since
+  // those are already covered by "Awaiting action" above; listing them
+  // again here too would just be the same booking twice.
+  const upcomingGroups = mpAllUpcoming(null).filter(g => !g.startDate || g.startDate > today);
   const outCount = groups.reduce((n,g) => n + g.items.length, 0);
   const overdueGroups = groups.filter(g => g.overdue);
   const dueTodayGroups = groups.filter(g => !g.overdue && g.endDate === today);
@@ -10870,11 +10893,7 @@ function mpRenderLoans() {
   const groups = mpActiveGroups().filter(g => _mp.scope === 'all' || g.am === _mp.scope);
   const active = groups.filter(g => !g.scheduled && !g.overdue);
   const overdue = groups.filter(g => !g.scheduled && g.overdue);
-  const upcoming = [
-    ...groups.filter(g => g.scheduled),
-    ...mpStuckLoans(null).filter(u => _mp.scope === 'all' || u.accountManager === _mp.scope)
-      .map(u => ({ loanTo: u.loanTo, location: u.location||'', endDate: u.endDate||'', startDate: u.startDate||'', items: u.items, am: u.accountManager, isUpcoming: true, id: u.id }))
-  ];
+  const upcoming = mpAllUpcoming(_mp.scope === 'all' ? null : _mp.scope);
   const seg = _mp.seg;
   const list = seg === 'active' ? active : seg === 'overdue' ? overdue : upcoming;
 
@@ -10899,7 +10918,7 @@ function mpRenderLoans() {
   if (window._mpPendingOpenLoanKey) {
     const key = window._mpPendingOpenLoanKey;
     window._mpPendingOpenLoanKey = null;
-    const idx = list.findIndex(g => !g.isUpcoming && _loanKey(g) === key);
+    const idx = list.findIndex(g => g.isUpcoming ? g.id === key : _loanKey(g) === key);
     if (idx >= 0) {
       setTimeout(() => {
         const openId = 'mp-lc-' + idx;
@@ -10919,14 +10938,22 @@ function mpSetSeg(seg) { _mp.seg = seg; mpRenderLoans(); }
 function mpJumpToLoan(g) {
   if (!g) return;
   if (g.am && _mp.role !== 'am') _mp.scope = g.am;
-  _mp.seg = g.scheduled ? 'upcoming' : (g.overdue ? 'overdue' : 'active');
-  window._mpPendingOpenLoanKey = _loanKey(g);
+  _mp.seg = (g.scheduled || g.isUpcoming) ? 'upcoming' : (g.overdue ? 'overdue' : 'active');
+  // isUpcoming rows come from upcomingLoans (mpAllUpcoming()), which have
+  // no equipment assigned yet — _loanKey() only matches equipment-derived
+  // groups, so these need their own stable id instead.
+  window._mpPendingOpenLoanKey = g.isUpcoming ? g.id : _loanKey(g);
   mpGoScreen('loans');
 }
 
 function mpLoanCardHtml(g, seg, i) {
-  const capColor = g.isUpcoming ? 'var(--mp-orange)' : seg === 'overdue' ? 'var(--mp-critical)' : seg === 'upcoming' ? 'var(--mp-purple)' : 'var(--mp-green)';
-  const statusPill = g.isUpcoming ? '<span class="mp-pill mp-pill-status-due">Starts today</span>'
+  // isUpcoming rows (from mpAllUpcoming()'s upcomingLoans half) can be
+  // genuinely still weeks out, not just due today — only the ones whose
+  // start date has actually arrived are "stuck"/due, so the pill needs to
+  // check the real date rather than assuming every isUpcoming row is due.
+  const isStuckNow = g.isUpcoming && g.startDate && g.startDate <= mpToday();
+  const capColor = isStuckNow ? 'var(--mp-orange)' : seg === 'overdue' ? 'var(--mp-critical)' : seg === 'upcoming' ? 'var(--mp-purple)' : 'var(--mp-green)';
+  const statusPill = isStuckNow ? '<span class="mp-pill mp-pill-status-due">Starts today</span>'
     : seg === 'overdue' ? '<span class="mp-pill mp-pill-status-overdue">Overdue</span>'
     : seg === 'upcoming' ? '<span class="mp-pill mp-pill-status-scheduled">Scheduled</span>'
     : '<span class="mp-pill mp-pill-status-active">Active</span>';
