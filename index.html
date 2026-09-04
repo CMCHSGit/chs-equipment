@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 68;
+const APP_VERSION = 69;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10732,7 +10732,7 @@ function mpRenderToday() {
   mine.filter(g => g.overdue).forEach(g => alerts.push({
     tag: 'Overdue', color: 'var(--mp-critical)', tint: 'var(--mp-critical-tint)',
     title: g.loanTo, sub: 'Due ' + formatDisplayDate(g.endDate),
-    onClick: () => { mpGoScreen('loans'); }
+    onClick: () => { _mp.seg = 'overdue'; mpGoScreen('loans'); }
   }));
   mine.filter(g => {
     const rKey = _readinessKey(g.batchId, g.loanTo, g.endDate);
@@ -10754,7 +10754,7 @@ function mpRenderToday() {
       <div class="mp-stat-tile"><div class="mp-stat-val${overdueCount?' mp-critical':''}">${overdueCount}</div><div class="mp-stat-label">Overdue</div></div>
       <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${bookedAhead}</div><div class="mp-stat-label">Booked ahead</div></div>
     </div>
-    ${alerts.length ? `<div class="mp-section-title">Needs you today</div>` + alerts.map((a,i) => `
+    ${alerts.length ? `<div class="mp-section-title">Action required</div>` + alerts.map((a,i) => `
       <div class="mp-alert-card" onclick="mpTodayAlert(${i})">
         <div class="mp-alert-bar" style="background:${a.color}"></div>
         <div class="mp-alert-body"><div class="mp-alert-title">${esc(a.title)}</div><div class="mp-alert-sub">${esc(a.sub)}</div></div>
