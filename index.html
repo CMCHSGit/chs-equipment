@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 73;
+const APP_VERSION = 74;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10753,11 +10753,11 @@ function mpRenderToday() {
 
   document.getElementById('mp-screen-today').innerHTML = `
     <div class="mp-greeting">Kia ora, ${esc(name.split(' ')[0])}</div>
-    <div class="mp-subline">${formatDisplayDate(today)} · your loans only</div>
+    <div class="mp-subline">${formatDisplayDate(today)}</div>
     <div class="mp-stat-grid mp-cols-3">
-      <div class="mp-stat-tile"><div class="mp-stat-val">${mine.length}</div><div class="mp-stat-label">Your loans out</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val">${mine.length}</div><div class="mp-stat-label">Active loans</div></div>
       <div class="mp-stat-tile"><div class="mp-stat-val${overdueCount?' mp-critical':''}">${overdueCount}</div><div class="mp-stat-label">Overdue</div></div>
-      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${bookedAhead}</div><div class="mp-stat-label">Booked ahead</div></div>
+      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${bookedAhead}</div><div class="mp-stat-label">Upcoming</div></div>
     </div>
     ${alerts.length ? `<div class="mp-section-title">Action required</div>` + alerts.map((a,i) => `
       <div class="mp-alert-card" onclick="mpTodayAlert(${i})">
