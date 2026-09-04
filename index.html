@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 74;
+const APP_VERSION = 75;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10755,9 +10755,9 @@ function mpRenderToday() {
     <div class="mp-greeting">Kia ora, ${esc(name.split(' ')[0])}</div>
     <div class="mp-subline">${formatDisplayDate(today)}</div>
     <div class="mp-stat-grid mp-cols-3">
-      <div class="mp-stat-tile"><div class="mp-stat-val">${mine.length}</div><div class="mp-stat-label">Active loans</div></div>
-      <div class="mp-stat-tile"><div class="mp-stat-val${overdueCount?' mp-critical':''}">${overdueCount}</div><div class="mp-stat-label">Overdue</div></div>
-      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${bookedAhead}</div><div class="mp-stat-label">Upcoming</div></div>
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('active')"><div class="mp-stat-val">${mine.length}</div><div class="mp-stat-label">Active loans</div></div>
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('overdue')"><div class="mp-stat-val${overdueCount?' mp-critical':''}">${overdueCount}</div><div class="mp-stat-label">Overdue</div></div>
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('upcoming')"><div class="mp-stat-val mp-brand">${bookedAhead}</div><div class="mp-stat-label">Upcoming</div></div>
     </div>
     ${alerts.length ? `<div class="mp-section-title">Action required</div>` + alerts.map((a,i) => `
       <div class="mp-alert-card" onclick="mpTodayAlert(${i})">
@@ -10784,7 +10784,11 @@ function mpTodayAlert(i) { const a = window._mpTodayAlerts && window._mpTodayAle
 function mpRenderOverview() {
   const today = mpToday();
   const totalAssets = equipment.filter(e => !isHiddenTestLoan(e)).length;
-  const groups = mpActiveGroups().filter(g => !g.scheduled);
+  const allGroups = mpActiveGroups();
+  const groups = allGroups.filter(g => !g.scheduled);
+  // Not-yet-started bookings, across every AM — service staff need to see
+  // and test these before they actually go out on loan.
+  const upcomingGroups = allGroups.filter(g => g.scheduled);
   const outCount = groups.reduce((n,g) => n + g.items.length, 0);
   const overdueGroups = groups.filter(g => g.overdue);
   const dueTodayGroups = groups.filter(g => !g.overdue && g.endDate === today);
@@ -10799,6 +10803,7 @@ function mpRenderOverview() {
   const byAM = {};
   groups.forEach(g => { const am = g.am || 'Unassigned'; if (!byAM[am]) byAM[am] = { n: 0, overdue: 0 }; byAM[am].n++; if (g.overdue) byAM[am].overdue++; });
   window._mpOverdueList = overdueGroups;
+  window._mpUpcomingList = upcomingGroups;
 
   document.getElementById('mp-screen-overview').innerHTML = `
     <div class="mp-greeting" style="font-size:20px">Fleet overview</div>
@@ -10817,10 +10822,11 @@ function mpRenderOverview() {
         <span><i style="background:var(--mp-black-10)"></i>Available</span>
       </div>
     </div>
-    <div class="mp-stat-grid mp-cols-3">
-      <div class="mp-stat-tile"><div class="mp-stat-val">${groups.length}</div><div class="mp-stat-label">Loans active</div></div>
-      <div class="mp-stat-tile"><div class="mp-stat-val${overdueGroups.length?' mp-critical':''}">${overdueGroups.length}</div><div class="mp-stat-label">Overdue (all AMs)</div></div>
-      <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${stuckCount}</div><div class="mp-stat-label">Transfers due today</div></div>
+    <div class="mp-stat-grid mp-cols-2">
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('active')"><div class="mp-stat-val">${groups.length}</div><div class="mp-stat-label">Loans active</div></div>
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('overdue')"><div class="mp-stat-val${overdueGroups.length?' mp-critical':''}">${overdueGroups.length}</div><div class="mp-stat-label">Overdue (all AMs)</div></div>
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('upcoming')"><div class="mp-stat-val mp-brand">${upcomingGroups.length}</div><div class="mp-stat-label">Upcoming loans</div></div>
+      <div class="mp-stat-tile" style="cursor:pointer" onclick="mpGoLoansSeg('upcoming')"><div class="mp-stat-val mp-brand">${stuckCount}</div><div class="mp-stat-label">Transfers due today</div></div>
     </div>
     ${stuck.length ? `<div class="mp-section-title">Awaiting action</div><div class="mp-card">` +
       stuck.map(u => `<div class="mp-am-row" onclick="openStuckLoanReassign('${esc(u.id)}')" style="display:block;cursor:pointer">
@@ -10831,6 +10837,11 @@ function mpRenderOverview() {
       overdueGroups.map((g, i) => `<div class="mp-am-row" onclick="mpJumpToLoan(window._mpOverdueList[${i}])" style="display:block;cursor:pointer">
         <div style="display:flex;justify-content:space-between"><strong style="font-size:14px">${esc(g.loanTo)}</strong><span class="mp-pill-red">${g.items.length} device${g.items.length!==1?'s':''}</span></div>
         <div style="font-size:12px;color:var(--mp-text-muted)">Due ${formatDisplayDate(g.endDate)} · ${esc(g.am||'—')}</div>
+      </div>`).join('') + `</div>` : ''}
+    ${upcomingGroups.length ? `<div class="mp-section-title">Upcoming — needs testing</div><div class="mp-card">` +
+      upcomingGroups.map((g, i) => `<div class="mp-am-row" onclick="mpJumpToLoan(window._mpUpcomingList[${i}])" style="display:block;cursor:pointer">
+        <div style="display:flex;justify-content:space-between"><strong style="font-size:14px">${esc(g.loanTo)}</strong><span class="mp-pill mp-mono" style="background:var(--mp-black-10);color:var(--mp-text-body)">${g.items.length} device${g.items.length!==1?'s':''}</span></div>
+        <div style="font-size:12px;color:var(--mp-text-muted)">Starts ${formatDisplayDate(g.startDate)} · ${esc(g.am||'—')}</div>
       </div>`).join('') + `</div>` : ''}
     <div class="mp-section-title">By account manager</div>
     <div class="mp-card">
@@ -10845,6 +10856,11 @@ function mpRenderOverview() {
   `;
 }
 function mpScopeToAM(am) { _mp.scope = am; mpGoScreen('loans'); }
+// Overview's stat tiles — each jumps to Loans pre-filtered to the segment
+// that number came from, scoped to every AM (mpRenderLoans() overrides
+// this back to self anyway if ever reached as an AM, so 'all' is safe
+// regardless of role).
+function mpGoLoansSeg(seg) { _mp.scope = 'all'; _mp.seg = seg; mpGoScreen('loans'); }
 
 // ── LOANS ───────────────────────────────────────────────────────────────
 function mpRenderLoans() {
@@ -10903,7 +10919,7 @@ function mpSetSeg(seg) { _mp.seg = seg; mpRenderLoans(); }
 function mpJumpToLoan(g) {
   if (!g) return;
   if (g.am && _mp.role !== 'am') _mp.scope = g.am;
-  _mp.seg = g.overdue ? 'overdue' : 'active';
+  _mp.seg = g.scheduled ? 'upcoming' : (g.overdue ? 'overdue' : 'active');
   window._mpPendingOpenLoanKey = _loanKey(g);
   mpGoScreen('loans');
 }
