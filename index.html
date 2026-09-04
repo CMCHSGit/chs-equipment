@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 70;
+const APP_VERSION = 71;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10806,7 +10806,8 @@ function mpRenderOverview() {
     const r = getLoanReadiness(_readinessKey(g.batchId, g.loanTo, g.endDate));
     return !r.tested && !r.noTestRequired;
   });
-  const stuckCount = mpStuckLoans(null).length;
+  const stuck = mpStuckLoans(null);
+  const stuckCount = stuck.length;
 
   const byAM = {};
   groups.forEach(g => { const am = g.am || 'Unassigned'; if (!byAM[am]) byAM[am] = { n: 0, overdue: 0 }; byAM[am].n++; if (g.overdue) byAM[am].overdue++; });
@@ -10834,6 +10835,11 @@ function mpRenderOverview() {
       <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${notTested.length}</div><div class="mp-stat-label">Awaiting sign-off</div></div>
       <div class="mp-stat-tile"><div class="mp-stat-val mp-brand">${stuckCount}</div><div class="mp-stat-label">Transfers due today</div></div>
     </div>
+    ${stuck.length ? `<div class="mp-section-title">Awaiting action</div><div class="mp-card">` +
+      stuck.map(u => `<div class="mp-am-row" onclick="openStuckLoanReassign('${esc(u.id)}')" style="display:block;cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><strong style="font-size:14px">${esc(u.loanTo)}</strong><span class="mp-pill-red">${u.items.length} device${u.items.length!==1?'s':''}</span></div>
+        <div style="font-size:12px;color:var(--mp-text-muted)">${esc(u.accountManager||'Unassigned')} · waiting since ${formatDisplayDate(u.startDate)}</div>
+      </div>`).join('') + `</div>` : ''}
     ${notTested.length ? `<div class="mp-section-title">Awaiting test &amp; sign-off</div><div class="mp-card">` +
       notTested.map(g => `<div class="mp-am-row" onclick="mpGoScreen('loans')" style="display:block">
         <div style="display:flex;justify-content:space-between"><strong style="font-size:14px">${esc(g.loanTo)}</strong></div>
