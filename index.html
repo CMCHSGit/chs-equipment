@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 69;
+const APP_VERSION = 70;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3834,7 +3834,10 @@ let _orphanRecoverIndex = 0;
 
 async function checkOrphanedLoans() {
   _orphanCandidates = await _findOrphanCandidates();
-  if (_orphanCandidates.length) {
+  // The toast below points at a desktop-only recovery flow ("Recover
+  // Loan" in the Active Loans tab) that doesn't exist on mobile, so it's
+  // not actionable there — detection still runs either way.
+  if (_orphanCandidates.length && !isMobilePWA()) {
     showToast('warn', _orphanCandidates.length + ' loan' + (_orphanCandidates.length > 1 ? 's' : '') + ' may not have saved correctly -- click "Recover Loan" in the Active Loans tab.');
   }
 }
@@ -6925,6 +6928,14 @@ function isServiceTeamMember(name) {
 }
 
 function checkStuckLoansForAM() {
+  // Mobile has its own, better-suited surfacing of this exact information
+  // — the "Action required" card on the Today screen (mpRenderToday()) —
+  // so skip the desktop toast there rather than showing both. isMobilePWA()
+  // is safe to call here even though it's defined later in the file, in
+  // the second <script> block: this only ever runs after loadData(),
+  // which always runs after checkAuth() has already called isMobilePWA()
+  // once, by which point that script block has long since executed.
+  if (isMobilePWA()) return;
   if (!currentOperator) return;
   const today = nzDate();
   const isServiceTeam = isServiceTeamMember(currentOperator);
@@ -6993,7 +7004,10 @@ function openStuckLoanReassign(upcomingId) {
 function checkMissingSimproJobs() {
   const missing = findLoansMissingSimproJob();
   renderSimproHealthBadge();
-  if (missing.length) {
+  // Points at Settings → Simpro Job Health, a desktop-only screen — not
+  // actionable on mobile, so skip the toast there (detection/badge still
+  // run either way, for whenever this is checked from desktop).
+  if (missing.length && !isMobilePWA()) {
     showToast('warn', missing.length + ' loan' + (missing.length > 1 ? 's have' : ' has') + ' no Simpro job — see Settings → Simpro Job Health.');
   }
 }
