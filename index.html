@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 76;
+const APP_VERSION = 77;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3009,9 +3009,9 @@ function renderTable() {
       <td style="white-space:nowrap;padding:6px 8px">${buildStatusCell(e, on, od)}</td>
       <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px;font-size:11px;color:var(--text2)" title="${esc(window._tileLocationCache?.[String(e.TileNo)]?.location||'')}">${e.TileNo && window._tileLocationCache?.[String(e.TileNo)] ? esc(window._tileLocationCache[String(e.TileNo)].location) : (e.TileNo ? '<span style="color:var(--text3)">—</span>' : '—')}</td>
       <td style="white-space:nowrap;padding:6px 8px;font-size:11px">${e.TileNo && window._tileLocationCache?.[String(e.TileNo)]?.alert ? '<span style="color:var(--amber);font-weight:500">⚠ ' + esc(window._tileLocationCache[String(e.TileNo)].alert) + '</span>' : '—'}</td>
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(dOnLoanTo)}">${esc(dOnLoanTo)}</td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px${!on&&dOnLoanTo?';font-style:italic;color:var(--text3)':''}" title="${!on&&dOnLoanTo?'Last loan — this item is available now: ':''}${esc(dOnLoanTo)}">${!on&&dOnLoanTo?'Last: ':''}${esc(dOnLoanTo)}</td>
       <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(dLocation)}">${esc(dLocation)}</td>
-      <td style="font-size:12px;white-space:nowrap;padding:6px 8px;color:${od?'var(--red)':'var(--text2)'}">${esc(dLoanEndDate)}</td>
+      <td style="font-size:12px;white-space:nowrap;padding:6px 8px;color:${od?'var(--red)':(!on&&dLoanEndDate?'var(--text3)':'var(--text2)')}${!on&&dLoanEndDate?';font-style:italic':''}">${esc(dLoanEndDate)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.TileNo)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.PartNo)}</td>
       <td style="white-space:nowrap;padding:6px 8px">${e.NZPrice?'$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}</td>
