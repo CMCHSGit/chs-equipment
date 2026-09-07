@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 77;
+const APP_VERSION = 78;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2991,11 +2991,19 @@ function renderTable() {
   document.getElementById('main-tbody').innerHTML = rows.length ? rows.map(e => {
     const hidden = isHiddenTestLoan(e);
     const on = !hidden && e.OnLoanTo && e.Returned !== 'Yes', od = on && e.LoanEndDate && e.LoanEndDate < today;
+    // An item already queued for an upcoming booking (buildStatusCell()
+    // shows this via the "Booked -> X" badge) shouldn't ALSO show old On
+    // Loan To/date info here -- that field is just this record's last
+    // actual touch, unrelated to the upcoming reservation, and showing
+    // both was confusing: status badge says "Booked -> Conference Magic"
+    // while this column separately said "Last: Conference Magic" for what
+    // was really a different, already-resolved use of the same item.
+    const hasUpcoming = !hidden && !on && !!getUpcomingLoanForItem(e.id);
     // Blank out loan-info columns for a hidden test loan so the row reads as
     // fully available, not just "not flagged on-loan" with stale-looking text.
-    const dOnLoanTo = hidden ? '' : e.OnLoanTo;
-    const dLocation = hidden ? '' : e.Location;
-    const dLoanEndDate = hidden ? '' : e.LoanEndDate;
+    const dOnLoanTo = (hidden || hasUpcoming) ? '' : e.OnLoanTo;
+    const dLocation = (hidden || hasUpcoming) ? '' : e.Location;
+    const dLoanEndDate = (hidden || hasUpcoming) ? '' : e.LoanEndDate;
     const checked = _selectedIds.has(e.id);
     return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}" onclick="openDetail('${e.id}')">
       <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
