@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 82;
+const APP_VERSION = 83;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11237,13 +11237,42 @@ function mpOpenJobTypeSheet() {
     opts.map(o => `<button class="mp-sheet-item" onclick="mpBookSetJobType('${o}')">${_mp.book.jobType===o?'✓ ':''}${o}</button>`).join(''));
 }
 function mpBookSetJobType(v) { _mp.book.jobType = v; mpCloseSheet(); mpRenderBookStep1(); }
+const MP_DEMO_TYPE_FIXED = ['Conference/Presentation', 'Clinical Trial', 'Hotswap'];
 function mpOpenDemoTypeSheet() {
-  const opts = ['Conference/Presentation', 'Clinical Trial', 'Hotswap'];
+  // A current value that isn't one of the fixed options is a previously
+  // entered custom ("Other") type — show it ticked instead of losing track
+  // of it, and let them tap it again to edit rather than re-typing from scratch.
+  const isCustom = _mp.book.demoType && !MP_DEMO_TYPE_FIXED.includes(_mp.book.demoType);
+  const opts = [...MP_DEMO_TYPE_FIXED, 'Other'];
   mpOpenSheet('<div class="mp-sheet-title">Demo type</div>',
-    opts.map((o, i) => `<button class="mp-sheet-item" onclick="mpBookSetDemoType(${i})">${_mp.book.demoType===o?'✓ ':''}${esc(o)}</button>`).join(''));
+    opts.map((o, i) => {
+      const checked = o === 'Other' ? isCustom : _mp.book.demoType === o;
+      const label = (o === 'Other' && isCustom) ? 'Other: ' + esc(_mp.book.demoType) : esc(o);
+      return `<button class="mp-sheet-item" onclick="mpBookSetDemoType(${i})">${checked?'✓ ':''}${label}</button>`;
+    }).join(''));
   window._mpDemoTypeOpts = opts;
 }
-function mpBookSetDemoType(i) { _mp.book.demoType = (window._mpDemoTypeOpts||[])[i] || ''; mpCloseSheet(); mpRenderBookStep1(); }
+function mpBookSetDemoType(i) {
+  const val = (window._mpDemoTypeOpts||[])[i];
+  if (val === 'Other') { mpOpenDemoTypeOtherSheet(); return; }
+  _mp.book.demoType = val || '';
+  mpCloseSheet();
+  mpRenderBookStep1();
+}
+function mpOpenDemoTypeOtherSheet() {
+  const isCustom = _mp.book.demoType && !MP_DEMO_TYPE_FIXED.includes(_mp.book.demoType);
+  mpOpenSheet('<div class="mp-sheet-title">Please specify</div>',
+    `<input class="mp-input" id="mp-demo-type-other" placeholder="Demo type" autocomplete="off" value="${mpFormVal(isCustom ? _mp.book.demoType : '')}" onkeydown="if(event.key==='Enter')mpBookSetDemoTypeOther()">
+     <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpBookSetDemoTypeOther()">Save</button>`);
+  setTimeout(() => { const el = document.getElementById('mp-demo-type-other'); if (el) el.focus(); }, 150);
+}
+function mpBookSetDemoTypeOther() {
+  const val = (document.getElementById('mp-demo-type-other').value || '').trim();
+  if (!val) { showToast('error', 'Please enter a demo type.'); return; }
+  _mp.book.demoType = val;
+  mpCloseSheet();
+  mpRenderBookStep1();
+}
 function mpBookGoStep2() {
   const b = _mp.book;
   if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || !b.demoType) {
@@ -11333,7 +11362,22 @@ async function mpBookConfirm() {
   setVal('b-email', b.email);
   setVal('b-contact-number', b.contact);
   setVal('b-job-type', b.jobType);
-  setVal('b-demo-type', b.demoType);
+  // b-demo-type's real <option> list is only the three fixed types — a
+  // custom ("Other") value wouldn't match any of them, and a plain
+  // el.value = ... assignment silently no-ops when nothing matches,
+  // leaving it blank and failing submitBatchLoan()'s required-field
+  // check. Inject a matching option first so the custom text actually
+  // takes, same as if it had been a real dropdown choice all along.
+  (function setDemoTypeVal(v) {
+    const el = document.getElementById('b-demo-type');
+    if (!el) return;
+    if (v && !Array.from(el.options).some(o => o.value === v)) {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      el.appendChild(opt);
+    }
+    el.value = v;
+  })(b.demoType);
   setVal('b-notes', b.notes);
   setVal('b-shipping-details', b.shipping);
   batchDevices = b.selected.map((v, i) => ({ id: 'mpbd_' + i, value: v }));
