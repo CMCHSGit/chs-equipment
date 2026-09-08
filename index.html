@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 78;
+const APP_VERSION = 79;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10211,6 +10211,21 @@ async function syncFromFirebase() {
       if (activePanel === 'panel-calendar') renderCalendar();
       // Scan/Loan tab: only refresh device status badges, never touch the form
       if (activePanel === 'panel-scan')     renderBatchDevices();
+    }
+
+    // Mobile has its own screen set (#mobile-app), not .panel — this whole
+    // block above always missed it, so a remote change (e.g. someone else
+    // returning a loan) silently updated the underlying equipment/history
+    // arrays but never re-rendered whatever mobile screen was on-screen,
+    // which just looked frozen/stuck showing the stale pre-change state.
+    if (typeof isMobilePWA === 'function' && isMobilePWA()) {
+      const sheetOpen = document.getElementById('mp-sheet-scrim')?.classList.contains('mp-open');
+      if (!sheetOpen) {
+        if (_mp.screen === 'today') mpRenderToday();
+        else if (_mp.screen === 'overview') mpRenderOverview();
+        else if (_mp.screen === 'loans') mpRenderLoans();
+        else if (_mp.screen === 'equipment') mpRenderEquipmentList();
+      }
     }
 
     setSync('ok', 'Synced ✓');
