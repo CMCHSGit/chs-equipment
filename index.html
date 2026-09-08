@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 85;
+const APP_VERSION = 86;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10502,6 +10502,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-scan"></div>
       <div class="mp-screen" id="mp-screen-additems"></div>
       <div class="mp-screen" id="mp-screen-returnitems"></div>
+      <div class="mp-screen" id="mp-screen-extend"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10757,9 +10758,10 @@ function mpGoScreen(screen) {
   else if (screen === 'scan')     { document.getElementById('mp-screen-scan').classList.add('mp-active'); mpRenderScan(); }
   else if (screen === 'additems') { document.getElementById('mp-screen-additems').classList.add('mp-active'); mpRenderAddItems(); }
   else if (screen === 'returnitems') { document.getElementById('mp-screen-returnitems').classList.add('mp-active'); mpRenderReturnItems(); }
+  else if (screen === 'extend') { document.getElementById('mp-screen-extend').classList.add('mp-active'); mpRenderExtend(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -11737,6 +11739,48 @@ async function mpConfirmReturnItems() {
   mpGoScreen('loans');
 }
 
+// ── EXTEND LOAN ──────────────────────────────────────────────────────────
+// Reuses currentExtendGroup/confirmExtendLoan() exactly — that function
+// reads its new date from the (hidden here) #extend-date input rather than
+// a JS variable, so the mobile date field's value is copied there right
+// before calling it, same technique as Book-a-demo's field population.
+function mpOpenExtendFlow(key) {
+  renderLoans();
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  const gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
+  if (gi < 0) { showToast('error', 'Could not find that loan.'); return; }
+  currentExtendGroup = window._loanGroups[gi];
+  mpGoScreen('extend');
+}
+function mpRenderExtend() {
+  const g = currentExtendGroup;
+  if (!g) { mpGoScreen('loans'); return; }
+  document.getElementById('mp-screen-extend').innerHTML = `
+    <div style="padding:16px 20px">
+      <div class="mp-h3" style="margin-bottom:4px">${esc(g.loanTo)}</div>
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:16px">${g.items.length} device${g.items.length!==1?'s':''} · Current due date: ${g.endDate ? formatDisplayDate(g.endDate) : 'none'}</div>
+      <label style="${mpFieldLabel()}">New due date *</label>
+      <input class="mp-input" type="date" id="mp-extend-date" value="${mpFormVal(g.endDate || nzDate())}">
+    </div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelExtend()">Cancel</button>
+      <button class="mp-btn mp-btn-primary" onclick="mpConfirmExtend()">Save new due date</button>
+    </div>`;
+}
+function mpCancelExtend() { currentExtendGroup = null; mpGoScreen('loans'); }
+async function mpConfirmExtend() {
+  const val = document.getElementById('mp-extend-date').value;
+  if (!val) { showToast('error', 'Select a new due date.'); return; }
+  const el = document.getElementById('extend-date');
+  if (el) el.value = val;
+  // confirmExtendLoan() is a straightforward save (no interactive modal of
+  // its own), so it's safe to block on here.
+  mpShowBlockingLoader('Saving new due date…', "Please don't close the app or navigate away.");
+  try { await confirmExtendLoan(); } finally { mpHideBlockingLoader(); }
+  mpGoScreen('loans');
+}
+
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
@@ -11915,8 +11959,8 @@ function mpOpenLoanActionsForGroup(g) {
       ? [[readiness.tested ? '✓ Tested — tap to un-mark' : 'Mark as tested', () => toggleReadiness(rKey, 'tested')]]
       : [];
     items = _mp.role === 'am'
-      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
-      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
+      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
+      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
   }
   window._mpSheetActions = items;
   mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
