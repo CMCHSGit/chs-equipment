@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 83;
+const APP_VERSION = 84;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10500,6 +10500,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-equipment"></div>
       <div class="mp-screen" id="mp-screen-book"></div>
       <div class="mp-screen" id="mp-screen-scan"></div>
+      <div class="mp-screen" id="mp-screen-additems"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10753,9 +10754,10 @@ function mpGoScreen(screen) {
   else if (screen === 'equipment') { document.getElementById('mp-screen-equipment').classList.add('mp-active'); mpRenderEquipment(); }
   else if (screen === 'book')     { document.getElementById('mp-screen-book').classList.add('mp-active'); mpResetBookWizard(); mpRenderBook(); }
   else if (screen === 'scan')     { document.getElementById('mp-screen-scan').classList.add('mp-active'); mpRenderScan(); }
+  else if (screen === 'additems') { document.getElementById('mp-screen-additems').classList.add('mp-active'); mpRenderAddItems(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -11316,7 +11318,13 @@ function mpRenderBookStep2() {
 function mpRenderBookDeviceList() {
   const b = _mp.book;
   const q = (b.deviceQuery || '').trim().toLowerCase();
-  const matches = equipment.filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q));
+  // Shopping-cart behaviour: selected devices always show in their own
+  // section at the top, regardless of the current search text, so picking
+  // stays visible while searching for the next thing — search results
+  // below exclude whatever's already selected instead of showing it twice.
+  const selectedSet = new Set(b.selected);
+  const selectedItems = b.selected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean);
+  const matches = equipment.filter(e => !selectedSet.has(e.CHSAssetNo) && (!q || Object.values(e).join(' ').toLowerCase().includes(q)));
   const free = matches.filter(e => mpBookIsFree(e, b.startDate, b.endDate));
   const busy = matches.filter(e => !mpBookIsFree(e, b.startDate, b.endDate));
   // Both free and busy devices are selectable — matches submitBatchLoan()'s
@@ -11325,7 +11333,7 @@ function mpRenderBookDeviceList() {
   // (submitBatchLoan() only ever skips one outright, with its own toast,
   // if it's genuinely locked to an overlapping Simpro job).
   const row = (e, busyNote) => {
-    const checked = b.selected.includes(e.CHSAssetNo);
+    const checked = selectedSet.has(e.CHSAssetNo);
     return `<div onclick="mpBookToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer${busyNote ? ';border-left:3px solid var(--mp-orange)' : ''}">
       <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
       <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div>
@@ -11334,7 +11342,8 @@ function mpRenderBookDeviceList() {
     </div>`;
   };
   document.getElementById('mp-book-device-list').innerHTML = `
-    <div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
+    ${selectedItems.length ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e)).join('')}</div>` : ''}
+    <div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
     <div>${free.length ? free.map(e => row(e)).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
     ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : '') + ' — picking this queues your loan to start once it comes back')).join('')}</div>` : ''}`;
   const btn = document.getElementById('mp-book-confirm-btn');
@@ -11556,6 +11565,99 @@ function mpCloseScan() {
   const startBtn = document.getElementById('mp-scan-start-btn');
   if (startBtn) startBtn.style.display = 'flex';
 }
+
+// ── ADD ITEMS TO AN EXISTING LOAN ────────────────────────────────────────
+// Same shopping-cart search/select pattern as Book-a-demo's device step,
+// but committed through the desktop basket flow (_basketItems/
+// _basketLoanKey/proceedFromBasket()) that "Add items" already uses —
+// not a parallel write path. proceedFromBasket() can open desktop's own
+// interactive conflict-resolution modal (same one it always has), so this
+// is deliberately NOT wrapped in the blocking loader Book-a-demo uses —
+// that would sit on top of and block that modal instead of letting the
+// person actually use it.
+function mpOpenAddItemsFlow(key) {
+  renderLoans(); // rebuild _loanGroupMap fresh — same defensive pattern used elsewhere before looking a key up in it
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  _mp.addItems = {
+    key, loanTo: g.loanTo, startDate: g.startDate, endDate: g.endDate,
+    existingAssetNos: new Set(g.items.map(i => i.CHSAssetNo)),
+    query: '', selected: []
+  };
+  mpGoScreen('additems');
+}
+function mpRenderAddItems() {
+  const st = _mp.addItems;
+  if (!st) { mpGoScreen('loans'); return; }
+  document.getElementById('mp-screen-additems').innerHTML = `
+    <div style="padding:16px 20px 10px">
+      <div class="mp-h3" style="margin-bottom:4px">${esc(st.loanTo)}</div>
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:12px">Search and select devices to add to this loan.</div>
+      <input class="mp-input" id="mp-additems-search" placeholder="Search assets" value="${mpFormVal(st.query)}" oninput="_mp.addItems.query=this.value;mpRenderAddItemsList()">
+    </div>
+    <div id="mp-additems-list"></div>
+    <div style="height:90px"></div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="_mp.addItems=null;mpGoScreen('loans')">Cancel</button>
+      <button class="mp-btn mp-btn-primary" id="mp-additems-confirm-btn" onclick="mpConfirmAddItems()"></button>
+    </div>`;
+  mpRenderAddItemsList();
+}
+function mpRenderAddItemsList() {
+  const st = _mp.addItems;
+  const q = (st.query || '').trim().toLowerCase();
+  const selectedSet = new Set(st.selected);
+  const selectedItems = st.selected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean);
+  const matches = equipment.filter(e => !st.existingAssetNos.has(e.CHSAssetNo) && !selectedSet.has(e.CHSAssetNo) && (!q || Object.values(e).join(' ').toLowerCase().includes(q)));
+  const free = matches.filter(e => mpBookIsFree(e, st.startDate, st.endDate));
+  const busy = matches.filter(e => !mpBookIsFree(e, st.startDate, st.endDate));
+  const row = (e, busyNote) => {
+    const checked = selectedSet.has(e.CHSAssetNo);
+    return `<div onclick="mpAddItemsToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer${busyNote ? ';border-left:3px solid var(--mp-orange)' : ''}">
+      <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div>
+      ${busyNote ? `<div style="font:400 12px var(--mp-font-body);color:var(--mp-orange);margin-top:2px">${busyNote}</div>` : ''}</div>
+      <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:15px">${checked?'✓':''}</div>
+    </div>`;
+  };
+  document.getElementById('mp-additems-list').innerHTML = `
+    ${selectedItems.length ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e)).join('')}</div>` : ''}
+    <div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
+    <div>${free.length ? free.map(e => row(e)).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
+    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : ''))).join('')}</div>` : ''}`;
+  const btn = document.getElementById('mp-additems-confirm-btn');
+  if (btn) btn.textContent = st.selected.length ? st.selected.length + ' device' + (st.selected.length===1?'':'s') + ' selected · Add to loan' : 'Select devices to add';
+}
+function mpAddItemsToggleDevice(assetNo) {
+  const i = _mp.addItems.selected.indexOf(assetNo);
+  if (i >= 0) _mp.addItems.selected.splice(i, 1); else _mp.addItems.selected.push(assetNo);
+  mpRenderAddItemsList();
+}
+function mpConfirmAddItems() {
+  const st = _mp.addItems;
+  if (!st || !st.selected.length) { showToast('error', 'Select at least one device to add.'); return; }
+  const g = getLoanGroupByKey(st.key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  // Same basket shape openAddItemsToLoanByKey()/the desktop database-tick
+  // flow already build: existing items locked, newly picked ones not.
+  // _basketUpcomingId cleared defensively — proceedFromBasket() checks it
+  // before _basketLoanKey, so any stale value from an earlier action would
+  // otherwise hijack this into the wrong branch.
+  _basketUpcomingId = null;
+  _basketLoanKey = st.key;
+  _basketItems = g.items.map(item => {
+    const eq = equipment.find(e => e.id === item.id || e.CHSAssetNo === item.CHSAssetNo) || item;
+    return { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: true };
+  });
+  st.selected.forEach(assetNo => {
+    const eq = equipment.find(e => e.CHSAssetNo === assetNo);
+    if (eq) _basketItems.push({ id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: false });
+  });
+  _mp.addItems = null;
+  proceedFromBasket();
+  mpGoScreen('loans');
+}
+
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
@@ -11734,8 +11836,8 @@ function mpOpenLoanActionsForGroup(g) {
       ? [[readiness.tested ? '✓ Tested — tap to un-mark' : 'Mark as tested', () => toggleReadiness(rKey, 'tested')]]
       : [];
     items = _mp.role === 'am'
-      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
-      : [ ...testItem, ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => openAddItemsToLoanByKey(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
+      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
+      : [ ...testItem, ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
   }
   window._mpSheetActions = items;
   mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
