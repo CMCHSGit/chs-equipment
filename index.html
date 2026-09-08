@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 79;
+const APP_VERSION = 80;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2544,6 +2544,21 @@ function scheduleSave() {
       showToast('error', 'Save failed: ' + e.message);
     }
   }, 800);
+}
+
+// Nudges every other open session's SSE/poll auto-sync (syncFromFirebase())
+// into actually running, for a write that goes to its own Firebase path
+// instead of through saveBin() (which already bumps _v as part of its
+// normal /data.json write). Without this, a save like loanMeta or an
+// upcomingLoans-only edit is invisible to every other open session,
+// desktop or mobile, until they happen to reload — the version marker
+// never changed, so there was nothing for their poll/SSE to notice.
+async function bumpRemoteVersion() {
+  const newV = Date.now().toString();
+  try {
+    await fetch(FB_URL + '/data/_v.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newV) });
+    _dataVersion = newV; // this session already has the change — avoid it redundantly re-syncing itself
+  } catch(e) { /* best-effort — a missed live-sync nudge isn't worth surfacing an error for */ }
 }
 
 // ── LOADING / SYNC ─────────────────────────────────────────────────────
@@ -7648,6 +7663,12 @@ async function saveLoanMeta() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(_safeMeta)
     });
+    // This path never touches /data.json, so it never bumped _v — the one
+    // thing the SSE/poll auto-sync in syncFromFirebase() actually watches.
+    // A "Mark as tested" toggle (the main caller of this) was therefore
+    // completely invisible to every other open session, not just mobile,
+    // until they happened to reload.
+    await bumpRemoteVersion();
   } catch(e) {
     console.warn('saveLoanMeta failed:', e);
   }
@@ -9491,6 +9512,7 @@ async function saveUpcomingLoans() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(obj)
     }, 8000);
+    await bumpRemoteVersion(); // see bumpRemoteVersion() — this path bypasses saveBin() too
   } catch(e) { console.warn('Could not save upcoming loans', e); }
 }
 
@@ -9499,6 +9521,7 @@ async function deleteUpcomingLoan(id) {
   upcomingLoans = upcomingLoans.filter(u => u.id !== id);
   try {
     await fetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
+    await bumpRemoteVersion();
   } catch(e) { console.warn('Could not delete upcoming loan', e); }
 }
 
@@ -10193,8 +10216,13 @@ async function syncFromFirebase() {
     historyLog = mergedHistory;
     _dataVersion = fresh._v || null;
 
-    // Also reload upcoming loans so real-time changes from other users appear
+    // Also reload upcoming loans and loan-readiness state so real-time
+    // changes from other users appear — loadLoanMeta() hits /loanMeta.json
+    // directly (the authoritative, most-current source, since saveLoanMeta()
+    // writes there instead of through saveBin()), not just whatever loanMeta
+    // snapshot happened to be embedded in this /data.json read.
     await loadUpcomingLoans();
+    await loadLoanMeta();
 
     // Only re-render the panel that is currently visible — avoids disrupting
     // the user if they are filling out a loan form or have a modal open.
