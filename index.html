@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 90;
+const APP_VERSION = 91;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10863,7 +10863,7 @@ function mpRenderToday() {
         <div class="mp-alert-body"><div class="mp-alert-title">${esc(a.title)}</div><div class="mp-alert-sub">${esc(a.sub)}</div></div>
         <div class="mp-alert-tag" style="color:${a.color}">${esc(a.tag)}</div>
       </div>`).join('') : ''}
-    <div class="mp-section-title">Your week</div>
+    <div class="mp-section-title">Coming up</div>
     <div class="mp-card">
       ${week.length ? week.map(w => `
         <div class="mp-week-row">
