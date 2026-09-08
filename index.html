@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 86;
+const APP_VERSION = 87;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10503,6 +10503,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-additems"></div>
       <div class="mp-screen" id="mp-screen-returnitems"></div>
       <div class="mp-screen" id="mp-screen-extend"></div>
+      <div class="mp-screen" id="mp-screen-reassign"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10759,9 +10760,10 @@ function mpGoScreen(screen) {
   else if (screen === 'additems') { document.getElementById('mp-screen-additems').classList.add('mp-active'); mpRenderAddItems(); }
   else if (screen === 'returnitems') { document.getElementById('mp-screen-returnitems').classList.add('mp-active'); mpRenderReturnItems(); }
   else if (screen === 'extend') { document.getElementById('mp-screen-extend').classList.add('mp-active'); mpRenderExtend(); }
+  else if (screen === 'reassign') { document.getElementById('mp-screen-reassign').classList.add('mp-active'); mpRenderReassign(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.scheduled ? 'Edit loan' : 'Reassign items') : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -11168,10 +11170,13 @@ function mpOpenEquipmentActions(assetId) {
 function mpResetBookWizard() {
   const isAM = _mp.role === 'am';
   const self = isAM ? accountManagers.find(a => a.name === _mp.name) : null;
-  // Scan's "Check out" hands off a single asset number here rather than
-  // going through mpGoScreen('book')'s normal empty start — consumed once.
-  const preSelected = window._mpPendingBookAsset ? [window._mpPendingBookAsset] : [];
+  // Scan's "Check out" hands off a single asset number here, and Reassign's
+  // "Create new loan with these items" hands off the whole moved set, rather
+  // than going through mpGoScreen('book')'s normal empty start — both
+  // consumed once.
+  const preSelected = window._mpPendingBookAssets || (window._mpPendingBookAsset ? [window._mpPendingBookAsset] : []);
   window._mpPendingBookAsset = null;
+  window._mpPendingBookAssets = null;
   _mp.book = {
     step: 1,
     loanTo: '', location: '',
@@ -11781,6 +11786,271 @@ async function mpConfirmExtend() {
   mpGoScreen('loans');
 }
 
+// ── REASSIGN / TRANSFER ───────────────────────────────────────────────────
+// Two very different desktop modes hide behind the one openReassignAMByKey():
+// a Scheduled loan opens a plain "Edit Loan" form, an Active loan opens a
+// per-item "move to a different loan" view. confirmReassignAM() reads every
+// field straight off the (hidden here) #reassign-* DOM nodes rather than JS
+// state, so mpConfirmReassign() writes this screen's edited values into
+// those real nodes right before calling it — same technique as Extend's
+// #extend-date, just with a longer field list. Neither desktop mode opens
+// any interactive sub-modal of its own, so it's safe to wrap in the
+// blocking loader.
+function mpOpenReassignFlow(key) {
+  renderLoans(); // rebuild _loanGroupMap fresh — same requirement as the other loan-action flows
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  _reassignLoanKey = key;
+  _reassignUpcomingId = null;
+  _reassignScheduled = !!g.scheduled;
+  const batchId = g.items[0]?.BatchID || null;
+  _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
+  if (g.scheduled) {
+    const curAMName = getGroupAM(g);
+    const curAM = accountManagers.find(a => a.name === curAMName);
+    _mp.reassign = {
+      key, scheduled: true, g,
+      loanTo: g.loanTo || '', location: g.location || '',
+      startDate: g.startDate || '', endDate: g.endDate || '',
+      am: curAMName || '', email: curAM?.email || g.items[0]?.BorrowerEmail || '',
+      contact: '', notes: '', shipping: '', demoType: ''
+    };
+    mpGoScreen('reassign');
+    // Contact/notes/shipping/demoType live in the loan doc, not on equipment —
+    // fetched after the screen is already showing, same lag as desktop.
+    fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.ok ? r.json() : null).then(d => {
+      if (d && _mp.reassign) {
+        _mp.reassign.contact  = d.contactNumber || '';
+        _mp.reassign.notes    = d.notesCell || d.notes || '';
+        _mp.reassign.shipping = d.authCell || '';
+        _mp.reassign.demoType = d.demoType || '';
+        mpRenderReassignForm();
+      }
+    }).catch(()=>{});
+  } else {
+    _mp.reassign = { key, scheduled: false, g, selected: new Set(g.items.map(i => i.CHSAssetNo)), target: '' };
+    mpGoScreen('reassign');
+  }
+}
+function mpRenderReassign() {
+  const st = _mp.reassign;
+  if (!st) { mpGoScreen('loans'); return; }
+  return st.scheduled ? mpRenderReassignForm() : mpRenderReassignMove();
+}
+function mpCancelReassign() {
+  _reassignLoanKey = null; _reassignUpcomingId = null; _reassignPdfKey = null; _reassignScheduled = false;
+  _mp.reassign = null;
+  mpGoScreen('loans');
+}
+
+// ── Scheduled loan → edit form ──
+function mpRenderReassignForm() {
+  const st = _mp.reassign;
+  const amOptions = accountManagers.map(a => `<option value="${esc(a.name)}"${st.am===a.name?' selected':''}>${esc(a.name)}</option>`).join('');
+  document.getElementById('mp-screen-reassign').innerHTML = `
+    <div style="padding:16px 20px 100px;display:flex;flex-direction:column;gap:14px">
+      <div class="mp-h3" style="margin-bottom:-6px">${esc(st.g.loanTo)}</div>
+      <div><label style="${mpFieldLabel()}">Event / customer name</label><input class="mp-input" value="${mpFormVal(st.loanTo)}" oninput="_mp.reassign.loanTo=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Location</label><input class="mp-input" value="${mpFormVal(st.location)}" oninput="_mp.reassign.location=this.value"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">Start date</label><input class="mp-input" type="date" value="${mpFormVal(st.startDate)}" onchange="_mp.reassign.startDate=this.value"></div>
+        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">End date</label><input class="mp-input" type="date" value="${mpFormVal(st.endDate)}" onchange="_mp.reassign.endDate=this.value"></div>
+      </div>
+      <div><label style="${mpFieldLabel()}">Account manager</label><select class="mp-input" onchange="mpReassignSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>
+      <div><label style="${mpFieldLabel()}">Account manager email</label><input class="mp-input" type="email" value="${mpFormVal(st.email)}" oninput="_mp.reassign.email=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${mpFormVal(st.contact)}" oninput="_mp.reassign.contact=this.value"></div>
+      <div onclick="mpOpenReassignDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${st.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(st.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>
+      <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.reassign.notes=this.value">${mpFormVal(st.notes)}</textarea></div>
+      <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.reassign.shipping=this.value">${mpFormVal(st.shipping)}</textarea></div>
+    </div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelReassign()">Cancel</button>
+      <button class="mp-btn mp-btn-primary" onclick="mpConfirmReassign()">Save changes</button>
+    </div>`;
+}
+function mpReassignSetAM(name) {
+  _mp.reassign.am = name;
+  const am = accountManagers.find(a => a.name === name);
+  if (am) _mp.reassign.email = am.email || '';
+  mpRenderReassignForm();
+}
+const MP_REASSIGN_DEMO_TYPE_FIXED = MP_DEMO_TYPE_FIXED;
+function mpOpenReassignDemoTypeSheet() {
+  const isCustom = _mp.reassign.demoType && !MP_REASSIGN_DEMO_TYPE_FIXED.includes(_mp.reassign.demoType);
+  const opts = [...MP_REASSIGN_DEMO_TYPE_FIXED, 'Other'];
+  mpOpenSheet('<div class="mp-sheet-title">Demo type</div>',
+    opts.map((o, i) => {
+      const checked = o === 'Other' ? isCustom : _mp.reassign.demoType === o;
+      const label = (o === 'Other' && isCustom) ? 'Other: ' + esc(_mp.reassign.demoType) : esc(o);
+      return `<button class="mp-sheet-item" onclick="mpReassignSetDemoType(${i})">${checked?'✓ ':''}${label}</button>`;
+    }).join(''));
+  window._mpReassignDemoTypeOpts = opts;
+}
+function mpReassignSetDemoType(i) {
+  const val = (window._mpReassignDemoTypeOpts||[])[i];
+  if (val === 'Other') { mpOpenReassignDemoTypeOtherSheet(); return; }
+  _mp.reassign.demoType = val || '';
+  mpCloseSheet();
+  mpRenderReassignForm();
+}
+function mpOpenReassignDemoTypeOtherSheet() {
+  const isCustom = _mp.reassign.demoType && !MP_REASSIGN_DEMO_TYPE_FIXED.includes(_mp.reassign.demoType);
+  mpOpenSheet('<div class="mp-sheet-title">Please specify</div>',
+    `<input class="mp-input" id="mp-reassign-demo-type-other" placeholder="Demo type" autocomplete="off" value="${mpFormVal(isCustom ? _mp.reassign.demoType : '')}" onkeydown="if(event.key==='Enter')mpReassignSetDemoTypeOther()">
+     <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpReassignSetDemoTypeOther()">Save</button>`);
+  setTimeout(() => { const el = document.getElementById('mp-reassign-demo-type-other'); if (el) el.focus(); }, 150);
+}
+function mpReassignSetDemoTypeOther() {
+  const val = (document.getElementById('mp-reassign-demo-type-other').value || '').trim();
+  if (!val) { showToast('error', 'Please enter a demo type.'); return; }
+  _mp.reassign.demoType = val;
+  mpCloseSheet();
+  mpRenderReassignForm();
+}
+
+// ── Active loan → move items to another loan ──
+function mpRenderReassignMove() {
+  const st = _mp.reassign;
+  const g = st.g;
+  document.getElementById('mp-screen-reassign').innerHTML = `
+    <div style="padding:16px 20px 10px">
+      <div class="mp-h3" style="margin-bottom:4px">${esc(g.loanTo)}</div>
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:8px">${esc(g.location||'')}${g.endDate ? ' · Due ' + formatDisplayDate(g.endDate) : ''}</div>
+      <div style="font:400 13px/1.4 var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:14px">Tick the items to move, then choose where they should go.</div>
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <button class="mp-btn mp-btn-secondary" style="min-height:40px" onclick="mpReassignSelectAll(true)">Select all</button>
+        <button class="mp-btn mp-btn-ghost" style="min-height:40px" onclick="mpReassignSelectAll(false)">Deselect all</button>
+      </div>
+    </div>
+    <div id="mp-reassign-list"></div>
+    <div style="padding:18px 20px 4px">
+      <label style="${mpFieldLabel()}">Move to</label>
+      <select class="mp-input" id="mp-reassign-target" onchange="_mp.reassign.target=this.value">${mpReassignTargetOptions()}</select>
+      <button class="mp-btn mp-btn-ghost" style="margin-top:10px" onclick="mpReassignCreateNewLoan()">+ Create new loan with these items</button>
+    </div>
+    <div style="height:90px"></div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelReassign()">Cancel</button>
+      <button class="mp-btn mp-btn-primary" id="mp-reassign-confirm-btn" onclick="mpConfirmReassign()"></button>
+    </div>`;
+  mpRenderReassignList();
+}
+function mpReassignTargetOptions() {
+  const st = _mp.reassign;
+  const opts = ['<option value="">— Select loan —</option>'];
+  (window._loanGroups || []).forEach(og => {
+    const ogKey = _loanKey(og);
+    if (ogKey === st.key) return;
+    opts.push('<option value="active:' + esc(ogKey) + '"' + (st.target === 'active:' + ogKey ? ' selected' : '') + '>Active: ' + esc(og.loanTo) + ' (' + (og.endDate ? formatDisplayDate(og.endDate) : 'no end date') + ')</option>');
+  });
+  upcomingLoans.forEach(u => {
+    opts.push('<option value="upcoming:' + esc(u.id) + '"' + (st.target === 'upcoming:' + u.id ? ' selected' : '') + '>Upcoming: ' + esc(u.loanTo) + ' (' + (u.startDate ? formatDisplayDate(u.startDate) : '?') + ')</option>');
+  });
+  return opts.join('');
+}
+function mpRenderReassignList() {
+  const st = _mp.reassign;
+  document.getElementById('mp-reassign-list').innerHTML = st.g.items.map(e => {
+    const checked = st.selected.has(e.CHSAssetNo);
+    return `<div onclick="mpReassignToggleItem('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
+      <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.SerialNo ? ' · ' + esc(e.SerialNo) : ''}</div></div>
+      <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:15px">${checked?'✓':''}</div>
+    </div>`;
+  }).join('');
+  const btn = document.getElementById('mp-reassign-confirm-btn');
+  if (btn) btn.textContent = st.selected.size ? 'Move ' + st.selected.size + ' item' + (st.selected.size===1?'':'s') + ' to loan' : 'Select items to move';
+}
+function mpReassignToggleItem(assetNo) {
+  const st = _mp.reassign;
+  if (st.selected.has(assetNo)) st.selected.delete(assetNo); else st.selected.add(assetNo);
+  mpRenderReassignList();
+}
+function mpReassignSelectAll(val) {
+  const st = _mp.reassign;
+  if (val) st.g.items.forEach(e => st.selected.add(e.CHSAssetNo));
+  else st.selected.clear();
+  mpRenderReassignList();
+}
+// "Create new loan with these items" — mirrors desktop's reassignCreateNewLoan()
+// (stash the source loan's info for doLoan() to reconcile once the new loan is
+// confirmed), but instead of dropping into the desktop basket UI, hands the
+// moved asset numbers to the mobile Book-a-demo wizard via the same
+// window._mpPendingBookAssets hook Scan's single-item checkout already uses —
+// so the new loan's own details are entered fresh, with devices pre-picked.
+function mpReassignCreateNewLoan() {
+  const st = _mp.reassign;
+  if (!st || st.scheduled) return;
+  if (!st.selected.size) { showToast('error', 'Select at least one item to move.'); return; }
+  const g = st.g;
+  const movedItems = g.items.filter(i => st.selected.has(i.CHSAssetNo));
+  const srcPdfKey = _reassignPdfKey;
+  const srcLoanKey = _reassignLoanKey;
+  mpShowBlockingLoader('Preparing new loan…', "Please don't close the app or navigate away.");
+  (async () => {
+    try {
+      const srcJobId = srcPdfKey ? await _getJobId(srcPdfKey) : null;
+      const srcDoc = srcPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(srcPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
+      window._reassignPendingSource = {
+        loanKey: srcLoanKey, pdfKey: srcPdfKey, loanTo: g.loanTo, jobId: srcJobId,
+        movedNos: new Set(movedItems.map(i => i.CHSAssetNo)),
+        remainingItems: g.items.filter(i => !st.selected.has(i.CHSAssetNo)),
+        loanData: { loanTo: g.loanTo, location: g.location||'', startDate: g.startDate||'', endDate: g.endDate||'', accountManager: getGroupAM(g), notes: srcDoc?.notesCell||'', shippingDetails: srcDoc?.authCell||'', contactNumber: srcDoc?.contactNumber||'', jobType: srcDoc?.jobType||'Demo' },
+        savedRows: srcDoc?.savedRows || null
+      };
+      _reassignLoanKey = null; _reassignScheduled = false; _reassignPdfKey = null; _reassignUpcomingId = null;
+      _mp.reassign = null;
+      window._mpPendingBookAssets = movedItems.map(i => i.CHSAssetNo);
+      mpGoScreen('book');
+      showToast('info', movedItems.length + ' item' + (movedItems.length!==1?'s':'') + ' carried over — fill in the new loan details.');
+    } finally { mpHideBlockingLoader(); }
+  })();
+}
+// ── Shared confirm — writes the edited values into the real (hidden here)
+// #reassign-* nodes confirmReassignAM() reads, then calls it directly.
+async function mpConfirmReassign() {
+  const st = _mp.reassign;
+  if (!st) return;
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  if (st.scheduled) {
+    setVal('reassign-loan-to', st.loanTo);
+    setVal('reassign-location', st.location);
+    setVal('reassign-start-date', st.startDate);
+    setVal('reassign-end-date', st.endDate);
+    const amSel = document.getElementById('reassign-am-select');
+    if (amSel) {
+      amSel.innerHTML = '<option value="">Select account manager...</option>' + accountManagers.map(a => `<option value="${esc(a.name)}"${a.name===st.am?' selected':''}>${esc(a.name)}</option>`).join('');
+      amSel.value = st.am;
+    }
+    setVal('reassign-am-email', st.email);
+    setVal('reassign-contact', st.contact);
+    setVal('reassign-notes', st.notes);
+    setVal('reassign-shipping', st.shipping);
+    // Demo type's real <option> list is only the three fixed types — inject a
+    // matching option first if this is a custom value, same trick mpBookConfirm() uses.
+    (function setDemoTypeVal(v) {
+      const el = document.getElementById('reassign-demo-type');
+      if (!el) return;
+      if (v && !Array.from(el.options).some(o => o.value === v)) {
+        const opt = document.createElement('option'); opt.value = v; opt.textContent = v; el.appendChild(opt);
+      }
+      el.value = v;
+    })(st.demoType);
+  } else {
+    if (!st.selected.size) { showToast('error', 'Select at least one item to move.'); return; }
+    if (!st.target) { showToast('error', 'Select a target loan.'); return; }
+    document.getElementById('reassign-items-list').innerHTML = st.g.items.map(item =>
+      `<input type="checkbox" ${st.selected.has(item.CHSAssetNo)?'checked':''} data-assetno="${esc(item.CHSAssetNo)}" style="display:none">`
+    ).join('');
+    const tgtSel = document.getElementById('reassign-target-loan');
+    if (tgtSel) tgtSel.innerHTML = '<option value="' + esc(st.target) + '" selected></option>';
+  }
+  mpShowBlockingLoader(st.scheduled ? 'Saving changes…' : 'Moving items…', "Please don't close the app or navigate away.");
+  try { await confirmReassignAM(); } finally { mpHideBlockingLoader(); }
+  _mp.reassign = null;
+  mpGoScreen('loans');
+}
+
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
@@ -11959,8 +12229,8 @@ function mpOpenLoanActionsForGroup(g) {
       ? [[readiness.tested ? '✓ Tested — tap to un-mark' : 'Mark as tested', () => toggleReadiness(rKey, 'tested')]]
       : [];
     items = _mp.role === 'am'
-      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
-      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
+      ? [ ['Transfer / reassign', () => mpOpenReassignFlow(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
+      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => mpOpenReassignFlow(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
   }
   window._mpSheetActions = items;
   mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
