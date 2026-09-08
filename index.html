@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 84;
+const APP_VERSION = 85;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10501,6 +10501,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-book"></div>
       <div class="mp-screen" id="mp-screen-scan"></div>
       <div class="mp-screen" id="mp-screen-additems"></div>
+      <div class="mp-screen" id="mp-screen-returnitems"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10755,9 +10756,10 @@ function mpGoScreen(screen) {
   else if (screen === 'book')     { document.getElementById('mp-screen-book').classList.add('mp-active'); mpResetBookWizard(); mpRenderBook(); }
   else if (screen === 'scan')     { document.getElementById('mp-screen-scan').classList.add('mp-active'); mpRenderScan(); }
   else if (screen === 'additems') { document.getElementById('mp-screen-additems').classList.add('mp-active'); mpRenderAddItems(); }
+  else if (screen === 'returnitems') { document.getElementById('mp-screen-returnitems').classList.add('mp-active'); mpRenderReturnItems(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -11658,6 +11660,83 @@ function mpConfirmAddItems() {
   mpGoScreen('loans');
 }
 
+// ── RETURN ITEMS ─────────────────────────────────────────────────────────
+// A mobile-native checklist over the exact same currentBatchGroup/
+// batchReturnChecked state and confirmBatchReturn() write logic the
+// desktop batch-return modal uses — not a parallel implementation, just
+// never opening that modal (its cramped 4-button row is what was
+// clipping "Confirm" in your screenshot).
+function mpOpenReturnItemsFlow(key) {
+  renderLoans(); // rebuild _loanGroupMap fresh — same requirement as mpOpenAddItemsFlow()
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  currentBatchGroup = g;
+  batchReturnChecked = {};
+  g.items.forEach(e => { batchReturnChecked[e.id] = false; }); // same default as desktop: nothing pre-ticked
+  mpGoScreen('returnitems');
+}
+function mpRenderReturnItems() {
+  const g = currentBatchGroup;
+  if (!g) { mpGoScreen('loans'); return; }
+  document.getElementById('mp-screen-returnitems').innerHTML = `
+    <div style="padding:16px 20px 10px">
+      <div class="mp-h3" style="margin-bottom:4px">${esc(g.loanTo)}</div>
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:8px">${esc(g.location||'')}${g.endDate ? ' · Due ' + formatDisplayDate(g.endDate) : ''}</div>
+      <div style="font:400 13px/1.4 var(--mp-font-body);color:var(--mp-orange);margin-bottom:14px">Tick the items that have been returned. Unticked items remain on loan.</div>
+      <div style="display:flex;gap:10px">
+        <button class="mp-btn mp-btn-secondary" style="min-height:40px" onclick="mpReturnItemsSelectAll(true)">Select all</button>
+        <button class="mp-btn mp-btn-ghost" style="min-height:40px" onclick="mpReturnItemsSelectAll(false)">Deselect all</button>
+      </div>
+    </div>
+    <div id="mp-returnitems-list"></div>
+    <div style="height:90px"></div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelReturnItems()">Cancel</button>
+      <button class="mp-btn mp-btn-primary" id="mp-returnitems-confirm-btn" onclick="mpConfirmReturnItems()"></button>
+    </div>`;
+  mpRenderReturnItemsList();
+}
+function mpRenderReturnItemsList() {
+  const g = currentBatchGroup;
+  if (!g) return;
+  document.getElementById('mp-returnitems-list').innerHTML = g.items.map(e => {
+    const checked = !!batchReturnChecked[e.id];
+    return `<div onclick="mpToggleReturnItem('${e.id}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
+      <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.SerialNo ? ' · ' + esc(e.SerialNo) : ''}</div></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span style="font:700 11px var(--mp-font-body);color:${checked?'#4d7a00':'var(--mp-text-muted)'};text-transform:uppercase;letter-spacing:.03em;white-space:nowrap">${checked?'Returning':'On loan'}</span>
+        <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px">${checked?'✓':''}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const btn = document.getElementById('mp-returnitems-confirm-btn');
+  const n = Object.values(batchReturnChecked).filter(Boolean).length;
+  if (btn) btn.textContent = n ? 'Return ' + n + ' item' + (n===1?'':'s') : 'Select items to return';
+}
+function mpToggleReturnItem(id) {
+  batchReturnChecked[id] = !batchReturnChecked[id];
+  mpRenderReturnItemsList();
+}
+function mpReturnItemsSelectAll(val) {
+  Object.keys(batchReturnChecked).forEach(k => batchReturnChecked[k] = val);
+  mpRenderReturnItemsList();
+}
+function mpCancelReturnItems() {
+  currentBatchGroup = null;
+  batchReturnChecked = {};
+  mpGoScreen('loans');
+}
+async function mpConfirmReturnItems() {
+  const n = Object.values(batchReturnChecked).filter(Boolean).length;
+  if (!n) { showToast('error', 'Select at least one item to return.'); return; }
+  // confirmBatchReturn() is a straightforward save (no interactive modal
+  // of its own, unlike proceedFromBasket()), so it's safe to block on here.
+  mpShowBlockingLoader('Returning items…', "Please don't close the app or navigate away.");
+  try { await confirmBatchReturn(); } finally { mpHideBlockingLoader(); }
+  mpGoScreen('loans');
+}
+
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
@@ -11836,8 +11915,8 @@ function mpOpenLoanActionsForGroup(g) {
       ? [[readiness.tested ? '✓ Tested — tap to un-mark' : 'Mark as tested', () => toggleReadiness(rKey, 'tested')]]
       : [];
     items = _mp.role === 'am'
-      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
-      : [ ...testItem, ['Return items', () => openBatchReturnByKey(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
+      ? [ ['Transfer / reassign', () => openReassignAMByKey(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => viewLoanDocByKey(key)] ]
+      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => openExtendLoanByKey(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => openReassignAMByKey(key)], ['Loan form', () => viewLoanDocByKey(key)], ['Delete loan', () => deleteLoanByKey(key), true] ];
   }
   window._mpSheetActions = items;
   mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
