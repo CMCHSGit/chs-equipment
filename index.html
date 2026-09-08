@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 81;
+const APP_VERSION = 82;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11207,9 +11207,9 @@ function mpRenderBookStep1() {
       <div style="font:400 13px var(--mp-font-body);color:var(--mp-purple);background:var(--mp-purple-20);padding:10px 14px;border-radius:var(--mp-radius-md)">Fields marked * are required. Devices come next.</div>
       <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${mpFormVal(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${mpFormVal(b.location)}" oninput="_mp.book.location=this.value"></div>
-      <div style="display:flex;gap:10px">
-        <div style="flex:1"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
-        <div style="flex:1"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
+        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
       </div>
       ${isAM
         ? `<div><label style="${mpFieldLabel()}">Account manager</label><div class="mp-input" style="display:flex;align-items:center;color:var(--mp-text-muted);background:var(--mp-black-05)">${esc(b.am)}</div></div>`
