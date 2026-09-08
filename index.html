@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 80;
+const APP_VERSION = 81;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2280,18 +2280,28 @@ async function loadData() {
     renderTable(); renderHistory();
     setScanMode('batch');
     hideLoading();
-    await loadSentNotifications();
-    await loadUpcomingLoans();
-    await loadLoanMeta();
-    await loadLoanDocNotes();
-    await loadTestReportsIndex();
+    // These are all independent GETs to separate Firebase paths — none
+    // depend on each other's result (loadLoanMeta() only depends on
+    // fetchBin() above having already set the loanMeta baseline it merges
+    // onto, which it has by this point). Running them one at a time added
+    // up their round-trips instead of overlapping them, which is most of
+    // why a full mobile resume — which waits for all of loadData() before
+    // showing anything at all, unlike desktop's earlier hideLoading() —
+    // felt slow.
+    await Promise.all([
+      loadSentNotifications(),
+      loadUpcomingLoans(),
+      loadLoanMeta(),
+      loadLoanDocNotes(),
+      loadTestReportsIndex(),
+      loadKitGroups()
+    ]);
     // hideLoading() ran earlier in this sequence, so the Loans tab could
     // already have been opened (and rendered) before this data arrived —
     // if so, _dirty.loans is already consumed and nothing else will trigger
     // a re-render just because _testReportsKeys showed up late. Re-render
     // now so the Reports button badge doesn't need a second visit to catch up.
     if (_dirty.loans === false) renderLoans();
-    await loadKitGroups();
     // Migrate AccountManager from items → loanMeta, then strip from items
     let _amMigrated = false, _amStripped = false;
     equipment.forEach(e => {
