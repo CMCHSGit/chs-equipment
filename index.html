@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 91;
+const APP_VERSION = 92;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10568,7 +10568,7 @@ function isMobilePWA() {
   } catch(e) { return false; }
 }
 
-let _mp = { screen: 'today', role: null, name: null, seg: 'upcoming', scope: null, open: null };
+let _mp = { screen: 'today', role: null, name: null, seg: 'upcoming', scope: null, open: null, scanMode: 'checkout' };
 
 // ── PUSH NOTIFICATIONS (Firebase Cloud Messaging) ───────────────────────
 // Fill these in from the Firebase console — see plan notes / setup guide
@@ -11484,12 +11484,25 @@ function mpRenderScan() {
         <div id="mp-scan-camera-frame" style="position:absolute;width:160px;height:160px;border:2px solid #fff;border-radius:12px;display:none;pointer-events:none"></div>
         <button class="mp-btn mp-btn-primary" id="mp-scan-start-btn" style="width:auto;padding:0 24px" onclick="mpOpenScan()">Start camera</button>
       </div>
+      <div class="mp-seg" style="margin-bottom:12px">
+        <button class="mp-seg-btn${_mp.scanMode==='checkout'?' mp-active':''}" onclick="mpSetScanMode('checkout')">Check out</button>
+        <button class="mp-seg-btn${_mp.scanMode==='return'?' mp-active':''}" onclick="mpSetScanMode('return')">Return</button>
+        <button class="mp-seg-btn${_mp.scanMode==='count'?' mp-active':''}" onclick="mpSetScanMode('count')">Count</button>
+      </div>
       <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">Point the camera at the QR label, or enter the asset number below.</div>
       <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters"
         oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
       <div id="mp-scan-result" style="margin-top:16px"></div>
     </div>`;
   setTimeout(() => { const el = document.getElementById('mp-scan-input'); if (el) el.focus(); }, 100);
+}
+function mpSetScanMode(mode) {
+  _mp.scanMode = mode;
+  const input = document.getElementById('mp-scan-input');
+  const val = input ? input.value : '';
+  mpRenderScan();
+  const newInput = document.getElementById('mp-scan-input');
+  if (newInput && val) { newInput.value = val; mpScanLookup(val); }
 }
 
 let _mpQrStream = null, _mpQrInterval = null;
@@ -12185,11 +12198,37 @@ function mpScanLookup(val) {
   }
   const today = mpToday();
   const status = mpEquipmentStatus(item, today);
-  const actionBtn = (status.key === 'on-loan' || status.key === 'overdue')
-    ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}')">Check in</button>`
-    : status.key === 'available'
-      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckOut('${esc(item.CHSAssetNo)}')">Check out</button>`
-      : `<div class="mp-footnote" style="margin-top:12px">This item is booked ahead — use the Loans tab to manage it.</div>`;
+  const onLoan = status.key === 'on-loan' || status.key === 'overdue';
+  const mode = _mp.scanMode || 'checkout';
+
+  let actionBtn;
+  if (mode === 'return') {
+    actionBtn = onLoan
+      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}')">Return</button>`
+      : `<div class="mp-footnote" style="margin-top:12px">This item isn't currently on loan.</div>`;
+  } else if (mode === 'count') {
+    // Mirrors desktop's count-mode scan (submitCount()/submitCountKeepLoan()) —
+    // an item that's on loan when counted gets a choice (return it now, or
+    // leave the loan intact — e.g. counted at a customer site mid-demo),
+    // otherwise it's just a straightforward "mark as counted".
+    actionBtn = onLoan
+      ? `<div style="display:flex;gap:8px;margin-top:12px">
+           <button class="mp-btn mp-btn-secondary" style="flex:1" onclick="mpScanCountKeepLoan('${item.id}')">Keep on loan</button>
+           <button class="mp-btn mp-btn-primary" style="flex:1" onclick="mpScanCount('${item.id}')">Count &amp; return</button>
+         </div>`
+      : `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCount('${item.id}')">Mark as counted</button>`;
+  } else {
+    actionBtn = onLoan
+      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}')">Check in</button>`
+      : status.key === 'available'
+        ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckOut('${esc(item.CHSAssetNo)}')">Check out</button>`
+        : `<div class="mp-footnote" style="margin-top:12px">This item is booked ahead — use the Loans tab to manage it.</div>`;
+  }
+
+  const countedNote = mode === 'count'
+    ? `<div style="font:400 12px var(--mp-font-body);color:${item.Counted && item.Counted !== 'No' ? 'var(--mp-green)' : 'var(--mp-text-muted)'};margin-top:8px">${item.Counted && item.Counted !== 'No' && item.Counted !== '' ? esc(item.Counted) : 'Not yet counted'}</div>`
+    : '';
+
   box.innerHTML = `
     <div class="mp-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
@@ -12199,7 +12238,8 @@ function mpScanLookup(val) {
         </div>
         <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
       </div>
-      ${(status.key === 'on-loan' || status.key === 'overdue') ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(item.LoanEndDate) : ''}</div>` : ''}
+      ${onLoan ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(item.LoanEndDate) : ''}</div>` : ''}
+      ${countedNote}
       ${actionBtn}
     </div>`;
 }
@@ -12220,6 +12260,23 @@ async function mpScanCheckIn(assetId) {
   if (input) { input.value = ''; input.focus(); }
   const box = document.getElementById('mp-scan-result');
   if (box) box.innerHTML = '';
+}
+async function mpScanCount(assetId) {
+  const item = equipment.find(e => e.id === assetId);
+  if (!item) return;
+  currentItem = item;
+  mpShowBlockingLoader('Marking as counted…', "Please don't close the app or navigate away.");
+  // submitCount() already shows its own success toast — no need to add a second one.
+  try { await submitCount(); } finally { mpHideBlockingLoader(); }
+  mpScanLookup(item.CHSAssetNo);
+}
+async function mpScanCountKeepLoan(assetId) {
+  const item = equipment.find(e => e.id === assetId);
+  if (!item) return;
+  currentItem = item;
+  mpShowBlockingLoader('Marking as counted…', "Please don't close the app or navigate away.");
+  try { await submitCountKeepLoan(); } finally { mpHideBlockingLoader(); }
+  mpScanLookup(item.CHSAssetNo);
 }
 function mpScanCheckOut(assetNo) {
   window._mpPendingBookAsset = assetNo;
