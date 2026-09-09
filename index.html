@@ -585,6 +585,8 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 .mp-tab.mp-active{color:var(--mp-purple)}
 .mp-tab.mp-center{position:relative}
 .mp-tab.mp-center .mp-center-btn{width:52px;height:52px;border-radius:16px;background:var(--mp-purple);display:flex;align-items:center;justify-content:center;color:#fff;margin-top:-24px;box-shadow:0 6px 16px rgba(85,69,150,.35)}
+.mp-tab-icon-wrap{position:relative;display:inline-flex}
+.mp-tab-badge{position:absolute;top:-3px;right:-7px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--mp-critical);color:#fff;font:700 10px var(--mp-font-body);display:flex;align-items:center;justify-content:center;line-height:1;box-shadow:0 0 0 2px var(--mp-white)}
 
 /* ── SCREENS ─────────────────────────────────────────────────────── */
 .mp-screen{display:none;padding:var(--mp-space-4)}
@@ -1853,7 +1855,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 94;
+const APP_VERSION = 95;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10272,6 +10274,10 @@ async function syncFromFirebase() {
         else if (_mp.screen === 'loans') mpRenderLoans();
         else if (_mp.screen === 'equipment') mpRenderEquipmentList();
       }
+      // Refresh the Today/Overview tab's "action required" badge regardless
+      // of which screen is currently open, so it clears the moment a stuck
+      // or overdue loan is resolved from ANY device, not just this one.
+      if (typeof mpRenderTabbar === 'function' && _mp.role) mpRenderTabbar();
     }
 
     setSync('ok', 'Synced ✓');
@@ -10743,13 +10749,30 @@ function mpIcon(name, size) {
   return '<svg width="' + (size||22) + '" height="' + (size||22) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + (MP_ICONS[name]||'') + '</svg>';
 }
 
+// Same "needs attention" set as the Today/Overview alert cards (stuck
+// transfers + overdue loans) — kept as its own count here so the tab badge
+// can be computed regardless of which screen is currently showing, and
+// recomputed on every tabbar render (navigation, and syncFromFirebase()'s
+// mobile refresh) so it disappears the moment the underlying loan is
+// resolved, from this device or any other.
+function mpActionRequiredCount() {
+  if (_mp.role === 'am') {
+    const mine = mpActiveGroups().filter(g => g.am === _mp.name && !g.scheduled);
+    return mpStuckLoans(_mp.name).length + mine.filter(g => g.overdue).length;
+  }
+  const groups = mpActiveGroups().filter(g => !g.scheduled);
+  return mpStuckLoans(null).length + groups.filter(g => g.overdue).length;
+}
 function mpRenderTabbar() {
   const tabs = MP_TABS[_mp.role] || MP_TABS.am;
+  const homeId = _mp.role === 'am' ? 'today' : 'overview';
+  const badgeCount = mpActionRequiredCount();
   document.getElementById('mp-tabbar').innerHTML = tabs.map(t => {
+    const badge = (t.id === homeId && badgeCount > 0) ? `<span class="mp-tab-badge">${badgeCount > 9 ? '9+' : badgeCount}</span>` : '';
     if (t.center) {
       return '<button class="mp-tab mp-center" onclick="mpGoScreen(\'' + t.id + '\')"><span class="mp-center-btn">' + mpIcon(t.icon, 24) + '</span></button>';
     }
-    return '<button class="mp-tab' + (_mp.screen === t.id ? ' mp-active' : '') + '" onclick="mpGoScreen(\'' + t.id + '\')">' + mpIcon(t.icon) + '<span>' + t.label + '</span></button>';
+    return '<button class="mp-tab' + (_mp.screen === t.id ? ' mp-active' : '') + '" onclick="mpGoScreen(\'' + t.id + '\')"><span class="mp-tab-icon-wrap">' + mpIcon(t.icon) + badge + '</span><span>' + t.label + '</span></button>';
   }).join('');
 }
 
