@@ -1855,7 +1855,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 95;
+const APP_VERSION = 96;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10728,6 +10728,9 @@ function mpSignOut() {
   // name picker instead of silently resuming as the same person.
   try { localStorage.removeItem('chs_mobile_auth'); } catch (e) {}
   try { localStorage.removeItem('chs_operator'); } catch (e) {}
+  // The app icon badge is OS-level state that outlives the page — left
+  // alone here it would keep showing a stale count to whoever signs in next.
+  mpUpdateAppBadge(0);
   location.reload();
 }
 
@@ -10763,10 +10766,23 @@ function mpActionRequiredCount() {
   const groups = mpActiveGroups().filter(g => !g.scheduled);
   return mpStuckLoans(null).length + groups.filter(g => g.overdue).length;
 }
+// Home-screen app icon badge (Badging API) — same count as the tab badge
+// below, so both clear together. Only takes effect while the app is open/
+// foregrounded (there's no server push driving it), on browsers that support
+// it — iOS 16.4+ Safari (installed only) and Chrome/Edge on Android/desktop.
+// Feature-detected, so it's silently a no-op everywhere else.
+function mpUpdateAppBadge(count) {
+  if (!('setAppBadge' in navigator)) return;
+  try {
+    if (count > 0) navigator.setAppBadge(count).catch(() => {});
+    else navigator.clearAppBadge().catch(() => {});
+  } catch(e) {}
+}
 function mpRenderTabbar() {
   const tabs = MP_TABS[_mp.role] || MP_TABS.am;
   const homeId = _mp.role === 'am' ? 'today' : 'overview';
   const badgeCount = mpActionRequiredCount();
+  mpUpdateAppBadge(badgeCount);
   document.getElementById('mp-tabbar').innerHTML = tabs.map(t => {
     const badge = (t.id === homeId && badgeCount > 0) ? `<span class="mp-tab-badge">${badgeCount > 9 ? '9+' : badgeCount}</span>` : '';
     if (t.center) {
