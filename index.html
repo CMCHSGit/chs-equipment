@@ -1853,7 +1853,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 92;
+const APP_VERSION = 93;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12234,7 +12234,8 @@ function mpScanLookup(val) {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="min-width:0">
           <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(item.Model)}</div>
-          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(item.CHSAssetNo)}</div>
+          ${item.Description ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:1px">${esc(item.Description)}</div>` : ''}
+          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted);margin-top:2px">${esc(item.CHSAssetNo)}</div>
         </div>
         <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
       </div>
