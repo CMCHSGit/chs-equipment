@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 98;
+const APP_VERSION = 99;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2339,7 +2339,12 @@ async function loadData() {
 
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
 function writeAudit(type, summary, detail, op) {
-  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {}, operator: arguments.length >= 4 ? op : currentOperator };
+  // Mobile actions reuse these exact same confirm functions (see index.html's
+  // mobile script — mpOpenReassignFlow() etc.), so this is the one place that
+  // needs to tag the source; every caller gets it for free rather than each
+  // one having to know or guess whether it's running inside the mobile shell.
+  const source = (typeof isMobilePWA === 'function' && isMobilePWA()) ? 'mobile' : 'desktop';
+  const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {}, operator: arguments.length >= 4 ? op : currentOperator, source };
   auditLog.unshift(entry);
   if (auditLog.length > 300) auditLog.length = 300;
   scheduleSave(); // persists via /data.json on next debounced save
@@ -2433,7 +2438,17 @@ function renderAuditLog() {
       (e.detail && e.detail.items && e.detail.items.length
         ? '<div style="font-size:11px;color:var(--text3);margin-top:2px;font-family:\'DM Mono\',monospace">' + e.detail.items.map(a => esc(a)).join(', ') + '</div>'
         : '') +
-      (e.operator ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">by ' + esc(e.operator) + '</div>' : '') +
+      (e.operator || e.source
+        ? '<div style="font-size:11px;color:var(--text2);margin-top:2px">' +
+          (e.operator ? 'by ' + esc(e.operator) : '') +
+          // Older entries predate source tracking — no badge for those rather
+          // than guessing (defaulting them all to "Desktop" would misattribute
+          // any that actually came from mobile before this was added).
+          (e.source ? (e.operator ? ' · ' : '') + (e.source === 'mobile'
+            ? '<span title="From the mobile app">📱 Mobile</span>'
+            : '<span title="From the desktop site">🖥 Desktop</span>') : '') +
+          '</div>'
+        : '') +
       '</div>' +
       '<div style="flex-shrink:0;font-size:11px;color:var(--text3);white-space:nowrap;margin-top:2px">' + _auditFormatTs(e.ts) + '</div>' +
       '</div>'
