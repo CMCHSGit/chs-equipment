@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 106;
+const APP_VERSION = 107;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10880,6 +10880,11 @@ function mpGoScreen(screen) {
   // keeps running (battery + a very unwelcome privacy surprise) in the
   // background on every other screen.
   if (screen !== 'scan' && typeof mpCloseScan === 'function') mpCloseScan();
+  // Leaving Equipment any way other than its own explicit actions (Cancel,
+  // or Add/Save which already clear this themselves) still ends select
+  // mode — otherwise a stray tab-bar tap mid-pick leaves it "stuck on",
+  // silently carrying a stale selection/context into whatever opens next.
+  if (screen !== 'equipment' && _mp.eqSelectMode) { _mp.eqSelectMode = false; _mp.eqSelected = []; _mp.eqSelectContext = null; }
   _mp.screen = screen;
   document.querySelectorAll('#mp-body .mp-screen').forEach(el => el.classList.remove('mp-active'));
   if (screen === 'today')    { document.getElementById('mp-screen-today').classList.add('mp-active'); mpRenderToday(); }
@@ -11362,14 +11367,10 @@ function mpRenderEquipmentPills() {
 function mpRenderEquipmentList() {
   const q = _mp.eqQuery.trim().toLowerCase();
   const today = mpToday();
-  const rows = equipment
-    .filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q))
-    .map(e => ({ e, status: mpEquipmentStatus(e, today) }))
-    .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter);
   const selectMode = _mp.eqSelectMode;
   const selectedSet = new Set(_mp.eqSelected);
-  document.getElementById('mp-eq-list').innerHTML = rows.length ? rows.map(({e, status}) => {
-    const checked = selectedSet.has(e.CHSAssetNo);
+  const row = (e, status) => {
+    const checked = selectMode && selectedSet.has(e.CHSAssetNo);
     const onclick = selectMode ? `mpToggleEquipmentSelect('${e.CHSAssetNo}')` : `mpOpenEquipmentActions('${e.id}')`;
     const checkbox = selectMode ? `<div style="width:24px;height:24px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:14px;margin-top:2px">${checked?'✓':''}</div>` : '';
     return `
@@ -11384,7 +11385,24 @@ function mpRenderEquipmentList() {
         <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
       </div>
     </div>`;
-  }).join('') : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>';
+  };
+  const rows = equipment
+    .filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q))
+    .map(e => ({ e, status: mpEquipmentStatus(e, today) }))
+    .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter)
+    .filter(r => !selectMode || !selectedSet.has(r.e.CHSAssetNo));
+  // Shopping-cart behaviour: selected devices pin to their own section at
+  // the top, regardless of the current search text or filter pill — with
+  // a long real inventory (unlike a handful of test items), a pick can
+  // easily scroll out of view or get hidden by a filter change, and
+  // without this it reads as "lost" even though it's still selected.
+  const selectedItems = selectMode ? _mp.eqSelected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean) : [];
+  const selectedHtml = selectedItems.length
+    ? `<div style="padding:12px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>` : '';
+  const restHtml = rows.length
+    ? rows.map(({e, status}) => row(e, status)).join('')
+    : (selectedItems.length ? '' : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>');
+  document.getElementById('mp-eq-list').innerHTML = selectedHtml + restHtml;
 }
 
 function mpSetEquipmentQuery(v) { _mp.eqQuery = v; mpRenderEquipmentList(); }
