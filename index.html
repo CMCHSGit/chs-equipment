@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 102;
+const APP_VERSION = 105;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10887,7 +10887,7 @@ function mpGoScreen(screen) {
   else if (screen === 'loans')    { document.getElementById('mp-screen-loans').classList.add('mp-active'); mpRenderLoans(); }
   else if (screen === 'more')     { document.getElementById('mp-screen-more').classList.add('mp-active'); mpRenderMore(); }
   else if (screen === 'equipment') { document.getElementById('mp-screen-equipment').classList.add('mp-active'); mpRenderEquipment(); }
-  else if (screen === 'book')     { document.getElementById('mp-screen-book').classList.add('mp-active'); mpResetBookWizard(); mpRenderBook(); }
+  else if (screen === 'book')     { document.getElementById('mp-screen-book').classList.add('mp-active'); mpEnterBookScreen(); mpRenderBook(); }
   else if (screen === 'scan')     { document.getElementById('mp-screen-scan').classList.add('mp-active'); mpRenderScan(); }
   else if (screen === 'additems') { document.getElementById('mp-screen-additems').classList.add('mp-active'); mpRenderAddItems(); }
   else if (screen === 'returnitems') { document.getElementById('mp-screen-returnitems').classList.add('mp-active'); mpRenderReturnItems(); }
@@ -11270,17 +11270,55 @@ function mpEquipmentStatus(e, today) {
 function mpRenderEquipment() {
   if (_mp.eqFilter === undefined) _mp.eqFilter = 'all';
   if (_mp.eqQuery === undefined) _mp.eqQuery = '';
+  if (_mp.eqSelectMode === undefined) _mp.eqSelectMode = false;
+  if (_mp.eqSelected === undefined) _mp.eqSelected = [];
   document.getElementById('mp-screen-equipment').innerHTML = `
     <div style="padding:16px 20px 12px">
-      <div style="position:relative;display:flex;align-items:center">
-        <span style="position:absolute;left:14px;color:var(--mp-text-muted);display:flex;pointer-events:none">${mpIcon('search',18)}</span>
-        <input class="mp-input" id="mp-eq-search" type="search" placeholder="Search ${equipment.length} assets" value="${mpFormVal(_mp.eqQuery)}" oninput="mpSetEquipmentQuery(this.value)" style="padding-left:40px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="position:relative;flex:1;display:flex;align-items:center">
+          <span style="position:absolute;left:14px;color:var(--mp-text-muted);display:flex;pointer-events:none">${mpIcon('search',18)}</span>
+          <input class="mp-input" id="mp-eq-search" type="search" placeholder="Search ${equipment.length} assets" value="${mpFormVal(_mp.eqQuery)}" oninput="mpSetEquipmentQuery(this.value)" style="padding-left:40px">
+        </div>
+        <button onclick="mpToggleEquipmentSelectMode()" style="flex:none;padding:9px 14px;border-radius:var(--mp-radius-pill);border:1px solid ${_mp.eqSelectMode?'var(--mp-purple)':'var(--mp-border-hairline)'};background:${_mp.eqSelectMode?'var(--mp-purple)':'var(--mp-white)'};color:${_mp.eqSelectMode?'#fff':'var(--mp-text-body)'};font:600 13px var(--mp-font-body);white-space:nowrap;cursor:pointer">${_mp.eqSelectMode?'Cancel':'Select'}</button>
       </div>
     </div>
     <div id="mp-eq-pills" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
-    <div id="mp-eq-list"></div>`;
+    <div id="mp-eq-list" style="padding-bottom:${_mp.eqSelectMode?'90px':'0'}"></div>
+    <div id="mp-eq-select-footer"></div>`;
   mpRenderEquipmentPills();
   mpRenderEquipmentList();
+  mpRenderEquipmentSelectFooter();
+}
+function mpToggleEquipmentSelectMode() {
+  _mp.eqSelectMode = !_mp.eqSelectMode;
+  if (!_mp.eqSelectMode) _mp.eqSelected = [];
+  mpRenderEquipment();
+}
+function mpToggleEquipmentSelect(assetNo) {
+  const i = _mp.eqSelected.indexOf(assetNo);
+  if (i >= 0) _mp.eqSelected.splice(i, 1); else _mp.eqSelected.push(assetNo);
+  mpRenderEquipmentList();
+  mpRenderEquipmentSelectFooter();
+}
+function mpRenderEquipmentSelectFooter() {
+  const el = document.getElementById('mp-eq-select-footer');
+  if (!el) return;
+  const n = _mp.eqSelected.length;
+  if (!_mp.eqSelectMode || !n) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0))">
+    <button class="mp-btn mp-btn-primary" onclick="mpEquipmentAddSelectedToLoan()">Add ${n} device${n===1?'':'s'} to loan</button>
+  </div>`;
+}
+// Hands the picked assets to the Book wizard the same way Scan's single-item
+// checkout and Reassign's multi-item handoff already do (window._mpPendingBookAssets,
+// consumed by mpEnterBookScreen) — merged into an in-progress draft if one
+// exists, or seeding a fresh one otherwise.
+function mpEquipmentAddSelectedToLoan() {
+  if (!_mp.eqSelected.length) return;
+  window._mpPendingBookAssets = _mp.eqSelected.slice();
+  _mp.eqSelectMode = false;
+  _mp.eqSelected = [];
+  mpGoScreen('book');
 }
 
 function mpRenderEquipmentPills() {
@@ -11298,15 +11336,25 @@ function mpRenderEquipmentList() {
     .filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q))
     .map(e => ({ e, status: mpEquipmentStatus(e, today) }))
     .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter);
-  document.getElementById('mp-eq-list').innerHTML = rows.length ? rows.map(({e, status}) => `
-    <div onclick="mpOpenEquipmentActions('${e.id}')" style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:14px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
-      <div style="min-width:0">
-        <div style="font:400 12px var(--mp-font-mono);color:var(--mp-purple);margin-bottom:2px">${esc(e.CHSAssetNo)}</div>
-        <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
-        <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.Description || '')}${e.Location ? ' · ' + esc(e.Location) : ''}</div>
+  const selectMode = _mp.eqSelectMode;
+  const selectedSet = new Set(_mp.eqSelected);
+  document.getElementById('mp-eq-list').innerHTML = rows.length ? rows.map(({e, status}) => {
+    const checked = selectedSet.has(e.CHSAssetNo);
+    const onclick = selectMode ? `mpToggleEquipmentSelect('${e.CHSAssetNo}')` : `mpOpenEquipmentActions('${e.id}')`;
+    const checkbox = selectMode ? `<div style="width:24px;height:24px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:14px;margin-top:2px">${checked?'✓':''}</div>` : '';
+    return `
+    <div onclick="${onclick}" style="display:flex;align-items:flex-start;gap:10px;padding:14px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
+      ${checkbox}
+      <div style="flex:1;min-width:0;display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+        <div style="min-width:0">
+          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-purple);margin-bottom:2px">${esc(e.CHSAssetNo)}</div>
+          <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+          <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.Description || '')}${e.Location ? ' · ' + esc(e.Location) : ''}</div>
+        </div>
+        <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
       </div>
-      <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
-    </div>`).join('') : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>';
+    </div>`;
+  }).join('') : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>';
 }
 
 function mpSetEquipmentQuery(v) { _mp.eqQuery = v; mpRenderEquipmentList(); }
@@ -11422,6 +11470,26 @@ function mpEquipmentDetailCheckOut(assetNo) {
 // and calling it directly, so equipment writes, the loan doc, the
 // confirmation email and the Simpro job all stay the one code path
 // instead of a second, driftable implementation.
+// Re-entering the Book screen must not discard an unconfirmed draft — a
+// user switching to Equipment/Loans mid-wizard and tapping back to Book
+// expects everything they'd typed to still be there. Only start clean when
+// there's genuinely nothing in flight (no draft yet, or the last one was
+// already confirmed). A device handed off from elsewhere (Equipment tab
+// multi-select, Scan checkout, Reassign) still comes through either way:
+// as the starting selection for a fresh wizard, or merged into whatever's
+// already selected mid-draft.
+function mpEnterBookScreen() {
+  const pending = window._mpPendingBookAssets || (window._mpPendingBookAsset ? [window._mpPendingBookAsset] : []);
+  const inProgress = _mp.book && !_mp.book.confirmed;
+  if (!inProgress) { mpResetBookWizard(); return; }
+  window._mpPendingBookAsset = null;
+  window._mpPendingBookAssets = null;
+  if (pending.length) {
+    const set = new Set(_mp.book.selected);
+    pending.forEach(a => set.add(a));
+    _mp.book.selected = Array.from(set);
+  }
+}
 function mpResetBookWizard() {
   const isAM = _mp.role === 'am';
   const self = isAM ? accountManagers.find(a => a.name === _mp.name) : null;
@@ -11487,9 +11555,16 @@ function mpRenderBookStep1() {
       <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.notes=this.value">${mpFormVal(b.notes)}</textarea></div>
       <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.shipping=this.value">${mpFormVal(b.shipping)}</textarea></div>
     </div>
-    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0))">
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelBookWizard()">Cancel</button>
       <button class="mp-btn mp-btn-primary" onclick="mpBookGoStep2()">Next: devices</button>
     </div>`;
+}
+// The draft now survives switching tabs (see mpEnterBookScreen), so this is
+// the only way left to actually discard one and start clean.
+function mpCancelBookWizard() {
+  _mp.book = null;
+  mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
 }
 function mpBookSetAM(name) {
   _mp.book.am = name;
