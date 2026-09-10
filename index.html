@@ -12677,7 +12677,7 @@ function mpRenderMore() {
         : mpPushEnabled()
           ? '<div class="mp-footnote" style="margin-bottom:16px">✓ Push notifications are on for this device.</div>'
           : '<button class="mp-btn mp-btn-secondary" style="margin-bottom:16px" onclick="mpEnablePush()">Enable push notifications</button>'}
-      <button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>
+      ${_mp.realRole === 'service' ? '<button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>' : ''}
       <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
     </div>`;
   window._mpMoreLinks = links;
