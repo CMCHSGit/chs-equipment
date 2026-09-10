@@ -1015,6 +1015,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
           <button class="btn btn-sm btn-red" onclick="deleteFromSelection()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>Delete
           </button>
+          <button class="btn btn-sm btn-primary" id="sel-btn-savekit" onclick="saveKitFromSelection()" style="display:none">📦 Save as Kit Group</button>
           <button class="btn btn-sm" onclick="clearSelection()">✕ Clear</button>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px">
@@ -1855,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 97;
+const APP_VERSION = 98;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3032,12 +3033,13 @@ function renderTable() {
     const dLocation = (hidden || hasUpcoming) ? '' : e.Location;
     const dLoanEndDate = (hidden || hasUpcoming) ? '' : e.LoanEndDate;
     const checked = _selectedIds.has(e.id);
-    return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}" onclick="openDetail('${e.id}')">
+    const isKitTrigger = e.id === _kitTriggerId;
+    return `<tr class="clickable-row ${checked?'row-selected':''}" id="row-${e.id}" onclick="openDetail('${e.id}')" style="${isKitTrigger?'background:var(--accent-light)':''}">
       <td class="col-sticky" style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
         <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
       </td>
 
-      <td class="td-mono" style="font-weight:500;white-space:nowrap;padding:6px 8px">${esc(e.CHSAssetNo)}</td>
+      <td class="td-mono" style="font-weight:500;white-space:nowrap;padding:6px 8px">${esc(e.CHSAssetNo)}${isKitTrigger?' <span style="font-size:9px;font-weight:700;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:1px 5px;vertical-align:middle">TRIGGER</span>':''}</td>
       <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Model)}">${esc(e.Model)}</td>
       <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:6px 8px" title="${esc(e.Description)}">${esc(e.Description)}</td>
       <td class="td-mono" style="font-size:11px;white-space:nowrap;padding:6px 8px">${esc(e.SerialNo)}</td>
@@ -5111,6 +5113,7 @@ function openDetail(id) {
     <button class="btn btn-sm" onclick="detailAction('retire')" style="color:var(--amber);border-color:var(--amber-border)">Retire</button>
     <button class="btn btn-sm" onclick="detailAction('extend')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
     <button class="btn btn-sm" onclick="detailAction('history')">History</button>
+    <button class="btn btn-sm" onclick="startKitBuilder('${item.id}')" title="Use this item as a kit group's trigger">📦 Build Kit</button>
     <button class="btn btn-sm btn-red" onclick="detailAction('delete')" style="margin-left:auto">Delete</button>
   `;
 }
@@ -7504,6 +7507,44 @@ async function saveNewKitGroup() {
   showToast('success', 'Kit group created — add accessories below');
 }
 
+// ── BUILD KIT FROM DATABASE SELECTION ───────────────────────────────────
+// Alternative to the Settings flow above — start from an item's own detail
+// view instead of typing asset numbers into Settings by hand. Reuses the
+// Database tab's existing multi-select checkboxes: the item you started
+// from becomes the trigger (_kitTriggerId), anything else you check
+// becomes an accessory, then "Save as Kit Group" builds the same
+// _kitGroups shape saveNewKitGroup()/addKitAccessory() already produce.
+function startKitBuilder(id) {
+  const item = equipment.find(e => e.id === id);
+  if (!item) return;
+  closeDetail();
+  clearSelection();
+  _kitTriggerId = id;
+  _selectedIds.add(id);
+  switchTab('database');
+  renderTable();
+  const row = document.getElementById('row-' + id);
+  if (row) row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  showToast('info', (item.CHSAssetNo || item.Model) + ' set as kit trigger — check other items below to add as accessories, then Save as Kit Group.');
+}
+async function saveKitFromSelection() {
+  if (!_kitTriggerId || !_selectedIds.has(_kitTriggerId)) { showToast('error', 'No kit trigger set.'); return; }
+  const trigger = equipment.find(e => e.id === _kitTriggerId);
+  if (!trigger) return;
+  const label = (prompt('Name this kit group:', trigger.Model || trigger.CHSAssetNo || '') || '').trim();
+  if (!label) return;
+  const accessories = [..._selectedIds].filter(id => id !== _kitTriggerId).map(id => {
+    const e = equipment.find(x => x.id === id);
+    return e ? { assetNo: e.CHSAssetNo || '', model: e.Model || '', desc: e.Description || e.Notes || '' } : null;
+  }).filter(Boolean);
+  const key = 'kit_' + Date.now();
+  _kitGroups[key] = { label, triggers: [trigger.CHSAssetNo || ''], accessories };
+  await saveKitGroups();
+  clearSelection();
+  renderTable();
+  showToast('success', 'Kit group "' + label + '" created with ' + accessories.length + ' accessor' + (accessories.length === 1 ? 'y' : 'ies'));
+}
+
 
 // (original checkKitSuggestion below is superseded by Firebase-backed version above)
 function _checkKitSuggestion_UNUSED(addedItem) {
@@ -8005,10 +8046,15 @@ function getAMEmail(amName) {
 
 // ── DATABASE ROW SELECTION ────────────────────────────────────────────
 const _selectedIds = new Set();
+// Set only while building a kit group from the Database tab (startKitBuilder())
+// — the one selected row this refers to is the kit's trigger, everything
+// else checked alongside it becomes an accessory. Reuses the existing
+// multi-select checkboxes rather than a parallel selection mechanism.
+let _kitTriggerId = null;
 
 function toggleRowSelect(id, checked) {
   if (checked) _selectedIds.add(id);
-  else _selectedIds.delete(id);
+  else { _selectedIds.delete(id); if (id === _kitTriggerId) _kitTriggerId = null; }
   const row = document.getElementById('row-' + id);
   if (row) row.classList.toggle('row-selected', checked);
   updateSelectionBar();
@@ -8032,13 +8078,27 @@ function updateSelectionBar() {
   const n = _selectedIds.size;
   const bar = document.getElementById('selection-bar');
   const label = document.getElementById('selection-label');
-  if (bar) bar.style.display = n > 0 ? 'flex' : 'none';
-  if (label) label.textContent = n + ' selected';
-  // Show Edit/History only when exactly 1 row selected
+  if (bar) bar.style.display = (n > 0 || _kitTriggerId) ? 'flex' : 'none';
+  if (label) {
+    const trigger = _kitTriggerId ? equipment.find(e => e.id === _kitTriggerId) : null;
+    label.textContent = trigger
+      ? 'Kit trigger: ' + (trigger.CHSAssetNo || trigger.Model) + ' · ' + (n - 1) + ' accessor' + (n - 1 === 1 ? 'y' : 'ies')
+      : n + ' selected';
+  }
+  // Show Edit/History only when exactly 1 row selected and not mid kit-build
   const editBtn = document.getElementById('sel-btn-edit');
   const histBtn = document.getElementById('sel-btn-history');
-  if (editBtn) editBtn.style.display = n === 1 ? 'inline-flex' : 'none';
-  if (histBtn) histBtn.style.display = n === 1 ? 'inline-flex' : 'none';
+  if (editBtn) editBtn.style.display = (n === 1 && !_kitTriggerId) ? 'inline-flex' : 'none';
+  if (histBtn) histBtn.style.display = (n === 1 && !_kitTriggerId) ? 'inline-flex' : 'none';
+  const kitBtn = document.getElementById('sel-btn-savekit');
+  if (kitBtn) kitBtn.style.display = _kitTriggerId ? 'inline-flex' : 'none';
+  // The other bulk actions (loan/return/count/retire/delete) don't make
+  // sense mid kit-build and would otherwise act on the trigger + accessories
+  // together — hide them while a kit trigger is set.
+  ['issueLoanFromSelection','returnFromSelection','countFromSelection','retireFromSelection','deleteFromSelection'].forEach(fn => {
+    const btn = document.querySelector('#selection-bar button[onclick^="' + fn + '"]');
+    if (btn) btn.style.display = _kitTriggerId ? 'none' : 'inline-flex';
+  });
   // Update select-all checkbox state
   const allCbs = document.querySelectorAll('#main-tbody .db-checkbox');
   const selectAllCb = document.getElementById('select-all-cb');
@@ -8214,6 +8274,7 @@ function returnFromSelection() {
 
 function clearSelection(alsoBasket) {
   _selectedIds.clear();
+  _kitTriggerId = null;
   document.querySelectorAll('#main-tbody .db-checkbox').forEach(cb => cb.checked = false);
   document.querySelectorAll('#main-tbody tr').forEach(r => r.classList.remove('row-selected'));
   const selectAllCb = document.getElementById('select-all-cb');
