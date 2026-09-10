@@ -1,7 +1,10 @@
 // CHS Equipment Tracker — Service Worker
 // Strategy: network-first for HTML (always gets latest), cache fallback for offline
 
-const CACHE_NAME = 'chs-equipment-v1';
+// Bump this whenever a non-HTML cached asset (manifest.json, icons, etc.)
+// changes — the cache-first branch below only refetches on a cache miss,
+// so a stale entry otherwise lingers forever for already-visited devices.
+const CACHE_NAME = 'chs-equipment-v2';
 const CACHED_URLS = ['/'];
 
 // Install: cache the app shell immediately and skip waiting
