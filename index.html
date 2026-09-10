@@ -876,6 +876,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
             <div class="form-grid" style="margin-bottom:12px">
               <div class="form-group"><label>Event and/or Customer Name <span style="color:var(--red)">*</span></label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
+              <div class="form-group"><label>Shipping Island <span style="color:var(--red)">*</span></label><select id="b-island" required><option value="">Select island…</option><option value="North">North Island</option><option value="South">South Island</option></select></div>
               <div class="form-group"><label>Loan Start Date <span style="color:var(--red)">*</span></label><input type="date" id="b-start-date" required></div>
               <div class="form-group"><label>Loan End Date <span style="color:var(--red)">*</span></label><input type="date" id="b-end-date" required></div>
               <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
@@ -1856,7 +1857,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 108;
+const APP_VERSION = 111;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2901,6 +2902,7 @@ function clearScan() {
   ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
   const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
   const dtEl2 = document.getElementById('b-demo-type'); if(dtEl2) dtEl2.value = '';
+  const isEl2 = document.getElementById('b-island'); if(isEl2) isEl2.value = '';
   const bsEl = document.getElementById('b-start-date'); if(bsEl) bsEl.value = nzDate();
   const fb = document.getElementById('batch-feedback'); if(fb) { fb.style.display='none'; fb.innerHTML=''; }
   const badge = document.getElementById('loan-confirmed-badge'); if(badge) badge.style.display='none';
@@ -4306,13 +4308,22 @@ function daysBetween(dateA, dateB) {
 }
 
 // "Starting Soon" is business-day-aware, not a flat calendar-day count — a
-// Monday start should flag from the preceding Friday, since the weekend
-// gives staff no real chance to test/dispatch. Counts weekdays strictly
+// Monday start should flag from the preceding Wednesday, since the weekend
+// gives staff no real chance to ship/test/dispatch. Counts weekdays strictly
 // between today and startDate (Mon–Fri only; Sat/Sun are free and don't
-// count against the 2-day notice window). Uses UTC date math throughout so
+// count against the notice window). Uses UTC date math throughout so
 // day-of-week is derived from the YYYY-MM-DD string itself, not shifted by
 // the browser's local timezone.
-function isStartingSoon(today, startDate) {
+//
+// The notice window itself depends on shipping destination: North Island
+// gets 3 business days' notice; South Island needs a full business week (5
+// days) for the extra inter-island freight time. This mirrors
+// .gas-proxy/Code.js's isStartingSoonBusinessDays() — the server-side twin
+// that actually sends the reminder email — so the UI badge and the email
+// never disagree about whether a loan is "starting soon". A loan with no
+// island set (created before this field existed) defaults to the longer,
+// safer South Island window rather than risk under-notifying.
+function isStartingSoon(today, startDate, island) {
   if (!startDate) return false;
   if (startDate <= today) return true;
   let businessDays = 0;
@@ -4324,7 +4335,8 @@ function isStartingSoon(today, startDate) {
     const dow = next.getUTCDay(); // 0=Sun..6=Sat
     if (dow !== 0 && dow !== 6) businessDays++;
   }
-  return businessDays <= 2;
+  const maxBusinessDays = island === 'North' ? 3 : 5;
+  return businessDays <= maxBusinessDays;
 }
 
 async function submitBatchLoan() {
@@ -4340,6 +4352,7 @@ async function submitBatchLoan() {
   const batchEmailCheck = document.getElementById('b-email').value.trim();
   const batchAMCheck    = document.getElementById('b-account-manager')?.value || '';
   const batchDemoTypeCheck = document.getElementById('b-demo-type')?.value || '';
+  const batchIslandCheck = document.getElementById('b-island')?.value || '';
 
   function showErr(msg) {
     document.getElementById('batch-feedback').style.display = 'block';
@@ -4351,10 +4364,11 @@ async function submitBatchLoan() {
   if (!loanTo || !location) { showErr('Please fill in "On Loan To" and "Location".'); return; }
   if (!startDate) { showErr('Please select a Loan Start Date.'); return; }
   if (!endDate)   { showErr('Please select a Loan End Date.'); return; }
-  if (endDate <= startDate) { showErr('Loan End Date must be after the Start Date.'); return; }
+  if (endDate < startDate) { showErr('Loan End Date must be on or after the Start Date.'); return; }
   if (!batchAMCheck) { showErr('Please select an Account Manager.'); return; }
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
   if (!batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
+  if (!batchIslandCheck) { showErr('Please select the shipping Island (North or South) — this determines how much notice we get for shipping.'); return; }
 
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
   // True overlap check: new loan [startDate, endDate] vs existing [existingStart, existingEnd].
@@ -4420,6 +4434,7 @@ async function submitBatchLoan() {
     const batchAM        = document.getElementById('b-account-manager')?.value || '';
     const batchJobType   = document.getElementById('b-job-type')?.value || 'Demo';
     const batchDemoType  = document.getElementById('b-demo-type')?.value || '';
+    const batchIsland    = document.getElementById('b-island')?.value || '';
 
     const targetIsFuture = startDate && startDate > today;
     const directDevices = [], upcomingDevices = [];
@@ -4496,14 +4511,14 @@ async function submitBatchLoan() {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, demoType: batchDemoType, notes: notes, notesCell: notes, authCell: shippingDetails,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, demoType: batchDemoType, island: batchIsland, notes: notes, notesCell: notes, authCell: shippingDetails,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loanDocPayload)
         });
         window._loanDocCache = window._loanDocCache || {};
-        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails, demoType: batchDemoType };
+        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails, demoType: batchDemoType, island: batchIsland };
         if (_dirty.loans === false) renderLoans();
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
     }, 300);
@@ -4530,6 +4545,7 @@ async function submitBatchLoan() {
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
     const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
     const dtEl = document.getElementById('b-demo-type'); if(dtEl) dtEl.value = '';
+    const isEl = document.getElementById('b-island'); if(isEl) isEl.value = '';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
     writeAudit('loan_created',
@@ -4762,7 +4778,10 @@ function renderLoans() {
   const scheduledCards = filteredScheduled.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
-    const isSoon = isStartingSoon(today, g.startDate);
+    const _gBId = g.items[0]?.BatchID;
+    const _gFallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||''));
+    const _gIsland = (_gBId && window._loanDocCache?.[_gBId]?.island) || window._loanDocCache?.[_gFallbackKey]?.island || '';
+    const isSoon = isStartingSoon(today, g.startDate, _gIsland);
     const key = _loanKey(g);
     window._loanGroupMap = window._loanGroupMap || {};
     window._loanGroupMap[key] = g;
@@ -4831,7 +4850,7 @@ function renderLoans() {
   const upcomingCards = filteredUpcoming.map(u => {
     const daysUntilStart = daysBetween(today, u.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
-    const isSoon = isStartingSoon(today, u.startDate);
+    const isSoon = isStartingSoon(today, u.startDate, window._loanDocCache?.[u.id]?.island || '');
     const itemsHtml = u.items.map(uItem => {
       const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
       if (!eq) return '';
@@ -9546,7 +9565,8 @@ async function loadLoanDocNotes() {
         notesCell:      doc.notesCell      || doc.notes || '',
         simproJobId:    doc.simproJobId    || '',
         accountManager: doc.accountManager || '',
-        demoType:       doc.demoType       || ''
+        demoType:       doc.demoType       || '',
+        island:         doc.island         || ''
       };
       // Firebase returns keys decoded. Store under both decoded (as returned)
       // and encoded (as constructed by lookup code) so both paths hit the cache.
@@ -10818,9 +10838,12 @@ function mpSignOut() {
 }
 
 // ── NAV SHELL ───────────────────────────────────────────────────────────
+// Scan used to be Service & Projects' center tab — it's now a header icon
+// (see mpGoScreen()'s chip-area code) so both roles share the same center
+// "+ Create loan" tab, and Loans/Equipment/More line up in the same spots.
 const MP_TABS = {
   am:      [ { id: 'today',  label: 'Today',  icon: 'home' }, { id: 'loans', label: 'Loans', icon: 'list' }, { id: 'book',      label: 'Book',      icon: 'plus',   center: true }, { id: 'equipment', label: 'Equipment', icon: 'box' }, { id: 'more', label: 'More', icon: 'more' } ],
-  service: [ { id: 'overview', label: 'Overview', icon: 'home' }, { id: 'loans', label: 'Loans', icon: 'list' }, { id: 'scan',      label: 'Scan',      icon: 'scan',   center: true }, { id: 'equipment', label: 'Equipment', icon: 'box' }, { id: 'more', label: 'More', icon: 'more' } ]
+  service: [ { id: 'overview', label: 'Overview', icon: 'home' }, { id: 'loans', label: 'Loans', icon: 'list' }, { id: 'book',      label: 'Book',      icon: 'plus',   center: true }, { id: 'equipment', label: 'Equipment', icon: 'box' }, { id: 'more', label: 'More', icon: 'more' } ]
 };
 const MP_ICONS = {
   home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
@@ -10904,9 +10927,20 @@ function mpGoScreen(screen) {
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
     screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.scheduled ? 'Edit loan' : 'Reassign items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : screen === 'equipmentdetail' ? 'Item details' : 'Loans';
+  // Service & Projects has no use for the "All loans" text (they see every
+  // loan regardless) — that header slot becomes a quick Scan shortcut
+  // instead, now that Scan is no longer the tab bar's center button (see
+  // MP_TABS — both roles now get "+ Create loan" there, matching AM).
   const chip = document.getElementById('mp-role-chip');
-  chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
-  chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
+  if (_mp.role === 'service') {
+    chip.className = 'mp-role-chip mp-service';
+    chip.style.padding = '0';
+    chip.innerHTML = `<button onclick="mpGoScreen('scan')" style="background:none;border:none;padding:6px 10px;display:flex;align-items:center;color:inherit;cursor:pointer" aria-label="Scan">${mpIcon('scan', 20)}</button>`;
+  } else {
+    chip.className = 'mp-role-chip mp-am';
+    chip.style.padding = '';
+    chip.textContent = 'Your loans';
+  }
   mpRenderTabbar();
   document.getElementById('mp-body').scrollTop = 0;
 }
@@ -11555,7 +11589,7 @@ function mpResetBookWizard() {
     startDate: nzDate(), endDate: '',
     am: isAM ? _mp.name : '',
     email: isAM && self ? (self.email || '') : '',
-    contact: '', jobType: 'Demo', demoType: '',
+    contact: '', jobType: 'Demo', demoType: '', island: '',
     notes: '', shipping: '',
     deviceQuery: '', selected: preSelected,
     confirmed: null
@@ -11590,6 +11624,7 @@ function mpRenderBookStep1() {
       <div style="font:400 13px var(--mp-font-body);color:var(--mp-purple);background:var(--mp-purple-20);padding:10px 14px;border-radius:var(--mp-radius-md)">Fields marked * are required. Devices come next.</div>
       <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${mpFormVal(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${mpFormVal(b.location)}" oninput="_mp.book.location=this.value"></div>
+      <div onclick="mpOpenIslandSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Shipping island *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.island?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${b.island==='North'?'North Island':b.island==='South'?'South Island':'Select…'}<span style="color:var(--mp-black-40)">›</span></div></div>
       <div style="display:flex;flex-wrap:wrap;gap:10px">
         <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
         <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
@@ -11627,6 +11662,16 @@ function mpOpenJobTypeSheet() {
     opts.map(o => `<button class="mp-sheet-item" onclick="mpBookSetJobType('${o}')">${_mp.book.jobType===o?'✓ ':''}${o}</button>`).join(''));
 }
 function mpBookSetJobType(v) { _mp.book.jobType = v; mpCloseSheet(); mpRenderBookStep1(); }
+// Drives the shipping lead-time reminder (see isStartingSoon() and
+// .gas-proxy/Code.js's isStartingSoonBusinessDays()) — South Island gets a
+// full business week's notice instead of North Island's 3 days, to cover
+// the extra inter-island freight time.
+function mpOpenIslandSheet() {
+  const opts = [['North', 'North Island'], ['South', 'South Island']];
+  mpOpenSheet('<div class="mp-sheet-title">Shipping island</div>',
+    opts.map(([v, label]) => `<button class="mp-sheet-item" onclick="mpBookSetIsland('${v}')">${_mp.book.island===v?'✓ ':''}${label}</button>`).join(''));
+}
+function mpBookSetIsland(v) { _mp.book.island = v; mpCloseSheet(); mpRenderBookStep1(); }
 const MP_DEMO_TYPE_FIXED = ['Conference/Presentation', 'Clinical Trial', 'Hotswap'];
 function mpOpenDemoTypeSheet() {
   // A current value that isn't one of the fixed options is a previously
@@ -11665,10 +11710,10 @@ function mpBookSetDemoTypeOther() {
 }
 function mpBookGoStep2() {
   const b = _mp.book;
-  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || !b.demoType) {
+  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || !b.demoType || !b.island) {
     showToast('error', 'Fill in all required fields first.'); return;
   }
-  if (b.endDate <= b.startDate) { showToast('error', 'End date must be after the start date.'); return; }
+  if (b.endDate < b.startDate) { showToast('error', 'End date must be on or after the start date.'); return; }
   b.step = 2;
   mpBookPickDevices();
 }
@@ -11739,6 +11784,7 @@ async function mpBookConfirm() {
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
   setVal('b-loan-to', b.loanTo);
   setVal('b-location', b.location);
+  setVal('b-island', b.island);
   setVal('b-start-date', b.startDate);
   setVal('b-end-date', b.endDate);
   setVal('b-account-manager', b.am);

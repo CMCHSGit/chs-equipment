@@ -236,11 +236,19 @@ function sendDemoReminders() {
   // written. Fixed 2026-08-14.
   const raw = fetchFirebaseJson('/data/equipment.json') || {};
   const items = Array.isArray(raw) ? raw : Object.values(raw);
+  const amsRaw = fetchFirebaseJson('/accountManagers.json') || [];
+  const ams = Array.isArray(amsRaw) ? amsRaw : Object.values(amsRaw);
+  const serviceTeam = ams.filter(function(a) { return a && amEffectiveRole_(a) === 'service'; });
 
+  // NOTE: the notice window now depends on shipping island (see
+  // isStartingSoonBusinessDays()), and island lives on the loan's loanDoc,
+  // not on the equipment record — so the businessDays check can't happen
+  // here any more. Group first by future-dated on-loan equipment only
+  // (todayStr < LoanStartDate), then check each group's actual window once
+  // its loanDoc (and island) has been fetched below.
   const groups = {};
   items.filter(function(e) {
-    return e && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate &&
-      isStartingSoonBusinessDays(todayStr, e.LoanStartDate);
+    return e && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > todayStr;
   }).forEach(function(e) {
     const key = e.OnLoanTo + '|||' + e.LoanStartDate;
     if (!groups[key]) groups[key] = { loanTo: e.OnLoanTo, startDate: e.LoanStartDate, batchId: e.BatchID || null, items: [] };
@@ -260,7 +268,11 @@ function sendDemoReminders() {
         Logger.log('Skipping non-demo job for ' + key + ' (' + jobType + ')');
         return;
       }
+      if (!isStartingSoonBusinessDays(todayStr, g.startDate, loanDoc.island)) {
+        return; // not yet within this loan's notice window
+      }
       sendDemoReminderInvite(g, loanDoc);
+      sendDemoReminderPush(g, loanDoc, serviceTeam);
       putFirebaseJson('/demoReminders/' + encodeURIComponent(key) + '.json', { sentAt: new Date().toISOString() });
       Logger.log('Demo reminder sent for ' + g.loanTo + ' starting ' + g.startDate);
     } catch (err) {
@@ -276,6 +288,7 @@ function sendDemoReminderInvite(g, loanDoc) {
   const descLines = ['Demo equipment loan starting for ' + g.loanTo];
   if (loanDoc.accountManager) descLines.push('Account Manager: ' + loanDoc.accountManager);
   if (loanDoc.location) descLines.push('Location: ' + loanDoc.location);
+  if (loanDoc.island) descLines.push('Shipping to: ' + (loanDoc.island === 'North' ? 'North Island' : 'South Island'));
   if (itemLines.length) descLines.push('', 'Items:', itemLines.join('\n'));
   const description = descLines.join('\n');
 
@@ -296,6 +309,32 @@ function sendDemoReminderInvite(g, loanDoc) {
     subject: 'Upcoming Demo: ' + g.loanTo + ' — starts ' + fmtDate(g.startDate),
     body: description,
     attachments: [icsBlob]
+  });
+}
+
+// Mirrors index.html's SERVICE_TEAM_OPERATORS/amEffectiveRole() so "who
+// counts as Service & Projects" is the same list on both sides — a
+// person's role is an explicit field on their accountManagers record (set
+// via the mobile app's "Manage team roles" sheet), falling back to this
+// hardcoded list for anyone who hasn't had a role set yet.
+const SERVICE_TEAM_OPERATORS = ['Peter Lin', 'Jonathan Nasrun'];
+function amEffectiveRole_(am) {
+  return am.role || (SERVICE_TEAM_OPERATORS.includes(am.name) ? 'service' : 'am');
+}
+
+// Push notification twin of sendDemoReminderInvite() — same event, same
+// dedup gate (the caller only reaches here once per loan/day), but to the
+// Service & Projects team's phones instead of the fixed DEMO_REMINDER_RECIPIENTS
+// email list, since they're the ones actually testing/dispatching the gear.
+function sendDemoReminderPush(g, loanDoc, serviceTeam) {
+  if (!serviceTeam || !serviceTeam.length) return;
+  const islandNote = loanDoc.island ? (loanDoc.island === 'North' ? ' (North Island)' : ' (South Island)') : '';
+  const title = 'Upcoming demo: ' + g.loanTo;
+  const body = 'Starts ' + fmtDate(g.startDate) + islandNote + (loanDoc.location ? ' — ' + loanDoc.location : '') +
+    ' — ' + g.items.length + ' item' + (g.items.length !== 1 ? 's' : '');
+  serviceTeam.forEach(function(am) {
+    try { sendPushToPerson_(am, title, body, TRACKER_URL + '?mobile=1'); }
+    catch (err) { Logger.log('Demo reminder push failed for ' + am.name + ': ' + err); }
   });
 }
 
@@ -540,9 +579,16 @@ function testSendPushOnly() {
 
 // Mirrors the tracker's client-side isStartingSoon(): counts weekdays
 // between today and startDate (inclusive of startDate) so a Monday start
-// enters the notice window on the preceding Friday, not over the weekend.
-// Ported here to keep the two in lockstep — see index.html's isStartingSoon().
-function isStartingSoonBusinessDays(todayStr, startDateStr) {
+// enters the notice window on the preceding Wednesday (North Island) or the
+// preceding Monday (South Island), not over the weekend. Ported here to
+// keep the two in lockstep — see index.html's isStartingSoon().
+//
+// North Island ships in 3 business days; South Island needs a full business
+// week (5 days) for the extra inter-island freight time, so shipping isn't
+// caught out. Missing/unrecognized island (a loan created before this field
+// existed) defaults to the longer, safer South Island window rather than
+// risk under-notifying.
+function isStartingSoonBusinessDays(todayStr, startDateStr, island) {
   if (!startDateStr || startDateStr <= todayStr) return false; // no advance notice for same-day/past starts
   let businessDays = 0;
   let cur = todayStr;
@@ -553,7 +599,8 @@ function isStartingSoonBusinessDays(todayStr, startDateStr) {
     const dow = next.getUTCDay();
     if (dow !== 0 && dow !== 6) businessDays++;
   }
-  return businessDays <= 2;
+  const maxBusinessDays = island === 'North' ? 3 : 5;
+  return businessDays <= maxBusinessDays;
 }
 
 function addDaysICS(yyyymmdd, days) {
