@@ -16,7 +16,7 @@ Last updated: 2026-09-11
 - [ ] **`openStuckLoanReassign()` not mobile-native** — the "resolve what's blocking this upcoming booking" shortcut (Today tab's "Action required" alerts, a scheduled loan's "Reassign/transfer" action, the stuck-loan email/push deep link) still opens the desktop Reassign modal directly instead of `mpOpenReassignFlow()`.
 - [ ] **Push notifications inactive** — built for the stuck-loan reminder, but needs the Firebase console setup finished (VAPID key, service-account key pasted into Apps Script Script Properties).
 - [ ] **App icon badge only updates while the app is open** — no push-driven update yet, so it won't tick up while the app is closed/backgrounded. Would need the push payload to carry the AM's current count and `sw.js`'s push handler to call `self.registration.setAppBadge()`.
-- [ ] **Demo-loan reminder has no push** — only the stuck-loan reminder got push; `sendDemoReminders()` is still email-only.
+- [x] **Demo-loan reminder push** — `sendDemoReminders()` now also pushes to every Service & Projects team member's device, alongside the existing email (Jonathan, 2026-09-11). Needs testing (see below) — still needs the same Firebase console setup as the stuck-loan push before it can actually deliver.
 - [ ] **Alerts screen is still just one toggle** — no in-app history list or per-notification-type toggles, per the original mockup.
 - [ ] **Kit-builder not on mobile** — built into desktop's Database tab only (see Desktop section). Flag if mobile parity is wanted.
 
@@ -24,13 +24,15 @@ Last updated: 2026-09-11
 
 - [ ] All six mobile-native loan actions: Add items, Return items, Extend, Reassign (scheduled-edit form, active-loan move, and "Create new loan with these items"), Delete loan, Loan form.
 - [ ] Scan tab's Check out / Return / Count modes, especially the "on loan when counted" two-button branch.
-- [ ] AM tab bar's Equipment tab (replacing Scan) — confirm parity with the service role's version.
+- [ ] AM and Service & Projects tab bars now match (both: Today/Overview, Loans, **Book** center, Equipment, More) — Service & Projects' Scan moved to a header icon top-right instead of a tab. Confirm this reshuffle looks/works right for both roles.
 - [ ] Equipment multi-select → "Add N devices to loan" hand-off into the Book wizard, the Book draft surviving a tab switch, and selected devices pinning to the top of the list regardless of search/filter.
-- [ ] New item detail screen (mobile-native rebuild) — Check out/Check in actions, recent activity list.
+- [ ] New item detail screen (mobile-native rebuild) — Check out/Check in actions, recent activity list, and the anti-double-tap "✓ Counted/Returned/Checked in" confirmation state added 2026-09-11.
 - [ ] Action-required badge — tab icon and home-screen app icon, on both Android Chrome and iOS 16.4+ if available.
 - [ ] The scheduled-loan dedup fix — a real (not test-case) split loan should show as one card with a pending sub-list, not two cards.
 - [ ] Audit log source badges — do something from mobile, confirm it shows 📱 Mobile.
 - [ ] "Manage team roles" correctly hidden from a real AM's More screen, still visible when a service person previews the AM view.
+- [ ] **New (Jonathan, 2026-09-11): mandatory Shipping Island (North/South)** field on loan creation, both desktop and mobile — drives island-aware reminder lead time (North: 3 business days notice, South: 5). Confirm the field is required, saves correctly, and the reminder timing math looks right for both islands.
+- [ ] **New (Jonathan, 2026-09-11): same-day loans allowed** — end date can now equal start date instead of being rejected. Confirm this works on both the desktop batch form and the mobile Book wizard.
 
 ## Desktop
 
@@ -41,3 +43,5 @@ Last updated: 2026-09-11
 ### Needs testing
 
 - [ ] New "Build Kit" flow — item detail's "📦 Build Kit" button, Database tab multi-select as accessories, "Save as Kit Group" in the selection bar.
+- [ ] Mandatory Shipping Island (North/South) field on the desktop batch loan form — same feature as mobile above, confirm required + saves correctly.
+- [ ] Same-day loans (end date = start date) now accepted on the desktop batch form too.
