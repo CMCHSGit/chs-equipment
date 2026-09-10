@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 105;
+const APP_VERSION = 106;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12643,7 +12643,7 @@ function mpRenderMore() {
         : mpPushEnabled()
           ? '<div class="mp-footnote" style="margin-bottom:16px">✓ Push notifications are on for this device.</div>'
           : '<button class="mp-btn mp-btn-secondary" style="margin-bottom:16px" onclick="mpEnablePush()">Enable push notifications</button>'}
-      <button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>
+      ${_mp.realRole === 'service' ? '<button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>' : ''}
       <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
     </div>`;
   window._mpMoreLinks = links;
