@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 99;
+const APP_VERSION = 100;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5589,7 +5589,14 @@ async function confirmExtendLoan() {
   if (currentExtendGroup._upcomingId) {
     // Upcoming loan — update the upcomingLoans entry instead of equipment records
     const u = upcomingLoans.find(x => x.id === currentExtendGroup._upcomingId);
-    if (u) { u.endDate = newDate; await saveUpcomingLoans(); }
+    if (u) {
+      const _oldUDate = u.endDate;
+      u.endDate = newDate;
+      await saveUpcomingLoans();
+      writeAudit('loan_extended',
+        'Upcoming loan for ' + currentExtendGroup.loanTo + ' extended from ' + formatDisplayDate(_oldUDate) + ' to ' + formatDisplayDate(newDate),
+        { loanTo: currentExtendGroup.loanTo, oldDate: _oldUDate, newDate, items: currentExtendGroup.items.map(i => i.CHSAssetNo) });
+    }
     closeExtendModal(); renderLoans();
     showToast('success', 'Loan extended to ' + formatDisplayDate(newDate) + ' for ' + currentExtendGroup.loanTo);
     return;
