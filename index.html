@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 100;
+const APP_VERSION = 101;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10603,6 +10603,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-reassign"></div>
       <div class="mp-screen" id="mp-screen-deleteloan"></div>
       <div class="mp-screen" id="mp-screen-loanform"></div>
+      <div class="mp-screen" id="mp-screen-equipmentdetail"></div>
     </div>
     <div id="mp-tabbar"></div>
   </div>
@@ -10895,9 +10896,10 @@ function mpGoScreen(screen) {
   else if (screen === 'reassign') { document.getElementById('mp-screen-reassign').classList.add('mp-active'); mpRenderReassign(); }
   else if (screen === 'deleteloan') { document.getElementById('mp-screen-deleteloan').classList.add('mp-active'); mpRenderDeleteLoan(); }
   else if (screen === 'loanform') { document.getElementById('mp-screen-loanform').classList.add('mp-active'); mpRenderLoanForm(); }
+  else if (screen === 'equipmentdetail') { document.getElementById('mp-screen-equipmentdetail').classList.add('mp-active'); mpRenderEquipmentDetail(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.scheduled ? 'Edit loan' : 'Reassign items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.scheduled ? 'Edit loan' : 'Reassign items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : screen === 'equipmentdetail' ? 'Item details' : 'Loans';
   const chip = document.getElementById('mp-role-chip');
   chip.className = 'mp-role-chip ' + (_mp.role === 'am' ? 'mp-am' : 'mp-service');
   chip.textContent = _mp.role === 'am' ? 'Your loans' : 'All loans';
@@ -11330,7 +11332,87 @@ function mpOpenEquipmentActions(assetId) {
     if (u) return mpOpenLoanActionsForGroup({ isUpcoming: true, id: u.id, loanTo: u.loanTo });
   }
   mpOpenSheet('<div class="mp-sheet-title">' + esc(e.CHSAssetNo) + ' · ' + esc(e.Model) + '</div>',
-    '<button class="mp-sheet-item" onclick="mpCloseSheet();setTimeout(()=>openDetail(\'' + e.id + '\'),350)">View details</button>');
+    '<button class="mp-sheet-item" onclick="mpCloseSheet();setTimeout(()=>mpOpenEquipmentDetail(\'' + e.id + '\'),350)" style="justify-content:space-between;color:var(--mp-purple);font-weight:600">' +
+    '<span style="display:flex;align-items:center;gap:10px">' + mpIcon('search',18) + 'View details</span>' +
+    '<span style="color:var(--mp-black-40);font-weight:400">›</span></button>');
+}
+
+// ── EQUIPMENT DETAIL (read-only, mobile-native) ─────────────────────────
+// Replaces opening the desktop item-detail modal directly — that dense
+// two-column form grid (with Edit/Retire/permanent-delete/History buttons
+// meant for a mouse) doesn't fit a phone screen. Shows the same underlying
+// fields, skipping any with no value, plus recent history read straight
+// from the same historyLog array the desktop History button uses. Only
+// the two most common actions (check out/check in) are wired here — Edit,
+// Retire, permanently deleting the asset, and Extend-from-detail stay
+// desktop-only, same scoping call as the read-only Loan Form screen.
+function mpOpenEquipmentDetail(id) {
+  _mp.equipmentDetailId = id;
+  mpGoScreen('equipmentdetail');
+}
+function mpRenderEquipmentDetail() {
+  const e = equipment.find(x => x.id === _mp.equipmentDetailId);
+  if (!e) { mpGoScreen('equipment'); return; }
+  const today = mpToday();
+  const status = mpEquipmentStatus(e, today);
+  const onLoan = status.key === 'on-loan' || status.key === 'overdue';
+
+  const field = (label, val) => val ? `<div style="margin-bottom:12px"><div style="${mpFieldLabel()}">${esc(label)}</div><div style="font:400 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(val)}</div></div>` : '';
+  const history = historyLog.filter(h => h.chsAssetNo === e.CHSAssetNo).slice(0, 8);
+  const actionLabel = { Loan: 'Loaned out', Return: 'Returned', Count: 'Counted', Transfer: 'Transferred' };
+
+  document.getElementById('mp-screen-equipmentdetail').innerHTML = `
+    <div style="padding:16px 20px 100px">
+      <div class="mp-h3" style="margin-bottom:2px">${esc(e.Model)}</div>
+      <div style="font:400 13px var(--mp-font-mono);color:var(--mp-text-muted);margin-bottom:10px">${esc(e.CHSAssetNo)}</div>
+      <span style="display:inline-flex;padding:4px 12px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;background:${status.bg};color:${status.fg};margin-bottom:18px">${status.label}</span>
+
+      ${field('Description', e.Description)}
+      ${field('Serial number', e.SerialNo)}
+      ${field('Part number', e.PartNo)}
+      ${field('Shelf location', e.ShelfLocation)}
+      ${field('Battery serial number', e.BatterySerialNo)}
+
+      ${onLoan ? `
+      <div class="mp-section-title" style="margin-top:4px">Current loan</div>
+      <div class="mp-card" style="padding:14px">
+        ${field('On loan to', e.OnLoanTo)}
+        ${field('Location', e.Location)}
+        ${field('Start date', e.LoanStartDate ? formatDisplayDate(e.LoanStartDate) : '')}
+        ${field('Due', e.LoanEndDate ? formatDisplayDate(e.LoanEndDate) : '')}
+      </div>` : ''}
+
+      ${e.Notes ? `<div class="mp-section-title">Notes</div><div class="mp-card" style="padding:14px;font:400 14px/1.5 var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Notes)}</div>` : ''}
+
+      <div class="mp-section-title">Recent activity</div>
+      <div class="mp-card" style="padding:0">
+        ${history.length ? history.map(h => `
+          <div style="padding:10px 14px;border-bottom:1px solid var(--mp-border-hairline)">
+            <div style="font:600 13px var(--mp-font-body);color:var(--mp-text-strong)">${esc(actionLabel[h.action] || h.action)}${h.loanTo ? ' — ' + esc(h.loanTo) : ''}</div>
+            <div style="font:400 12px var(--mp-font-body);color:var(--mp-text-muted)">${esc(formatDisplayDate((h.ts||'').slice(0,10)))}${h.operator ? ' · ' + esc(h.operator) : ''}</div>
+          </div>`).join('') : '<div style="padding:16px 14px;text-align:center;color:var(--mp-text-muted);font-size:13px">No history for this item.</div>'}
+      </div>
+    </div>
+    <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+      <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpGoScreen('equipment')">Back</button>
+      ${onLoan
+        ? `<button class="mp-btn mp-btn-primary" onclick="mpEquipmentDetailCheckIn('${e.id}')">Check in</button>`
+        : status.key === 'available'
+          ? `<button class="mp-btn mp-btn-primary" onclick="mpEquipmentDetailCheckOut('${esc(e.CHSAssetNo)}')">Check out</button>`
+          : `<div class="mp-footnote" style="flex:1;text-align:center;align-self:center">Booked ahead — manage via the Loans tab.</div>`}
+    </div>`;
+}
+async function mpEquipmentDetailCheckIn(assetId) {
+  const item = equipment.find(e => e.id === assetId);
+  if (!item) return;
+  currentItem = item;
+  mpShowBlockingLoader('Checking in…', "Please don't close the app or navigate away.");
+  try { await submitReturn(); } finally { mpHideBlockingLoader(); }
+  mpRenderEquipmentDetail();
+}
+function mpEquipmentDetailCheckOut(assetNo) {
+  window._mpPendingBookAsset = assetNo;
+  mpGoScreen('book');
 }
 
 // ── BOOK A DEMO (AM only — see MP_TABS) ─────────────────────────────────
