@@ -11291,7 +11291,7 @@ function mpRenderEquipment() {
 }
 function mpToggleEquipmentSelectMode() {
   _mp.eqSelectMode = !_mp.eqSelectMode;
-  if (!_mp.eqSelectMode) _mp.eqSelected = [];
+  if (!_mp.eqSelectMode) { _mp.eqSelected = []; _mp.eqSelectContext = null; }
   mpRenderEquipment();
 }
 function mpToggleEquipmentSelect(assetNo) {
@@ -11300,24 +11300,54 @@ function mpToggleEquipmentSelect(assetNo) {
   mpRenderEquipmentList();
   mpRenderEquipmentSelectFooter();
 }
+function mpClearEquipmentSelection() {
+  _mp.eqSelected = [];
+  mpRenderEquipmentList();
+  mpRenderEquipmentSelectFooter();
+}
 function mpRenderEquipmentSelectFooter() {
   const el = document.getElementById('mp-eq-select-footer');
   if (!el) return;
   const n = _mp.eqSelected.length;
-  if (!_mp.eqSelectMode || !n) { el.innerHTML = ''; return; }
-  el.innerHTML = `<div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0))">
-    <button class="mp-btn mp-btn-primary" onclick="mpEquipmentAddSelectedToLoan()">Add ${n} device${n===1?'':'s'} to loan</button>
+  // Picking devices for an in-progress loan draft (mpBookPickDevices()) can
+  // legitimately end at zero — clearing everything and saving that back is
+  // how you empty out a draft's device list — so that entry point always
+  // keeps its save action around. Plain standalone use (just browsing
+  // Equipment and picking some to add) has nothing useful to do at zero,
+  // so the whole footer hides until at least one is picked.
+  const editingBook = _mp.eqSelectContext === 'book';
+  if (!_mp.eqSelectMode || (!n && !editingBook)) { el.innerHTML = ''; return; }
+  const primaryLabel = editingBook
+    ? (n ? `Save ${n} device${n===1?'':'s'}` : 'Save with no devices')
+    : `Add ${n} device${n===1?'':'s'} to loan`;
+  el.innerHTML = `<div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+    ${n ? `<button onclick="mpClearEquipmentSelection()" style="flex:none;padding:0 18px;border-radius:var(--mp-radius-md);border:1.5px solid var(--mp-critical);background:var(--mp-white);color:var(--mp-critical);font:600 14px var(--mp-font-body);cursor:pointer">Clear</button>` : ''}
+    <button class="mp-btn mp-btn-primary" onclick="mpEquipmentAddSelectedToLoan()">${primaryLabel}</button>
   </div>`;
 }
-// Hands the picked assets to the Book wizard the same way Scan's single-item
-// checkout and Reassign's multi-item handoff already do (window._mpPendingBookAssets,
-// consumed by mpEnterBookScreen) — merged into an in-progress draft if one
-// exists, or seeding a fresh one otherwise.
+// Hands the picked assets back to the Book wizard. Two different callers,
+// two different merge semantics:
+// - mpBookPickDevices() (editing an in-progress draft's device list) seeds
+//   eqSelected as a COPY of _mp.book.selected, so whatever comes back here
+//   already reflects any removals as well as additions — it replaces
+//   _mp.book.selected outright rather than merging into it.
+// - Everything else (Scan's single-item checkout, Reassign's multi-item
+//   handoff, or just browsing Equipment standalone) hands off via
+//   window._mpPendingBookAssets instead, which mpEnterBookScreen() only
+//   ever adds on top of an existing draft (or seeds a fresh one) — never
+//   removes anything, since those callers never had the full picture of
+//   what else might already be selected.
 function mpEquipmentAddSelectedToLoan() {
-  if (!_mp.eqSelected.length) return;
-  window._mpPendingBookAssets = _mp.eqSelected.slice();
+  const editingBook = _mp.eqSelectContext === 'book' && _mp.book;
+  if (!_mp.eqSelected.length && !editingBook) return;
+  if (editingBook) {
+    _mp.book.selected = _mp.eqSelected.slice();
+  } else {
+    window._mpPendingBookAssets = _mp.eqSelected.slice();
+  }
   _mp.eqSelectMode = false;
   _mp.eqSelected = [];
+  _mp.eqSelectContext = null;
   mpGoScreen('book');
 }
 
@@ -11621,11 +11651,13 @@ function mpBookGoStep2() {
   }
   if (b.endDate <= b.startDate) { showToast('error', 'End date must be after the start date.'); return; }
   b.step = 2;
-  mpRenderBook();
+  mpBookPickDevices();
 }
 
 // Mirrors the overlap check inside submitBatchLoan()'s isDateConflict() —
 // free = the existing loan (if any) doesn't overlap the requested dates.
+// Still used by the Add-items-to-an-existing-loan screen's device picker
+// (mpRenderAddItemsList) — not the new-loan wizard below any more.
 function mpBookIsFree(e, startDate, endDate) {
   if (!e.OnLoanTo || e.Returned === 'Yes') return true;
   const existingStart = e.LoanStartDate || '', existingEnd = e.LoanEndDate || '';
@@ -11633,65 +11665,49 @@ function mpBookIsFree(e, startDate, endDate) {
   if (existingStart && endDate && existingStart >= endDate) return true;
   return false;
 }
-// Shell (incl. the search <input>) is rendered ONCE; typing only
-// re-renders #mp-book-device-list below, so the input never gets
-// recreated mid-keystroke — recreating it on every oninput (the original
-// bug here) drops focus and garbles what's typed, same failure mode
-// avoided on the Equipment screen's search box.
+// Device picking for a new loan happens on the Equipment tab itself (the
+// full list, same search/filters as browsing normally) rather than a
+// separate date-filtered chooser — one screen to maintain, and it's the
+// same screen whether you're building a loan or just browsing. Seeds
+// select mode with whatever's already picked so nothing already chosen is
+// lost, and tags eqSelectContext so mpEquipmentAddSelectedToLoan() knows
+// to treat the return trip as "this replaces the draft's device list"
+// (edits AND removals) rather than "add these on top of" (see there).
+function mpBookPickDevices() {
+  _mp.eqSelectMode = true;
+  _mp.eqSelected = (_mp.book.selected || []).slice();
+  _mp.eqSelectContext = 'book';
+  mpGoScreen('equipment');
+}
+// Step 2 is now just a review of what's already been picked on the
+// Equipment tab, plus the actual submit action — editing the list itself
+// happens over there (mpBookPickDevices()), not here.
 function mpRenderBookStep2() {
   const b = _mp.book;
+  const items = b.selected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean);
   document.getElementById('mp-screen-book').innerHTML = `
     ${mpBookProgressHtml()}
-    <div style="padding:16px 20px 10px">
-      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:10px">Devices to include. Availability shown for ${esc(b.startDate)} – ${esc(b.endDate)}.</div>
-      <input class="mp-input" id="mp-book-search" placeholder="Search assets" value="${mpFormVal(b.deviceQuery)}" oninput="_mp.book.deviceQuery=this.value;mpRenderBookDeviceList()">
+    <div style="padding:16px 20px 10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted)">${items.length} device${items.length===1?'':'s'} selected</div>
+      ${items.length ? `<button onclick="mpBookClearDevices()" style="flex:none;padding:7px 16px;border-radius:var(--mp-radius-pill);border:1.5px solid var(--mp-critical);background:var(--mp-white);color:var(--mp-critical);font:600 13px var(--mp-font-body);cursor:pointer">Clear</button>` : ''}
     </div>
-    <div id="mp-book-device-list"></div>
-    <div style="height:90px"></div>
+    <div>${items.length ? items.map(e => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline)">
+        <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
+        <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div></div>
+      </div>`).join('') : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No devices selected yet</div>'}</div>
+    <div style="padding:16px 20px">
+      <button class="mp-btn mp-btn-ghost" onclick="mpBookPickDevices()">${items.length ? 'Edit devices' : 'Choose devices'}</button>
+    </div>
+    <div style="height:20px"></div>
     <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
       <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="_mp.book.step=1;mpRenderBook()">Back</button>
-      <button class="mp-btn mp-btn-primary" id="mp-book-confirm-btn" onclick="mpBookConfirm()"></button>
+      <button class="mp-btn mp-btn-primary" onclick="mpBookConfirm()">${items.length} device${items.length===1?'':'s'} selected · Confirm loan</button>
     </div>`;
-  mpRenderBookDeviceList();
 }
-function mpRenderBookDeviceList() {
-  const b = _mp.book;
-  const q = (b.deviceQuery || '').trim().toLowerCase();
-  // Shopping-cart behaviour: selected devices always show in their own
-  // section at the top, regardless of the current search text, so picking
-  // stays visible while searching for the next thing — search results
-  // below exclude whatever's already selected instead of showing it twice.
-  const selectedSet = new Set(b.selected);
-  const selectedItems = b.selected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean);
-  const matches = equipment.filter(e => !selectedSet.has(e.CHSAssetNo) && (!q || Object.values(e).join(' ').toLowerCase().includes(q)));
-  const free = matches.filter(e => mpBookIsFree(e, b.startDate, b.endDate));
-  const busy = matches.filter(e => !mpBookIsFree(e, b.startDate, b.endDate));
-  // Both free and busy devices are selectable — matches submitBatchLoan()'s
-  // actual behaviour: a device already on loan isn't rejected, it's queued
-  // as an upcoming loan that activates once the current one returns
-  // (submitBatchLoan() only ever skips one outright, with its own toast,
-  // if it's genuinely locked to an overlapping Simpro job).
-  const row = (e, busyNote) => {
-    const checked = selectedSet.has(e.CHSAssetNo);
-    return `<div onclick="mpBookToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer${busyNote ? ';border-left:3px solid var(--mp-orange)' : ''}">
-      <div style="min-width:0"><div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
-      <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(e.CHSAssetNo)}${e.ShelfLocation ? ' · ' + esc(e.ShelfLocation) : ''}</div>
-      ${busyNote ? `<div style="font:400 12px var(--mp-font-body);color:var(--mp-orange);margin-top:2px">${busyNote}</div>` : ''}</div>
-      <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:15px">${checked?'✓':''}</div>
-    </div>`;
-  };
-  document.getElementById('mp-book-device-list').innerHTML = `
-    ${selectedItems.length ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e)).join('')}</div>` : ''}
-    <div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
-    <div>${free.length ? free.map(e => row(e)).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
-    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : '') + ' — picking this queues your loan to start once it comes back')).join('')}</div>` : ''}`;
-  const btn = document.getElementById('mp-book-confirm-btn');
-  if (btn) btn.textContent = b.selected.length + ' device' + (b.selected.length===1?'':'s') + ' selected · Confirm loan';
-}
-function mpBookToggleDevice(assetNo) {
-  const i = _mp.book.selected.indexOf(assetNo);
-  if (i >= 0) _mp.book.selected.splice(i, 1); else _mp.book.selected.push(assetNo);
-  mpRenderBookDeviceList();
+function mpBookClearDevices() {
+  _mp.book.selected = [];
+  mpRenderBookStep2();
 }
 
 async function mpBookConfirm() {
