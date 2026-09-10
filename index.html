@@ -1856,7 +1856,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 107;
+const APP_VERSION = 108;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11491,13 +11491,14 @@ function mpRenderEquipmentDetail() {
     <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
       <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpGoScreen('equipment')">Back</button>
       ${onLoan
-        ? `<button class="mp-btn mp-btn-primary" onclick="mpEquipmentDetailCheckIn('${e.id}')">Check in</button>`
+        ? `<button class="mp-btn mp-btn-primary" onclick="mpEquipmentDetailCheckIn('${e.id}',this)">Check in</button>`
         : status.key === 'available'
           ? `<button class="mp-btn mp-btn-primary" onclick="mpEquipmentDetailCheckOut('${esc(e.CHSAssetNo)}')">Check out</button>`
           : `<div class="mp-footnote" style="flex:1;text-align:center;align-self:center">Booked ahead — manage via the Loans tab.</div>`}
     </div>`;
 }
-async function mpEquipmentDetailCheckIn(assetId) {
+async function mpEquipmentDetailCheckIn(assetId, btnEl) {
+  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
   const item = equipment.find(e => e.id === assetId);
   if (!item) return;
   currentItem = item;
@@ -12538,7 +12539,7 @@ function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
   _mpScanTimer = setTimeout(() => { if (v.trim().length >= 3) mpScanLookup(v); }, 400);
 }
-function mpScanLookup(val) {
+function mpScanLookup(val, justDid) {
   val = (val || '').trim();
   const box = document.getElementById('mp-scan-result');
   if (!box) return;
@@ -12554,9 +12555,18 @@ function mpScanLookup(val) {
   const mode = _mp.scanMode || 'checkout';
 
   let actionBtn;
-  if (mode === 'return') {
+  // justDid is only set for the one render immediately after an action
+  // completes (see mpScanCount()/mpScanCheckIn() below) — a persistent
+  // "done" state instead of the normal actionable button, so a well-meaning
+  // repeat tap ("did that work?") can't fire the same write twice. Retyping
+  // or re-looking-up the same item afterward calls this without justDid and
+  // gets the normal button back.
+  if (justDid) {
+    const doneLabel = justDid === 'count' ? '✓ Counted' : justDid === 'return' ? '✓ Returned' : '✓ Checked in';
+    actionBtn = `<button class="mp-btn" style="margin-top:12px;background:var(--mp-green-20);color:#4d7a00;cursor:default" disabled>${doneLabel}</button>`;
+  } else if (mode === 'return') {
     actionBtn = onLoan
-      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}')">Return</button>`
+      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}',this)">Return</button>`
       : `<div class="mp-footnote" style="margin-top:12px">This item isn't currently on loan.</div>`;
   } else if (mode === 'count') {
     // Mirrors desktop's count-mode scan (submitCount()/submitCountKeepLoan()) —
@@ -12565,13 +12575,13 @@ function mpScanLookup(val) {
     // otherwise it's just a straightforward "mark as counted".
     actionBtn = onLoan
       ? `<div style="display:flex;gap:8px;margin-top:12px">
-           <button class="mp-btn mp-btn-secondary" style="flex:1" onclick="mpScanCountKeepLoan('${item.id}')">Keep on loan</button>
-           <button class="mp-btn mp-btn-primary" style="flex:1" onclick="mpScanCount('${item.id}')">Count &amp; return</button>
+           <button class="mp-btn mp-btn-secondary" style="flex:1" onclick="mpScanCountKeepLoan('${item.id}',this)">Keep on loan</button>
+           <button class="mp-btn mp-btn-primary" style="flex:1" onclick="mpScanCount('${item.id}',this)">Count &amp; return</button>
          </div>`
-      : `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCount('${item.id}')">Mark as counted</button>`;
+      : `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCount('${item.id}',this)">Mark as counted</button>`;
   } else {
     actionBtn = onLoan
-      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}')">Check in</button>`
+      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}',this)">Check in</button>`
       : status.key === 'available'
         ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckOut('${esc(item.CHSAssetNo)}')">Check out</button>`
         : `<div class="mp-footnote" style="margin-top:12px">This item is booked ahead — use the Loans tab to manage it.</div>`;
@@ -12596,7 +12606,12 @@ function mpScanLookup(val) {
       ${actionBtn}
     </div>`;
 }
-async function mpScanCheckIn(assetId) {
+async function mpScanCheckIn(assetId, btnEl) {
+  // Disabled synchronously, before anything async — a blocking loader alone
+  // still leaves a window (the tap it takes to render it) for a fast double
+  // tap to fire this twice and log two Return/Count history entries for the
+  // same action.
+  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
   const item = equipment.find(e => e.id === assetId);
   if (!item) return;
   // currentItem is a top-level `let` in the desktop script, not a window
@@ -12609,27 +12624,26 @@ async function mpScanCheckIn(assetId) {
   // submitReturn() already shows its own success toast ("X returned") —
   // no need to add a second one here.
   try { await submitReturn(); } finally { mpHideBlockingLoader(); }
-  const input = document.getElementById('mp-scan-input');
-  if (input) { input.value = ''; input.focus(); }
-  const box = document.getElementById('mp-scan-result');
-  if (box) box.innerHTML = '';
+  mpScanLookup(item.CHSAssetNo, (_mp.scanMode || 'checkout') === 'return' ? 'return' : 'checkin');
 }
-async function mpScanCount(assetId) {
+async function mpScanCount(assetId, btnEl) {
+  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
   const item = equipment.find(e => e.id === assetId);
   if (!item) return;
   currentItem = item;
   mpShowBlockingLoader('Marking as counted…', "Please don't close the app or navigate away.");
   // submitCount() already shows its own success toast — no need to add a second one.
   try { await submitCount(); } finally { mpHideBlockingLoader(); }
-  mpScanLookup(item.CHSAssetNo);
+  mpScanLookup(item.CHSAssetNo, 'count');
 }
-async function mpScanCountKeepLoan(assetId) {
+async function mpScanCountKeepLoan(assetId, btnEl) {
+  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
   const item = equipment.find(e => e.id === assetId);
   if (!item) return;
   currentItem = item;
   mpShowBlockingLoader('Marking as counted…', "Please don't close the app or navigate away.");
   try { await submitCountKeepLoan(); } finally { mpHideBlockingLoader(); }
-  mpScanLookup(item.CHSAssetNo);
+  mpScanLookup(item.CHSAssetNo, 'count');
 }
 function mpScanCheckOut(assetNo) {
   window._mpPendingBookAsset = assetNo;
