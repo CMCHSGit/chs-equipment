@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 114;
+const APP_VERSION = 115;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10968,12 +10968,19 @@ function mpStuckLoans(forName) {
   const today = mpToday();
   return upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.startDate && u.startDate <= today && (!forName || u.accountManager === forName));
 }
+// Thin, strictly-future filter over mpAllUpcoming() — previously built its
+// own separate groups+bookings concatenation with no de-dup, so a booking
+// split across a scheduled group (some items already reserved) and a
+// leftover upcomingLoans entry (the rest still elsewhere) showed up twice
+// under "Coming up" with no way to tell them apart, and — since these were
+// bare {loanTo,startDate,endDate,am} objects rather than real groups —
+// nothing to actually navigate to on tap either. Reusing mpAllUpcoming()
+// fixes both: its merge already resolves the duplicate, and every item it
+// returns is a real group mpJumpToLoan() can act on.
 function mpUpcomingForName(forName) {
   const today = mpToday();
-  const groups = mpActiveGroups().filter(g => g.scheduled && (!forName || g.am === forName));
-  const bookings = upcomingLoans.filter(u => (TEST_MODE || !isTestBatch(u.id)) && u.startDate > today && (!forName || u.accountManager === forName))
-    .map(u => ({ loanTo: u.loanTo, startDate: u.startDate, endDate: u.endDate, am: u.accountManager }));
-  return [...groups.map(g => ({ loanTo: g.loanTo, startDate: g.startDate, endDate: g.endDate, am: g.am })), ...bookings]
+  return mpAllUpcoming(forName)
+    .filter(g => g.startDate && g.startDate > today)
     .sort((a,b) => (a.startDate||'') < (b.startDate||'') ? -1 : 1);
 }
 
@@ -11045,8 +11052,8 @@ function mpRenderToday() {
       </div>`).join('') : ''}
     <div class="mp-section-title">Coming up</div>
     <div class="mp-card">
-      ${week.length ? week.map(w => `
-        <div class="mp-week-row">
+      ${week.length ? week.map((w,i) => `
+        <div class="mp-week-row" style="cursor:pointer" onclick="mpTodayJumpWeek(${i})">
           <div class="mp-date-chip"><span>${new Date(w.startDate).toLocaleDateString('en-NZ',{weekday:'short'})}</span><span>${new Date(w.startDate).getDate()}</span></div>
           <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;color:var(--mp-text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(w.loanTo)}</div><div style="font-size:12px;color:var(--mp-text-muted)">Starts ${formatDisplayDate(w.startDate)}</div></div>
           <span style="color:var(--mp-black-40)">›</span>
@@ -11055,8 +11062,10 @@ function mpRenderToday() {
     <button class="mp-btn mp-btn-primary" onclick="mpGoScreen('book')">+ Book a demo</button>
   `;
   window._mpTodayAlerts = alerts;
+  window._mpTodayWeek = week;
 }
 function mpTodayAlert(i) { const a = window._mpTodayAlerts && window._mpTodayAlerts[i]; if (a && a.onClick) a.onClick(); }
+function mpTodayJumpWeek(i) { const w = window._mpTodayWeek && window._mpTodayWeek[i]; if (w) mpJumpToLoan(w); }
 
 // ── OVERVIEW (Service home) ─────────────────────────────────────────────
 function mpRenderOverview() {
