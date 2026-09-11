@@ -556,6 +556,11 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 #mp-signin .mp-signin-body,#mp-resume .mp-signin-body{font:300 15px/1.55 var(--mp-font-body);color:var(--mp-text-body);max-width:280px}
 .mp-input{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);font-size:16px;outline:none;background:var(--mp-white);color:var(--mp-text-strong);transition:border-color var(--mp-fast) var(--mp-ease),box-shadow var(--mp-fast) var(--mp-ease)}
 .mp-input:focus{border-color:var(--mp-purple);box-shadow:var(--mp-focus-ring)}
+/* iOS Safari's native date/time control ignores min-height and renders its
+   own taller intrinsic box (visibly stretched vs. every other .mp-input) —
+   an explicit height forces it to compress into the same box everything
+   else uses, instead of just setting a floor it's free to exceed. */
+input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 .mp-btn{min-height:50px;width:100%;border-radius:var(--mp-radius-md);border:none;cursor:pointer;font:600 15px var(--mp-font-body);transition:background var(--mp-fast) var(--mp-ease),opacity var(--mp-fast) var(--mp-ease);display:flex;align-items:center;justify-content:center;gap:8px}
 .mp-btn-primary{background:var(--mp-purple);color:#fff}
 .mp-btn-primary:hover{background:#47397e}
@@ -1857,7 +1862,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 113;
+const APP_VERSION = 114;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
