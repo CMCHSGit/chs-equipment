@@ -11213,8 +11213,13 @@ function mpLoanCardHtml(g, seg, i) {
     : seg === 'overdue' ? '<span class="mp-pill mp-pill-status-overdue">Overdue</span>'
     : seg === 'upcoming' ? '<span class="mp-pill mp-pill-status-scheduled">Scheduled</span>'
     : '<span class="mp-pill mp-pill-status-active">Active</span>';
+  // Test & sign-off only matters before a loan goes out — once it's Active
+  // or Overdue the equipment is already with the customer, so tracking
+  // "awaiting test" there is just noise. Only shown for scheduled loans
+  // (seg === 'upcoming' with real equipment already reserved — g.isUpcoming
+  // ones are pure bookings with no equipment yet, so there's nothing to test).
   let testPill = '';
-  if (!g.isUpcoming && seg !== 'upcoming') {
+  if (seg === 'upcoming' && !g.isUpcoming) {
     const r = getLoanReadiness(_readinessKey(g.batchId, g.loanTo, g.endDate));
     if (!r.noTestRequired) testPill = r.tested ? '<span class="mp-pill mp-pill-test-done">Tested</span>' : '<span class="mp-pill mp-pill-test-awaiting">Awaiting test</span>';
   }
@@ -12837,9 +12842,22 @@ function mpOpenLoanActionsForGroup(g) {
     // to mark tested; un-marking is instant either way).
     const rKey = _readinessKey(g.batchId, g.loanTo, g.endDate);
     const readiness = getLoanReadiness(rKey);
-    const testItem = (_mp.role === 'service' && !readiness.noTestRequired)
-      ? [[readiness.tested ? '✓ Tested — tap to un-mark' : 'Mark as tested', () => toggleReadiness(rKey, 'tested')]]
-      : [];
+    // toggleReadiness(rKey,'noTestRequired') never opens the date-confirm
+    // modal (only marking 'tested'/'dispatched' as newly-done does — see
+    // toggleReadiness()'s `field === 'noTestRequired'` short-circuit), so
+    // it's safe to call directly here same as the tested toggle already is.
+    // Only offered for scheduled loans (not yet dispatched) — once a loan
+    // is Active/Overdue the equipment's already with the customer, so
+    // there's nothing left to test for.
+    const testItem = (_mp.role !== 'service' || !g.scheduled) ? [] :
+      readiness.noTestRequired
+        ? [['— No test required (tap to re-enable testing)', () => toggleReadiness(rKey, 'noTestRequired')]]
+        : readiness.tested
+          ? [['✓ Tested — tap to un-mark', () => toggleReadiness(rKey, 'tested')]]
+          : [
+              ['Mark as tested', () => toggleReadiness(rKey, 'tested')],
+              ['No test required', () => toggleReadiness(rKey, 'noTestRequired')]
+            ];
     items = _mp.role === 'am'
       ? [ ['Transfer / reassign', () => mpOpenReassignFlow(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)] ]
       : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => mpOpenReassignFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
