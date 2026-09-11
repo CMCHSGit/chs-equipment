@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 115;
+const APP_VERSION = 116;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2935,7 +2935,7 @@ function renderHistory() {
   const aL = { Loan:'Loaned out', Return:'Returned', Count:'Counted' }, aC = { Loan:'badge-loan', Return:'badge-avail', Count:'badge-avail' };
   document.getElementById('hist-tbody').innerHTML = rows.length
     ? rows.map(h => `<tr>
-        <td style="font-size:12px;color:var(--text2);white-space:nowrap">${h.ts ? new Date(h.ts).toLocaleDateString('en-NZ',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+        <td style="font-size:12px;color:var(--text2);white-space:nowrap">${h.ts ? formatDisplayDateTime(h.ts) : '—'}</td>
         <td class="td-mono">${esc(h.chsAssetNo)}</td><td>${esc(h.model)}</td>
         <td><span class="status-badge ${aC[h.action]||''}">${aL[h.action]||h.action}</span></td>
         <td>${esc(h.loanTo)}</td><td>${esc(h.location)}</td><td style="font-size:12px">${formatDisplayDate(h.loanStart)}</td><td style="font-size:12px">${formatDisplayDate(h.loanEnd)}</td>
@@ -2951,9 +2951,7 @@ function renderHistory() {
     const aL = { Loan:'Loaned out', Return:'Returned', Count:'Counted' };
     const aC = { Loan:'badge-loan', Return:'badge-avail', Count:'badge-avail' };
     histCardList.innerHTML = rows.length ? rows.map(h => {
-      const ts = h.ts
-        ? new Date(h.ts).toLocaleDateString('en-NZ', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
-        : '—';
+      const ts = h.ts ? formatDisplayDateTime(h.ts) : '—';
       const actionBadge = `<span class="status-badge ${aC[h.action]||''}">${aL[h.action]||h.action}</span>`;
       const loanLine = h.loanTo
         ? `<div class="hist-card-row"><span>${esc(h.loanTo)}</span>${h.location ? `<span>· ${esc(h.location)}</span>` : ''}</div>`
@@ -3093,7 +3091,7 @@ function renderTable() {
         ? `<div class="db-card-sub">Loaned to <strong>${esc(e.OnLoanTo)}</strong>${e.Location ? ' · ' + esc(e.Location) : ''}</div>`
         : '';
       const dateLine = on && e.LoanEndDate
-        ? `<div class="db-card-sub ${od ? 'db-card-due-overdue' : ''}">Due: ${esc(e.LoanEndDate)}</div>`
+        ? `<div class="db-card-sub ${od ? 'db-card-due-overdue' : ''}">Due: ${esc(formatDisplayDate(e.LoanEndDate))}</div>`
         : '';
       const serialLine = e.SerialNo
         ? `<div class="db-card-sub">S/N: ${esc(e.SerialNo)}</div>`
@@ -3418,7 +3416,7 @@ function openItemHistory(assetNo, model) {
   document.getElementById('hmodal-title').textContent = `History — ${assetNo} (${model})`;
   const aL={Loan:'Loaned out',Return:'Returned',Count:'Counted'}, dC={Loan:'hdot-loan',Return:'hdot-return',Count:'hdot-count'};
   document.getElementById('hmodal-body').innerHTML = rows.length
-    ? `<div class="history-list">${rows.map(h=>`<div class="history-item"><div class="history-dot ${dC[h.action]||''}"></div><div class="history-body"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="history-action">${aL[h.action]||h.action}</div>${h.action==='Loan'&&h._pdfKey?`<button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')" style="font-size:11px;padding:2px 7px;margin-left:8px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>`:''}</div><div class="history-meta">${h.loanTo?`To: ${h.loanTo}`:''}${h.location?` · ${h.location}`:''}${h.loanEnd?` · Due: ${h.loanEnd}`:''}<br>${h.ts?new Date(h.ts).toLocaleString():''}${h.notes?`<br><em>${h.notes}</em>`:''}</div></div></div>`).join('')}</div>`
+    ? `<div class="history-list">${rows.map(h=>`<div class="history-item"><div class="history-dot ${dC[h.action]||''}"></div><div class="history-body"><div style="display:flex;justify-content:space-between;align-items:flex-start"><div class="history-action">${aL[h.action]||h.action}</div>${h.action==='Loan'&&h._pdfKey?`<button class="btn btn-sm" onclick="viewHistoryPDF('${h._pdfKey}')" style="font-size:11px;padding:2px 7px;margin-left:8px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> PDF</button>`:''}</div><div class="history-meta">${h.loanTo?`To: ${h.loanTo}`:''}${h.location?` · ${h.location}`:''}${h.loanEnd?` · Due: ${formatDisplayDate(h.loanEnd)}`:''}<br>${h.ts?formatDisplayDateTime(h.ts):''}${h.notes?`<br><em>${h.notes}</em>`:''}</div></div></div>`).join('')}</div>`
     : '<p style="color:var(--text3);padding:12px 0">No history for this item.</p>';
   document.getElementById('history-modal').classList.add('open');
 }
@@ -3642,7 +3640,7 @@ function downloadExcel() {
   // History sheet
   const hCols=['ts','chsAssetNo','model','action','loanTo','location','loanStart','loanEnd','notes'];
   const hHead=['Date/Time','CHS Asset No.','Model','Action','On Loan To','Location','Loan Start','Loan End','Notes'];
-  const hRows = historyLog.map(h => hCols.map(c => c==='ts'?(h.ts?new Date(h.ts).toLocaleString():''):(h[c]||'')));
+  const hRows = historyLog.map(h => hCols.map(c => c==='ts'?(h.ts?formatDisplayDateTime(h.ts):''):(h[c]||'')));
   const ws2 = XLSX.utils.aoa_to_sheet([hHead, ...hRows]);
   ws2['!cols'] = hCols.map(() => ({ wch: 18 }));
   XLSX.utils.book_append_sheet(wb, ws2, 'History');
@@ -5100,8 +5098,8 @@ function openDetail(id) {
         <div class="detail-field"><label>Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.SerialNo)}</span></div>
         <div class="detail-field"><label>Battery Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${item.BatterySerialNo || '—'}</span></div>
         <div class="detail-field"><label>Part Number</label><span>${esc2(item.PartNo)}</span></div>
-        <div class="detail-field"><label>Manufacture Date</label><span>${esc2(item.MfgDate)}</span></div>
-        <div class="detail-field"><label>Purchase Date</label><span>${esc2(item.PurchaseDate)}</span></div>
+        <div class="detail-field"><label>Manufacture Date</label><span>${esc2(formatDisplayDate(item.MfgDate))}</span></div>
+        <div class="detail-field"><label>Purchase Date</label><span>${esc2(formatDisplayDate(item.PurchaseDate))}</span></div>
         <div class="detail-field"><label>US$ Price</label><span>${item.USPrice ? '$'+Number(item.USPrice).toLocaleString() : '—'}</span></div>
         <div class="detail-field"><label>NZ$ Price</label><span>${item.NZPrice ? '$'+Number(item.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</span></div>
         <div class="detail-field"><label>Tile No.</label><span>${esc2(item.TileNo)}</span></div>
@@ -5203,8 +5201,8 @@ function openRetiredDetail(id) {
         <div class="detail-field"><label>Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${esc2(item.SerialNo)}</span></div>
         <div class="detail-field"><label>Battery Serial Number</label><span style="font-family:'DM Mono',monospace;font-size:12px">${item.BatterySerialNo || '—'}</span></div>
         <div class="detail-field"><label>Part Number</label><span>${esc2(item.PartNo)}</span></div>
-        <div class="detail-field"><label>Manufacture Date</label><span>${esc2(item.MfgDate)}</span></div>
-        <div class="detail-field"><label>Purchase Date</label><span>${esc2(item.PurchaseDate)}</span></div>
+        <div class="detail-field"><label>Manufacture Date</label><span>${esc2(formatDisplayDate(item.MfgDate))}</span></div>
+        <div class="detail-field"><label>Purchase Date</label><span>${esc2(formatDisplayDate(item.PurchaseDate))}</span></div>
         <div class="detail-field"><label>US$ Price</label><span>${item.USPrice ? '$'+Number(item.USPrice).toLocaleString() : '—'}</span></div>
         <div class="detail-field"><label>NZ$ Price</label><span>${item.NZPrice ? '$'+Number(item.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</span></div>
         <div class="detail-field"><label>Tile No.</label><span>${esc2(item.TileNo)}</span></div>
@@ -5605,7 +5603,7 @@ function renderHistoryMgmt() {
       <div class="br-checkbox">${_histMgmtChecked[h.id]?'✓':''}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:500;font-family:'DM Mono',monospace">${h.chsAssetNo||'—'} <span style="font-family:'DM Sans',sans-serif;font-weight:400;color:var(--text2)">${h.model||''}</span></div>
-        <div style="font-size:11px;color:var(--text2)">${aL[h.action]||h.action} ${h.loanTo?'→ '+h.loanTo:''} · ${h.ts?new Date(h.ts).toLocaleString():''}</div>
+        <div style="font-size:11px;color:var(--text2)">${aL[h.action]||h.action} ${h.loanTo?'→ '+h.loanTo:''} · ${h.ts?formatDisplayDateTime(h.ts):''}</div>
       </div>
       <div style="font-size:11px;color:${_histMgmtChecked[h.id]?'var(--red)':'var(--text3)'}">${_histMgmtChecked[h.id]?'Delete':''}</div>
     </div>`).join('')
@@ -6071,6 +6069,19 @@ function formatDisplayDate(d) {
     return dd + '/' + mm + '/' + date.getUTCFullYear();
   }
   return s;
+}
+
+// Same dd/mm/yyyy ordering as formatDisplayDate(), for timestamps that also
+// need a time-of-day (history/audit-style rows). Explicit 'en-NZ' locale —
+// not the browser/OS default — since a bare toLocaleString() silently
+// varies by the viewing device's own region settings (e.g. mm/dd/yyyy on a
+// US-region phone), which is exactly the inconsistency a single shared
+// formatter exists to rule out.
+function formatDisplayDateTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 async function closeLoanDoc() {
@@ -11211,6 +11222,15 @@ function mpOpenScopeSheet() {
 function mpChooseScope(am) { _mp.scope = am; mpCloseSheet(); mpRenderLoans(); }
 
 // ── EQUIPMENT (both roles — see MP_TABS) ────────────────────────────────
+// Smallest asset number to largest, same as the desktop database table's
+// default sort (renderTable() — sortCol 'CHSAssetNo', sortDir 1: a plain
+// lowercase string comparison, not natural/numeric) — shared by every
+// mobile screen that lists equipment, so none of them drift from it or
+// from each other.
+function byAssetNoAsc(a, b) {
+  const av = (a.CHSAssetNo || '').toLowerCase(), bv = (b.CHSAssetNo || '').toLowerCase();
+  return av < bv ? -1 : av > bv ? 1 : 0;
+}
 // Same status derivation buildStatusCell()/renderTable() use on desktop —
 // booked/scheduled beats on-loan, overdue is on-loan past its end date.
 function mpEquipmentStatus(e, today) {
@@ -11352,13 +11372,14 @@ function mpRenderEquipmentList() {
     .filter(e => !q || Object.values(e).join(' ').toLowerCase().includes(q))
     .map(e => ({ e, status: mpEquipmentStatus(e, today) }))
     .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter)
-    .filter(r => !selectMode || !selectedSet.has(r.e.CHSAssetNo));
+    .filter(r => !selectMode || !selectedSet.has(r.e.CHSAssetNo))
+    .sort((a, b) => byAssetNoAsc(a.e, b.e));
   // Shopping-cart behaviour: selected devices pin to their own section at
   // the top, regardless of the current search text or filter pill — with
   // a long real inventory (unlike a handful of test items), a pick can
   // easily scroll out of view or get hidden by a filter change, and
   // without this it reads as "lost" even though it's still selected.
-  const selectedItems = selectMode ? _mp.eqSelected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean) : [];
+  const selectedItems = selectMode ? _mp.eqSelected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean).sort(byAssetNoAsc) : [];
   const selectedHtml = selectedItems.length
     ? `<div style="padding:12px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>` : '';
   const restHtml = rows.length
@@ -12002,10 +12023,10 @@ function mpRenderAddItemsList() {
   const st = _mp.addItems;
   const q = (st.query || '').trim().toLowerCase();
   const selectedSet = new Set(st.selected);
-  const selectedItems = st.selected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean);
+  const selectedItems = st.selected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean).sort(byAssetNoAsc);
   const matches = equipment.filter(e => !st.existingAssetNos.has(e.CHSAssetNo) && !selectedSet.has(e.CHSAssetNo) && (!q || Object.values(e).join(' ').toLowerCase().includes(q)));
-  const free = matches.filter(e => mpBookIsFree(e, st.startDate, st.endDate));
-  const busy = matches.filter(e => !mpBookIsFree(e, st.startDate, st.endDate));
+  const free = matches.filter(e => mpBookIsFree(e, st.startDate, st.endDate)).sort(byAssetNoAsc);
+  const busy = matches.filter(e => !mpBookIsFree(e, st.startDate, st.endDate)).sort(byAssetNoAsc);
   const row = (e, busyNote) => {
     const checked = selectedSet.has(e.CHSAssetNo);
     return `<div onclick="mpAddItemsToggleDevice('${e.CHSAssetNo}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer${busyNote ? ';border-left:3px solid var(--mp-orange)' : ''}">
@@ -12019,7 +12040,7 @@ function mpRenderAddItemsList() {
     ${selectedItems.length ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e)).join('')}</div>` : ''}
     <div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
     <div>${free.length ? free.map(e => row(e)).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
-    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(e.LoanEndDate) : ''))).join('')}</div>` : ''}`;
+    ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(formatDisplayDate(e.LoanEndDate)) : ''))).join('')}</div>` : ''}`;
   const btn = document.getElementById('mp-additems-confirm-btn');
   if (btn) btn.textContent = st.selected.length ? st.selected.length + ' device' + (st.selected.length===1?'':'s') + ' selected · Add to loan' : 'Select devices to add';
 }
@@ -12607,7 +12628,7 @@ function mpScanLookup(val, justDid) {
         </div>
         <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
       </div>
-      ${onLoan ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(item.LoanEndDate) : ''}</div>` : ''}
+      ${onLoan ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(formatDisplayDate(item.LoanEndDate)) : ''}</div>` : ''}
       ${countedNote}
       ${actionBtn}
     </div>`;
