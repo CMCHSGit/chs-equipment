@@ -33,6 +33,7 @@ Last updated: 2026-09-11
 - [ ] "Manage team roles" correctly hidden from a real AM's More screen, still visible when a service person previews the AM view.
 - [ ] **New (Jonathan, 2026-09-11): mandatory Shipping Island (North/South)** field on loan creation, both desktop and mobile — drives island-aware reminder lead time (North: 3 business days notice, South: 5). Confirm the field is required, saves correctly, and the reminder timing math looks right for both islands.
 - [ ] **New (Jonathan, 2026-09-11): same-day loans allowed** — end date can now equal start date instead of being rejected. Confirm this works on both the desktop batch form and the mobile Book wizard.
+- [ ] **Date-field overlap on real iPhone 14** — reported again 2026-09-11 on Book-a-demo Step 1 despite the earlier flex-wrap/min-width fix (which looked fine elsewhere but not on that real device — iOS Safari's native `<input type="date">` has its own minimum content width that can exceed the CSS threshold used to decide when to wrap). Fixed by stacking Start/End date fields vertically instead of attempting side-by-side, in both Book-a-demo Step 1 and Reassign's scheduled-loan edit form. **Needs re-confirming on the actual iPhone 14** this was reported on.
 
 ## Desktop
 
