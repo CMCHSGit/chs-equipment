@@ -1857,7 +1857,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 111;
+const APP_VERSION = 112;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11625,10 +11625,8 @@ function mpRenderBookStep1() {
       <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${mpFormVal(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${mpFormVal(b.location)}" oninput="_mp.book.location=this.value"></div>
       <div onclick="mpOpenIslandSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Shipping island *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.island?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${b.island==='North'?'North Island':b.island==='South'?'South Island':'Select…'}<span style="color:var(--mp-black-40)">›</span></div></div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px">
-        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
-        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
-      </div>
+      <div><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
+      <div><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
       ${isAM
         ? `<div><label style="${mpFieldLabel()}">Account manager</label><div class="mp-input" style="display:flex;align-items:center;color:var(--mp-text-muted);background:var(--mp-black-05)">${esc(b.am)}</div></div>`
         : `<div><label style="${mpFieldLabel()}">Account manager *</label><select class="mp-input" onchange="mpBookSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>`}
@@ -12276,10 +12274,8 @@ function mpRenderReassignForm() {
       <div class="mp-h3" style="margin-bottom:-6px">${esc(st.g.loanTo)}</div>
       <div><label style="${mpFieldLabel()}">Event / customer name</label><input class="mp-input" value="${mpFormVal(st.loanTo)}" oninput="_mp.reassign.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location</label><input class="mp-input" value="${mpFormVal(st.location)}" oninput="_mp.reassign.location=this.value"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:10px">
-        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">Start date</label><input class="mp-input" type="date" value="${mpFormVal(st.startDate)}" onchange="_mp.reassign.startDate=this.value"></div>
-        <div style="flex:1 1 150px;min-width:150px"><label style="${mpFieldLabel()}">End date</label><input class="mp-input" type="date" value="${mpFormVal(st.endDate)}" onchange="_mp.reassign.endDate=this.value"></div>
-      </div>
+      <div><label style="${mpFieldLabel()}">Start date</label><input class="mp-input" type="date" value="${mpFormVal(st.startDate)}" onchange="_mp.reassign.startDate=this.value"></div>
+      <div><label style="${mpFieldLabel()}">End date</label><input class="mp-input" type="date" value="${mpFormVal(st.endDate)}" onchange="_mp.reassign.endDate=this.value"></div>
       <div><label style="${mpFieldLabel()}">Account manager</label><select class="mp-input" onchange="mpReassignSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>
       <div><label style="${mpFieldLabel()}">Account manager email</label><input class="mp-input" type="email" value="${mpFormVal(st.email)}" oninput="_mp.reassign.email=this.value"></div>
       <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${mpFormVal(st.contact)}" oninput="_mp.reassign.contact=this.value"></div>
