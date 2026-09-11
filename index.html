@@ -1857,7 +1857,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 113;
+const APP_VERSION = 114;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11939,7 +11939,22 @@ async function mpOpenScan() {
     // browser-reported fact, unlike a curl check of the top-level
     // response) is the next concrete thing worth actually seeing rather
     // than guessing further.
-    showToast('error', 'Camera not available. secureContext=' + window.isSecureContext + ' mediaDevices=' + (!!navigator.mediaDevices) + ' UA=' + navigator.userAgent.slice(0, 60));
+    //
+    // getUserMedia requires a secure context in every browser — this isn't
+    // iOS/Safari-specific. Plain http:// is by far the most likely reason
+    // to actually hit that here: this custom domain's DNS still points at
+    // the wrong GitHub Pages host (see project notes — the `demo` CNAME
+    // needs to target cmchsgit.github.io, not www.cmchsgit.github.io),
+    // which has blocked GitHub from ever issuing it a valid HTTPS
+    // certificate. Until that's fixed, "Enforce HTTPS" stays unavailable
+    // and the site keeps answering on http:// too — camera access simply
+    // can't run there, on any device. Give a concrete, actionable message
+    // for that case instead of a raw diagnostic dump.
+    if (location.protocol === 'http:') {
+      showToast('error', 'Camera needs a secure connection. You\'re on http:// — open https://' + location.host + ' instead (the camera can\'t work on plain http on any device or browser).');
+    } else {
+      showToast('error', 'Camera not available. secureContext=' + window.isSecureContext + ' mediaDevices=' + (!!navigator.mediaDevices) + ' UA=' + navigator.userAgent.slice(0, 60));
+    }
     console.warn('mpOpenScan: getUserMedia unavailable. isSecureContext=', window.isSecureContext, 'protocol=', location.protocol, 'mediaDevices=', navigator.mediaDevices, 'UA=', navigator.userAgent);
     return;
   }
