@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 118;
+const APP_VERSION = 119;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10616,7 +10616,14 @@ const FIREBASE_CONFIG = {
 const FCM_VAPID_KEY = 'BGnfakbRICvRXVFTrV3xGfvUz5DVWAZ_ECRTkxXu_SkNfFRibIEV520UwrfuAbbNdTW9HuTt3xKD3uNRTQ4rfdA';
 
 function mpPushSupported() {
-  return 'Notification' in window && 'serviceWorker' in navigator && FIREBASE_CONFIG.apiKey !== 'REPLACE_ME' && FCM_VAPID_KEY !== 'REPLACE_ME';
+  // isSecureContext matters here: Chrome exposes Notification/serviceWorker
+  // as properties even over plain http:// (unlike Safari, which hides
+  // navigator.mediaDevices entirely in that case — see the camera issue),
+  // but actually registering a service worker or requesting a push token
+  // genuinely requires a secure context regardless of browser. Without this
+  // check the button showed up on Android over HTTP and just failed when
+  // tapped, instead of not appearing at all.
+  return window.isSecureContext && 'Notification' in window && 'serviceWorker' in navigator && FIREBASE_CONFIG.apiKey !== 'REPLACE_ME' && FCM_VAPID_KEY !== 'REPLACE_ME';
 }
 function mpPushEnabled() {
   const am = accountManagers.find(a => a.name === _mp.name);
