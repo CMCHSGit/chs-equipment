@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 115;
+const APP_VERSION = 116;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11132,8 +11132,11 @@ function mpLoanCardHtml(g, seg, i) {
   // "awaiting test" there is just noise. Only shown for scheduled loans
   // (seg === 'upcoming' with real equipment already reserved — g.isUpcoming
   // ones are pure bookings with no equipment yet, so there's nothing to test).
+  // Service & Projects-only, matching the kebab actions below — test/sign-
+  // off is their responsibility to track, not something an AM needs to see
+  // on their own loan cards.
   let testPill = '';
-  if (seg === 'upcoming' && !g.isUpcoming) {
+  if (_mp.role === 'service' && seg === 'upcoming' && !g.isUpcoming) {
     const r = getLoanReadiness(_readinessKey(g.batchId, g.loanTo, g.endDate));
     if (!r.noTestRequired) testPill = r.tested ? '<span class="mp-pill mp-pill-test-done">Tested</span>' : '<span class="mp-pill mp-pill-test-awaiting">Awaiting test</span>';
   }
