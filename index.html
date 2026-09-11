@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 117;
+const APP_VERSION = 118;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2843,6 +2843,7 @@ async function submitReturn() {
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
   const batchId = equipment[idx].BatchID || null;
+  const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
   Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Returned', loanTo: prev.loanTo, location: prev.loc });
@@ -2854,7 +2855,7 @@ async function submitReturn() {
       try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
     }
   }
-  showToast('success', `${currentItem.CHSAssetNo} returned`);
+  showToast('success', `${assetNo} returned`);
 }
 
 function submitCount() {
@@ -2862,6 +2863,7 @@ function submitCount() {
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID };
+  const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
   // Mark as counted + return if on loan
   Object.assign(equipment[idx], {
     Counted: countedValue,
@@ -2876,20 +2878,22 @@ function submitCount() {
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   if (scanMode === 'count') renderCountOverview();
-  showToast('success', `${currentItem.CHSAssetNo} counted and marked as returned`);
+  showToast('success', `${assetNo} counted and marked as returned`);
 }
 
 function submitCountKeepLoan() {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
+  const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
+  const loanTo = equipment[idx].OnLoanTo;
   // Mark as counted but leave loan intact
   equipment[idx].Counted = countedValue;
   logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location, notes: countedValue + ' (kept on loan)' });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted', loanTo: equipment[idx].OnLoanTo, location: equipment[idx].Location });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   if (scanMode === 'count') renderCountOverview();
-  showToast('success', currentItem.CHSAssetNo + ' counted — still on loan to ' + equipment[idx].OnLoanTo);
+  showToast('success', assetNo + ' counted — still on loan to ' + loanTo);
 }
 
 function clearScan() {
@@ -11848,8 +11852,9 @@ function mpRenderScan() {
         <button class="mp-seg-btn${_mp.scanMode==='checkout'?' mp-active':''}" onclick="mpSetScanMode('checkout')">Check out</button>
         <button class="mp-seg-btn${_mp.scanMode==='return'?' mp-active':''}" onclick="mpSetScanMode('return')">Return</button>
         <button class="mp-seg-btn${_mp.scanMode==='count'?' mp-active':''}" onclick="mpSetScanMode('count')">Count</button>
+        <button class="mp-seg-btn${_mp.scanMode==='stocktake'?' mp-active':''}" onclick="mpRequestStocktakeMode()">Stocktake</button>
       </div>
-      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">Point the camera at the QR label, or enter the asset number below.</div>
+      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">${_mp.scanMode==='stocktake' ? 'Keep scanning — each item is counted &amp; returned automatically. The camera stays on between scans.' : 'Point the camera at the QR label, or enter the asset number below.'}</div>
       <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters"
         oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
       <div id="mp-scan-result" style="margin-top:16px"></div>
@@ -11866,14 +11871,44 @@ function mpRenderScan() {
   // once the stream actually starts (permission denied / no camera / etc.
   // leave it visible to retry manually).
   mpOpenScan();
+  if (_mp.scanMode === 'stocktake') mpRenderStocktakeResult();
 }
 function mpSetScanMode(mode) {
   _mp.scanMode = mode;
+  // Persists across brief detours to another mode and back (rather than
+  // resetting every time) — a stocktake run is one continuous session
+  // until the app is closed/reloaded, not something a stray tap should
+  // silently wipe the running tally on.
+  if (mode === 'stocktake' && !_mp.stocktake) _mp.stocktake = { count: 0, recent: [] };
   const input = document.getElementById('mp-scan-input');
   const val = input ? input.value : '';
   mpRenderScan();
   const newInput = document.getElementById('mp-scan-input');
   if (newInput && val) { newInput.value = val; mpScanLookup(val); }
+}
+// Stocktake marks every scan as counted+returned automatically (no
+// per-item confirmation tap), so it's gated behind the admin password the
+// same way "Manage team roles" is — a stray tap on the segment shouldn't
+// be able to bulk-return the whole floor by accident. Stays unlocked for
+// the rest of this session once entered once (matching how the camera and
+// manual field both already work across the other modes without
+// re-prompting on every switch).
+function mpRequestStocktakeMode() {
+  if (_mp.stocktakeUnlocked) { mpSetScanMode('stocktake'); return; }
+  mpOpenSheet('<div class="mp-sheet-title">Stocktake mode</div>',
+    `<div style="font:400 14px/1.5 var(--mp-font-body);color:var(--mp-text-body);margin-bottom:14px">Stocktake counts &amp; returns every scanned item automatically, with no per-item confirmation. Enter the admin password to continue.</div>
+     <input class="mp-input" type="password" id="mp-stocktake-pw" placeholder="Admin password" autocomplete="off" onkeydown="if(event.key==='Enter')mpUnlockStocktake()">
+     <div class="mp-err" id="mp-stocktake-pw-err" style="display:none;margin-top:8px">Incorrect password.</div>
+     <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpUnlockStocktake()">Unlock</button>`);
+  setTimeout(() => { const el = document.getElementById('mp-stocktake-pw'); if (el) el.focus(); }, 150);
+}
+async function mpUnlockStocktake() {
+  if (!ADMIN_PASSWORD) await loadConfig();
+  const val = document.getElementById('mp-stocktake-pw').value;
+  if (val !== ADMIN_PASSWORD) { document.getElementById('mp-stocktake-pw-err').style.display = 'block'; return; }
+  _mp.stocktakeUnlocked = true;
+  mpCloseSheet();
+  mpSetScanMode('stocktake');
 }
 
 let _mpQrStream = null, _mpQrInterval = null;
@@ -11920,6 +11955,13 @@ async function mpOpenScan() {
     const handleDecoded = raw => {
       const val = String(raw || '').trim().replace(/[^\x20-\x7E]/g, '');
       if (!val) return;
+      // Stocktake is a continuous scan — the whole point is not needing to
+      // restart the camera after every single item, so it deliberately
+      // skips the mpCloseScan() every other mode does here.
+      // mpStocktakeProcessScan() (via mpScanLookup()) has its own cooldown
+      // guard against re-processing the same code on every 300ms poll while
+      // it's still sitting in frame.
+      if (_mp.scanMode === 'stocktake') { mpScanLookup(val); return; }
       mpCloseScan();
       const inputEl = document.getElementById('mp-scan-input');
       if (inputEl) inputEl.value = val;
@@ -12581,6 +12623,11 @@ function mpScanDebounce(v) {
   _mpScanTimer = setTimeout(() => { if (v.trim().length >= 3) mpScanLookup(v); }, 400);
 }
 function mpScanLookup(val, justDid) {
+  // Stocktake has no per-item confirmation tap to route through (that's
+  // the whole point — see mpStocktakeProcessScan()) — every entry point
+  // that would normally land here (camera decode, manual-field debounce,
+  // pressing Enter) goes there instead as long as this mode is active.
+  if (_mp.scanMode === 'stocktake') { mpStocktakeProcessScan(val); return; }
   val = (val || '').trim();
   const box = document.getElementById('mp-scan-result');
   if (!box) return;
@@ -12645,6 +12692,66 @@ function mpScanLookup(val, justDid) {
       ${onLoan ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(formatDisplayDate(item.LoanEndDate)) : ''}</div>` : ''}
       ${countedNote}
       ${actionBtn}
+    </div>`;
+}
+// One scan = one count-and-return, immediately, with no confirmation tap —
+// that's the entire point of stocktake mode. Guards against the same QR
+// code firing repeatedly while it's still sitting in front of the camera
+// (the decode loop polls every 300ms) by ignoring a repeat of the exact
+// same value within COOLDOWN_MS; a different code — or the same one again
+// after the cooldown, for a genuine deliberate re-scan — always goes
+// through.
+const MP_STOCKTAKE_COOLDOWN_MS = 2500;
+function mpStocktakeProcessScan(val) {
+  val = (val || '').trim();
+  if (!val) return;
+  const now = Date.now();
+  if (val === _mp.stocktakeLastScanned && (now - (_mp.stocktakeLastScanTime || 0)) < MP_STOCKTAKE_COOLDOWN_MS) return;
+  _mp.stocktakeLastScanned = val;
+  _mp.stocktakeLastScanTime = now;
+  const input = document.getElementById('mp-scan-input');
+  if (input) input.value = '';
+  const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+  if (!item) {
+    const box = document.getElementById('mp-scan-result');
+    if (box) box.innerHTML = `<div class="mp-err">"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.</div>`;
+    return;
+  }
+  currentItem = item;
+  submitCount(); // marks Counted + Returned in one step; shows its own toast
+  if (!_mp.stocktake) _mp.stocktake = { count: 0, recent: [] };
+  _mp.stocktake.count++;
+  _mp.stocktake.recent.unshift({ assetNo: item.CHSAssetNo, model: item.Model });
+  if (_mp.stocktake.recent.length > 8) _mp.stocktake.recent.length = 8;
+  mpRenderStocktakeResult(item);
+}
+// item is the one just scanned (omitted for the initial empty-session
+// render) — shown briefly highlighted above the running tally/recent list,
+// which stays in place as the next scan comes in.
+function mpRenderStocktakeResult(item) {
+  const box = document.getElementById('mp-scan-result');
+  if (!box) return;
+  const st = _mp.stocktake || { count: 0, recent: [] };
+  const justScannedHtml = item ? `
+    <div class="mp-card" style="background:var(--mp-green-20);border:1px solid var(--mp-green);margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;color:#4d7a00;flex-shrink:0">✓</span>
+        <div style="min-width:0">
+          <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(item.Model)}</div>
+          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(item.CHSAssetNo)} · counted &amp; returned</div>
+        </div>
+      </div>
+    </div>` : '';
+  const recentHtml = st.recent.map(r => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--mp-border-hairline)">
+      <span style="font:400 13px var(--mp-font-body);color:var(--mp-text-strong)">${esc(r.assetNo)}<span style="color:var(--mp-text-muted)"> · ${esc(r.model || '')}</span></span>
+      <span style="color:#4d7a00;flex-shrink:0">✓</span>
+    </div>`).join('');
+  box.innerHTML = `
+    ${justScannedHtml}
+    <div class="mp-card">
+      <div style="font:700 13px var(--mp-font-body);color:var(--mp-text-strong);margin-bottom:${st.recent.length?'6px':'0'}">${st.count} item${st.count===1?'':'s'} counted this session</div>
+      ${recentHtml || '<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted)">Scan the first item to get started.</div>'}
     </div>`;
 }
 async function mpScanCheckIn(assetId, btnEl) {
