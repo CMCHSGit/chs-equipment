@@ -1857,7 +1857,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 112;
+const APP_VERSION = 113;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11355,14 +11355,23 @@ function mpRenderEquipmentSelectFooter() {
   // Equipment and picking some to add) has nothing useful to do at zero,
   // so the whole footer hides until at least one is picked.
   const editingBook = _mp.eqSelectContext === 'book';
-  if (!_mp.eqSelectMode || (!n && !editingBook)) { el.innerHTML = ''; return; }
+  if (!_mp.eqSelectMode || (!n && !editingBook)) { el.style.cssText = ''; el.innerHTML = ''; return; }
   const primaryLabel = editingBook
     ? (n ? `Save ${n} device${n===1?'':'s'}` : 'Save with no devices')
     : `Add ${n} device${n===1?'':'s'} to loan`;
-  el.innerHTML = `<div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+  // The sticky positioning has to live on #mp-eq-select-footer itself, not
+  // on a div nested inside it — a sticky element can only "float" within
+  // the height of its own immediate parent, and a wrapper that does
+  // nothing but hold this one block ends up exactly as tall as it (zero
+  // room to move), so it silently never sticks and you have to scroll all
+  // the way to the actual bottom of the list to reach it. #mp-eq-list's
+  // sibling here is a direct child of the (much taller) screen div, same
+  // as every other working sticky footer in this file.
+  el.style.cssText = 'position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px';
+  el.innerHTML = `
     ${n ? `<button onclick="mpClearEquipmentSelection()" style="flex:none;padding:0 18px;border-radius:var(--mp-radius-md);border:1.5px solid var(--mp-critical);background:var(--mp-white);color:var(--mp-critical);font:600 14px var(--mp-font-body);cursor:pointer">Clear</button>` : ''}
     <button class="mp-btn mp-btn-primary" onclick="mpEquipmentAddSelectedToLoan()">${primaryLabel}</button>
-  </div>`;
+  `;
 }
 // Hands the picked assets back to the Book wizard. Two different callers,
 // two different merge semantics:
@@ -11891,7 +11900,18 @@ function mpRenderScan() {
         oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
       <div id="mp-scan-result" style="margin-top:16px"></div>
     </div>`;
-  setTimeout(() => { const el = document.getElementById('mp-scan-input'); if (el) el.focus(); }, 100);
+  // Deliberately NOT auto-focusing the manual-entry input any more — doing
+  // so used to pop the on-screen keyboard open every time this screen (or
+  // just the Check out/Return/Count mode) rendered, covering the camera
+  // button and making people dismiss the keyboard (or scroll) before they
+  // could even start scanning. The field is still right there to tap into
+  // if someone wants to type an asset number instead.
+  // Auto-start the camera instead, so scanning is ready immediately rather
+  // than needing an extra "Start camera" tap every single time — the
+  // button stays in the DOM as a fallback since mpOpenScan() only hides it
+  // once the stream actually starts (permission denied / no camera / etc.
+  // leave it visible to retry manually).
+  mpOpenScan();
 }
 function mpSetScanMode(mode) {
   _mp.scanMode = mode;
@@ -11964,13 +11984,23 @@ async function mpOpenScan() {
     const canvas = document.createElement('canvas');
     _mpQrInterval = setInterval(() => {
       if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
-      if (code && code.data) handleDecoded(code.data);
+      // The camera can now auto-start the instant this screen renders
+      // (rather than waiting for a manual "Start camera" tap, which used to
+      // guarantee the CDN's jsQR script had long since finished loading by
+      // the time anyone could interact) — so a still-loading/slow-network
+      // jsQR is a real possibility here now, not just a theoretical one.
+      // Guarded the same way the BarcodeDetector branch above already is:
+      // skip this tick and let the next one retry.
+      try {
+        if (typeof jsQR !== 'function') return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0);
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
+        if (code && code.data) handleDecoded(code.data);
+      } catch (e) { /* transient per-frame failure — next tick retries */ }
     }, 300);
   } catch (e) {
     mpCloseScan();
