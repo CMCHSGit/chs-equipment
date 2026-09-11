@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 114;
+const APP_VERSION = 115;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1941,7 +1941,6 @@ function updateTestModeUI() {
 
 // EmailJS config
 const EJS_SERVICE           = 'service_ig1n6ut';
-const EJS_TEMPLATE          = 'template_xux1ico';       // overdue reminder template
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'http://demo.chsnz.co.nz';
@@ -2297,7 +2296,6 @@ async function loadData() {
     // showing anything at all, unlike desktop's earlier hideLoading() —
     // felt slow.
     await Promise.all([
-      loadSentNotifications(),
       loadUpcomingLoans(),
       loadLoanMeta(),
       loadLoanDocNotes(),
@@ -2328,7 +2326,6 @@ async function loadData() {
     loadTileLocationCache();
     setTimeout(async () => {
       await activateUpcomingLoans();
-      checkOverdueNotifications();
       checkOrphanedLoans(); // detect any loans whose data.json save was lost
       checkMissingSimproJobs(); // detect any loans whose Simpro job never got created
       checkStuckLoansForAM(); // nudge the assigned AM about their own stuck bookings
@@ -5287,10 +5284,6 @@ function initEmailJS() {
       emailjs.init({ publicKey: EJS_KEY });
       _ejsReady = true;
       console.log('EmailJS ready');
-      // Re-run notification checks now that EmailJS is ready —
-      // the startup checks fire at 500ms but EmailJS loads at ~1000ms,
-      // so they returned early and nothing was marked as sent.
-      checkOverdueNotifications();
     } else if (attempts < 5) {
       attempts++;
       setTimeout(tryInit, 1000);
@@ -5310,23 +5303,6 @@ function loanReturnToken(loanTo, endDate) {
 function buildReturnLink(loanTo, endDate) {
   const token = loanReturnToken(loanTo, endDate);
   return APP_URL + '?return=' + token;
-}
-
-async function sendOverdueEmail(group) {
-  if (!_ejsReady || !group.email) return;
-  if (TEST_MODE) { console.log('TEST MODE: overdue email simulated for', group.email); return; }
-  const itemsList = group.items.map(function(e) {
-    return '- ' + (e.CHSAssetNo||'') + ' - ' + (e.Model||'') + (e.SerialNo ? ' (SN: ' + e.SerialNo + ')' : '');
-  }).join('\n');
-  const returnLink = buildReturnLink(group.loanTo, group.endDate);
-  await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
-    to_email:    group.email,
-    to_name:     group.loanTo,
-    items:       itemsList,
-    due_date:    formatDisplayDate(group.endDate),
-    return_link: returnLink,
-    extend_link: APP_URL + '?extend=' + loanReturnToken(group.loanTo, group.endDate)
-  });
 }
 
 // ── LOAN CONFIRMATION EMAIL via EmailJS ──────────────────────────────
@@ -5390,94 +5366,15 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
   }
 }
 
-// Track notified loans persistently in Firebase
-// _sentNotifications stores { "loanKey": "YYYY-MM-DD" } — date last sent
-let _sentNotifications = {};
-
-async function loadSentNotifications() {
-  try {
-    const r = await fetch(FB_URL + '/notifications.json');
-    const d = await r.json();
-    _sentNotifications = d || {};
-  } catch(e) { _sentNotifications = {}; }
-}
-
-async function markNotificationSent(key) {
-  _sentNotifications[key] = nzDate();
-  try {
-    await fetch(FB_URL + '/notifications.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(_sentNotifications)
-    });
-  } catch(e) { console.warn('Could not save notification record', e); }
-}
-
-// Returns true if today is Monday in NZ time and after 9am
-function isMondayMorningNZ() {
-  const now = new Date();
-  const nzStr = now.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', weekday: 'long', hour: 'numeric', hour12: false });
-  // weekday: 'long' gives us "Monday" etc, hour gives us 0-23
-  const day  = now.toLocaleDateString('en-NZ', { timeZone: 'Pacific/Auckland', weekday: 'long' });
-  const hour = parseInt(now.toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', hour: 'numeric', hour12: false }));
-  return day === 'Monday' && hour >= 9;
-}
-
-// Returns the most recent Monday date string (YYYY-MM-DD) in NZ time
-function lastMondayNZ() {
-  const now = new Date();
-  const nzDate2 = new Date(now.toLocaleString('en-US', { timeZone: 'Pacific/Auckland' }));
-  const day = nzDate2.getDay(); // 0=Sun, 1=Mon
-  const diff = (day === 0) ? 6 : day - 1; // days since last Monday
-  nzDate2.setDate(nzDate2.getDate() - diff);
-  return nzDate2.toISOString().slice(0, 10);
-}
-
-function checkOverdueNotifications() {
-  if (!_ejsReady) return; // don't mark as sent if EmailJS isn't ready yet
-  const today = nzDate();
-  // Test loans never get real overdue reminders, in test mode or not.
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && e.LoanEndDate && !isTestBatch(e.BatchID));
-  const grouped = {};
-  onLoan.forEach(e => {
-    const key = e.OnLoanTo + '|||' + e.LoanEndDate;
-    const _ldKeyDecoded = 'loandoc_' + e.OnLoanTo + '|||' + e.LoanEndDate;
-    const _ldKeyEncoded = 'loandoc_' + encodeURIComponent(e.OnLoanTo + '|||' + e.LoanEndDate);
-    const _batchAM = loanMeta[e.BatchID]?.accountManager
-      || loanMeta[_ldKeyEncoded]?.accountManager
-      || loanMeta[_ldKeyDecoded]?.accountManager
-      || window._loanDocCache?.[_ldKeyEncoded]?.accountManager
-      || window._loanDocCache?.[_ldKeyDecoded]?.accountManager
-      || '';
-    const amEmail = getAMEmail(_batchAM) || '';
-    if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, endDate: e.LoanEndDate, email: amEmail, accountManager: _batchAM, items: [] };
-    grouped[key].items.push(e);
-  });
-  Object.values(grouped).forEach(g => {
-    const notifKey = g.loanTo + '|||' + g.endDate;
-    if (g.endDate >= today) return; // not overdue yet
-    if (!g.email) {
-      console.log('Overdue loan for', g.loanTo, '- no email set');
-      return;
-    }
-    const lastSent = _sentNotifications[notifKey]; // date string or undefined
-    const thisMonday = lastMondayNZ();
-    // Only send on Monday mornings (NZ time), whether first send or a repeat
-    const shouldSend = isMondayMorningNZ() && (!lastSent || lastSent < thisMonday);
-    if (shouldSend) {
-      // Mark in memory immediately to block duplicate calls before async .then() resolves
-      _sentNotifications[notifKey] = nzDate();
-      sendOverdueEmail(g).then(() => {
-        markNotificationSent(notifKey);
-        console.log('Weekly overdue reminder sent to', g.email, 'for', g.loanTo);
-      }).catch(err => {
-        // Roll back in-memory mark so it retries next check
-        delete _sentNotifications[notifKey];
-        console.error('Overdue email failed, will retry next check:', err);
-      });
-    }
-  });
-}
+// Overdue reminders (and the "due back soon" heads-up before that) are now
+// entirely server-side — see .gas-proxy/Code.js's sendReturnReminders(),
+// which runs on a real daily trigger regardless of whether anyone has this
+// app open, and pushes to the AM's phone as well as emailing them. This
+// used to be a client-side check (loadSentNotifications()/
+// checkOverdueNotifications()/sendOverdueEmail(), gated on someone having a
+// tab open at 9am on a Monday NZ time) — removed 2026-09-11 along with its
+// /notifications.json store, now replaced by /returnDueSoonReminders/ and
+// /overdueReminders/ on the Firebase side.
 
 // Handle return/extend links from email
 function handleReturnLink() {
@@ -5628,14 +5525,17 @@ async function confirmExtendLoan() {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx >= 0) equipment[idx].LoanEndDate = newDate;
   });
-  // Clear old notification so new date can trigger fresh notification
-  if (_sentNotifications[oldKey]) {
-    delete _sentNotifications[oldKey];
-    await fetch(FB_URL + '/notifications.json', {
-      method: 'PUT', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(_sentNotifications)
-    });
-  }
+  // Clear any reminder already sent against the OLD end date — see
+  // .gas-proxy/Code.js's sendReturnReminders(), which keys its due-soon/
+  // overdue dedup the same way (loanTo|||endDate). A new end date gets a
+  // fresh key of its own regardless, but this avoids leaving a stale,
+  // orphaned entry behind under the old one.
+  try {
+    await Promise.all([
+      fetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' }),
+      fetch(FB_URL + '/overdueReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' })
+    ]);
+  } catch(e) { console.warn('Could not clear old return-reminder dedup entries', e); }
   setSync('saving', 'Saving...');
   try {
     await saveBin({ equipment, history: historyLog });
