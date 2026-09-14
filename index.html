@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 119;
+const APP_VERSION = 120;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2838,7 +2838,7 @@ function showAssetPreview(item) {
   }
 }
 
-async function submitReturn() {
+async function submitReturn(opts) {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
@@ -2855,10 +2855,10 @@ async function submitReturn() {
       try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
     }
   }
-  showToast('success', `${assetNo} returned`);
+  if (!(opts && opts.silent)) showToast('success', `${assetNo} returned`);
 }
 
-function submitCount() {
+function submitCount(opts) {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
@@ -2878,7 +2878,7 @@ function submitCount() {
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   if (scanMode === 'count') renderCountOverview();
-  showToast('success', `${assetNo} counted and marked as returned`);
+  if (!(opts && opts.silent)) showToast('success', `${assetNo} counted and marked as returned`);
 }
 
 function submitCountKeepLoan() {
@@ -10597,7 +10597,7 @@ function isMobilePWA() {
   } catch(e) { return false; }
 }
 
-let _mp = { screen: 'today', role: null, name: null, seg: 'upcoming', scope: null, open: null, scanMode: 'checkout' };
+let _mp = { screen: 'today', role: null, name: null, seg: 'upcoming', scope: null, open: null, scanMode: 'checkout', scanCart: { checkout: [], return: [], count: [] } };
 
 // ── PUSH NOTIFICATIONS (Firebase Cloud Messaging) ───────────────────────
 // Fill these in from the Firebase console — see plan notes / setup guide
@@ -11861,7 +11861,7 @@ function mpRenderScan() {
         <button class="mp-seg-btn${_mp.scanMode==='count'?' mp-active':''}" onclick="mpSetScanMode('count')">Count</button>
         <button class="mp-seg-btn${_mp.scanMode==='stocktake'?' mp-active':''}" onclick="mpRequestStocktakeMode()">Stocktake</button>
       </div>
-      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">${_mp.scanMode==='stocktake' ? 'Keep scanning — each item is counted &amp; returned automatically. The camera stays on between scans.' : 'Point the camera at the QR label, or enter the asset number below.'}</div>
+      <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">${_mp.scanMode==='stocktake' ? 'Keep scanning — each item is counted &amp; returned automatically. The camera stays on between scans.' : 'Keep scanning to add items to the list below, then tap Confirm — or enter the asset number manually.'}</div>
       <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters"
         oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
       <div id="mp-scan-result" style="margin-top:16px"></div>
@@ -11879,6 +11879,7 @@ function mpRenderScan() {
   // leave it visible to retry manually).
   mpOpenScan();
   if (_mp.scanMode === 'stocktake') mpRenderStocktakeResult();
+  else mpRenderScanCart();
 }
 function mpSetScanMode(mode) {
   _mp.scanMode = mode;
@@ -11962,16 +11963,12 @@ async function mpOpenScan() {
     const handleDecoded = raw => {
       const val = String(raw || '').trim().replace(/[^\x20-\x7E]/g, '');
       if (!val) return;
-      // Stocktake is a continuous scan — the whole point is not needing to
-      // restart the camera after every single item, so it deliberately
-      // skips the mpCloseScan() every other mode does here.
-      // mpStocktakeProcessScan() (via mpScanLookup()) has its own cooldown
-      // guard against re-processing the same code on every 300ms poll while
-      // it's still sitting in frame.
-      if (_mp.scanMode === 'stocktake') { mpScanLookup(val); return; }
-      mpCloseScan();
-      const inputEl = document.getElementById('mp-scan-input');
-      if (inputEl) inputEl.value = val;
+      // Every mode is a continuous scan now — Check out/Return/Count queue
+      // items into a list (mpScanBatchProcessScan) and Stocktake counts &
+      // returns immediately (mpStocktakeProcessScan) — so the camera never
+      // needs to close after a single decode any more. Both paths have
+      // their own cooldown guard against re-processing the same code on
+      // every 300ms poll while it's still sitting in frame.
       mpScanLookup(val);
     };
 
@@ -12629,77 +12626,15 @@ function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
   _mpScanTimer = setTimeout(() => { if (v.trim().length >= 3) mpScanLookup(v); }, 400);
 }
-function mpScanLookup(val, justDid) {
-  // Stocktake has no per-item confirmation tap to route through (that's
-  // the whole point — see mpStocktakeProcessScan()) — every entry point
-  // that would normally land here (camera decode, manual-field debounce,
-  // pressing Enter) goes there instead as long as this mode is active.
+function mpScanLookup(val) {
+  // Stocktake counts &amp; returns immediately on every scan (see
+  // mpStocktakeProcessScan()); Check out/Return/Count instead queue each
+  // scan into a running list and wait for an explicit Confirm tap (see
+  // mpScanBatchProcessScan()) — every entry point that would normally land
+  // here (camera decode, manual-field debounce, pressing Enter) routes to
+  // whichever of those matches the active mode.
   if (_mp.scanMode === 'stocktake') { mpStocktakeProcessScan(val); return; }
-  val = (val || '').trim();
-  const box = document.getElementById('mp-scan-result');
-  if (!box) return;
-  if (!val) { box.innerHTML = ''; return; }
-  const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
-  if (!item) {
-    box.innerHTML = `<div class="mp-err">"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.</div>`;
-    return;
-  }
-  const today = mpToday();
-  const status = mpEquipmentStatus(item, today);
-  const onLoan = status.key === 'on-loan' || status.key === 'overdue';
-  const mode = _mp.scanMode || 'checkout';
-
-  let actionBtn;
-  // justDid is only set for the one render immediately after an action
-  // completes (see mpScanCount()/mpScanCheckIn() below) — a persistent
-  // "done" state instead of the normal actionable button, so a well-meaning
-  // repeat tap ("did that work?") can't fire the same write twice. Retyping
-  // or re-looking-up the same item afterward calls this without justDid and
-  // gets the normal button back.
-  if (justDid) {
-    const doneLabel = justDid === 'count' ? '✓ Counted' : justDid === 'return' ? '✓ Returned' : '✓ Checked in';
-    actionBtn = `<button class="mp-btn" style="margin-top:12px;background:var(--mp-green-20);color:#4d7a00;cursor:default" disabled>${doneLabel}</button>`;
-  } else if (mode === 'return') {
-    actionBtn = onLoan
-      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}',this)">Return</button>`
-      : `<div class="mp-footnote" style="margin-top:12px">This item isn't currently on loan.</div>`;
-  } else if (mode === 'count') {
-    // Mirrors desktop's count-mode scan (submitCount()/submitCountKeepLoan()) —
-    // an item that's on loan when counted gets a choice (return it now, or
-    // leave the loan intact — e.g. counted at a customer site mid-demo),
-    // otherwise it's just a straightforward "mark as counted".
-    actionBtn = onLoan
-      ? `<div style="display:flex;gap:8px;margin-top:12px">
-           <button class="mp-btn mp-btn-secondary" style="flex:1" onclick="mpScanCountKeepLoan('${item.id}',this)">Keep on loan</button>
-           <button class="mp-btn mp-btn-primary" style="flex:1" onclick="mpScanCount('${item.id}',this)">Count &amp; return</button>
-         </div>`
-      : `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCount('${item.id}',this)">Mark as counted</button>`;
-  } else {
-    actionBtn = onLoan
-      ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckIn('${item.id}',this)">Check in</button>`
-      : status.key === 'available'
-        ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpScanCheckOut('${esc(item.CHSAssetNo)}')">Check out</button>`
-        : `<div class="mp-footnote" style="margin-top:12px">This item is booked ahead — use the Loans tab to manage it.</div>`;
-  }
-
-  const countedNote = mode === 'count'
-    ? `<div style="font:400 12px var(--mp-font-body);color:${item.Counted && item.Counted !== 'No' ? 'var(--mp-green)' : 'var(--mp-text-muted)'};margin-top:8px">${item.Counted && item.Counted !== 'No' && item.Counted !== '' ? esc(item.Counted) : 'Not yet counted'}</div>`
-    : '';
-
-  box.innerHTML = `
-    <div class="mp-card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
-        <div style="min-width:0">
-          <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(item.Model)}</div>
-          ${item.Description ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:1px">${esc(item.Description)}</div>` : ''}
-          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted);margin-top:2px">${esc(item.CHSAssetNo)}</div>
-        </div>
-        <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
-      </div>
-      ${onLoan ? `<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-top:8px">On loan to ${esc(item.OnLoanTo)}${item.LoanEndDate ? ' · due ' + esc(formatDisplayDate(item.LoanEndDate)) : ''}</div>` : ''}
-      ${countedNote}
-      ${actionBtn}
-    </div>`;
+  mpScanBatchProcessScan(val);
 }
 // One scan = one count-and-return, immediately, with no confirmation tap —
 // that's the entire point of stocktake mode. Guards against the same QR
@@ -12761,48 +12696,125 @@ function mpRenderStocktakeResult(item) {
       ${recentHtml || '<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted)">Scan the first item to get started.</div>'}
     </div>`;
 }
-async function mpScanCheckIn(assetId, btnEl) {
-  // Disabled synchronously, before anything async — a blocking loader alone
-  // still leaves a window (the tap it takes to render it) for a fast double
-  // tap to fire this twice and log two Return/Count history entries for the
-  // same action.
-  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
-  const item = equipment.find(e => e.id === assetId);
-  if (!item) return;
-  // currentItem is a top-level `let` in the desktop script, not a window
-  // property (window.currentItem would silently miss the binding
-  // submitReturn() actually reads) — classic <script> tags share one
-  // lexical global scope, so a plain assignment reaches it directly,
-  // same as batchDevices is set directly in mpBookConfirm() above.
-  currentItem = item;
-  mpShowBlockingLoader('Checking in…', "Please don't close the app or navigate away.");
-  // submitReturn() already shows its own success toast ("X returned") —
-  // no need to add a second one here.
-  try { await submitReturn(); } finally { mpHideBlockingLoader(); }
-  mpScanLookup(item.CHSAssetNo, (_mp.scanMode || 'checkout') === 'return' ? 'return' : 'checkin');
+// ── SCAN BATCH (Check out / Return / Count) ─────────────────────────────
+// These three modes share one flow: scanning queues items into
+// _mp.scanCart[mode] (like Stocktake's continuous scan, but with no write
+// happening yet) and the person reviews the list — removing a mis-scan if
+// needed — before tapping Confirm, which is the one point any of these
+// modes actually touches equipment/Firebase. Kept separate per mode (rather
+// than one shared array) so switching tabs to check something else doesn't
+// silently drop whatever was already queued.
+const MP_SCAN_BATCH_COOLDOWN_MS = 2500;
+function mpScanBatchProcessScan(val) {
+  val = (val || '').trim();
+  if (!val) return;
+  const now = Date.now();
+  // Same repeat-scan guard as Stocktake — the camera decode loop polls
+  // every 300ms, so a code still sitting in frame would otherwise queue
+  // itself dozens of times before the person can pull the camera away.
+  if (val === _mp.scanBatchLastScanned && (now - (_mp.scanBatchLastScanTime || 0)) < MP_SCAN_BATCH_COOLDOWN_MS) return;
+  _mp.scanBatchLastScanned = val;
+  _mp.scanBatchLastScanTime = now;
+  const input = document.getElementById('mp-scan-input');
+  if (input) input.value = '';
+  const mode = _mp.scanMode || 'checkout';
+  const cart = _mp.scanCart[mode];
+  const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+  if (!item) { mpRenderScanCart(`"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.`); return; }
+  if (cart.some(c => c.id === item.id)) { mpRenderScanCart(`${esc(item.CHSAssetNo)} is already in the list below.`); return; }
+  const status = mpEquipmentStatus(item, mpToday());
+  const onLoan = status.key === 'on-loan' || status.key === 'overdue';
+  if (mode === 'checkout' && status.key !== 'available') {
+    mpRenderScanCart(status.key === 'booked'
+      ? `${esc(item.CHSAssetNo)} is booked ahead — use the Loans tab to manage it.`
+      : `${esc(item.CHSAssetNo)} is already on loan to ${esc(item.OnLoanTo)} — use Return to check it in.`);
+    return;
+  }
+  if (mode === 'return' && !onLoan) { mpRenderScanCart(`${esc(item.CHSAssetNo)} isn't currently on loan.`); return; }
+  cart.push({ id: item.id, assetNo: item.CHSAssetNo, model: item.Model });
+  mpRenderScanCart(null, item);
 }
-async function mpScanCount(assetId, btnEl) {
-  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
-  const item = equipment.find(e => e.id === assetId);
-  if (!item) return;
-  currentItem = item;
-  mpShowBlockingLoader('Marking as counted…', "Please don't close the app or navigate away.");
-  // submitCount() already shows its own success toast — no need to add a second one.
-  try { await submitCount(); } finally { mpHideBlockingLoader(); }
-  mpScanLookup(item.CHSAssetNo, 'count');
+// errorMsg and addedItem are mutually exclusive, single-use call args (like
+// mpRenderStocktakeResult's `item`) — omit both for a plain re-render, e.g.
+// after removing a queued item or re-entering the screen.
+function mpRenderScanCart(errorMsg, addedItem) {
+  const box = document.getElementById('mp-scan-result');
+  if (!box) return;
+  const mode = _mp.scanMode || 'checkout';
+  const cart = _mp.scanCart[mode] || [];
+  const modeLabel = { checkout: 'check out', return: 'return', count: 'count' }[mode] || mode;
+  const confirmVerb = { checkout: 'Check out', return: 'Return', count: 'Count' }[mode] || modeLabel;
+  const statusHtml = errorMsg ? `<div class="mp-err" style="margin-bottom:10px">${errorMsg}</div>` : addedItem ? `
+    <div class="mp-card" style="background:var(--mp-green-20);border:1px solid var(--mp-green);margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px;color:#4d7a00;flex-shrink:0">✓</span>
+        <div style="min-width:0">
+          <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(addedItem.Model)}</div>
+          <div style="font:400 12px var(--mp-font-mono);color:var(--mp-text-muted)">${esc(addedItem.CHSAssetNo)} · added to list</div>
+        </div>
+      </div>
+    </div>` : '';
+  const rows = cart.map((c, i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;${i < cart.length - 1 ? 'border-bottom:1px solid var(--mp-border-hairline)' : ''}">
+      <span style="font:400 13px var(--mp-font-body);color:var(--mp-text-strong);min-width:0">${esc(c.assetNo)}<span style="color:var(--mp-text-muted)"> · ${esc(c.model || '')}</span></span>
+      <button style="flex-shrink:0;background:none;border:none;padding:2px 4px;font:600 12px var(--mp-font-body);color:var(--mp-critical);cursor:pointer" onclick="mpRemoveScanCartItem('${c.id}')">Remove</button>
+    </div>`).join('');
+  box.innerHTML = `
+    ${statusHtml}
+    <div class="mp-card">
+      <div style="font:700 13px var(--mp-font-body);color:var(--mp-text-strong);margin-bottom:${cart.length ? '6px' : '0'}">${cart.length} item${cart.length === 1 ? '' : 's'} to ${modeLabel}</div>
+      ${rows || '<div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted)">Scan the first item to get started.</div>'}
+    </div>
+    ${cart.length ? `<button class="mp-btn mp-btn-primary" style="margin-top:12px" onclick="mpConfirmScanCart()">Confirm ${confirmVerb} (${cart.length})</button>` : ''}`;
 }
-async function mpScanCountKeepLoan(assetId, btnEl) {
-  if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
-  const item = equipment.find(e => e.id === assetId);
-  if (!item) return;
-  currentItem = item;
-  mpShowBlockingLoader('Marking as counted…', "Please don't close the app or navigate away.");
-  try { await submitCountKeepLoan(); } finally { mpHideBlockingLoader(); }
-  mpScanLookup(item.CHSAssetNo, 'count');
+function mpRemoveScanCartItem(id) {
+  const cart = _mp.scanCart[_mp.scanMode || 'checkout'];
+  const idx = cart.findIndex(c => c.id === id);
+  if (idx !== -1) cart.splice(idx, 1);
+  mpRenderScanCart();
 }
-function mpScanCheckOut(assetNo) {
-  window._mpPendingBookAsset = assetNo;
+async function mpConfirmScanCart() {
+  const mode = _mp.scanMode || 'checkout';
+  const cart = _mp.scanCart[mode];
+  if (!cart.length) return;
+  if (mode === 'checkout') { mpConfirmScanCheckout(cart); return; }
+  if (mode === 'return') { await mpConfirmScanReturn(cart); return; }
+  if (mode === 'count') { await mpConfirmScanCount(cart); return; }
+}
+// Checkout still needs a borrower/dates/location, so Confirm here hands the
+// queued assets to the existing Book wizard (same window._mpPendingBookAssets
+// hook Reassign's "create new loan" already uses) rather than writing
+// anything itself — mpEnterBookScreen() folds them into _mp.book.selected.
+function mpConfirmScanCheckout(cart) {
+  window._mpPendingBookAssets = cart.map(c => c.assetNo);
+  _mp.scanCart.checkout = [];
   mpGoScreen('book');
+}
+async function mpConfirmScanReturn(cart) {
+  mpShowBlockingLoader(`Returning ${cart.length} item${cart.length === 1 ? '' : 's'}…`, "Please don't close the app or navigate away.");
+  for (const c of cart) {
+    const item = equipment.find(e => e.id === c.id);
+    if (!item) continue;
+    currentItem = item;
+    await submitReturn({ silent: true });
+  }
+  mpHideBlockingLoader();
+  showToast('success', `${cart.length} item${cart.length === 1 ? '' : 's'} returned`);
+  _mp.scanCart.return = [];
+  mpRenderScanCart();
+}
+async function mpConfirmScanCount(cart) {
+  mpShowBlockingLoader(`Counting ${cart.length} item${cart.length === 1 ? '' : 's'}…`, "Please don't close the app or navigate away.");
+  for (const c of cart) {
+    const item = equipment.find(e => e.id === c.id);
+    if (!item) continue;
+    currentItem = item;
+    submitCount({ silent: true });
+  }
+  mpHideBlockingLoader();
+  showToast('success', `${cart.length} item${cart.length === 1 ? '' : 's'} counted`);
+  _mp.scanCart.count = [];
+  mpRenderScanCart();
 }
 
 // ── MORE (Phase E is otherwise deferred — this is just enough to reach
