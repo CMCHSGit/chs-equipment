@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 131;
+const APP_VERSION = 132;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11464,7 +11464,7 @@ function mpRenderEquipment() {
   if (_mp.eqSelectMode === undefined) _mp.eqSelectMode = false;
   if (_mp.eqSelected === undefined) _mp.eqSelected = [];
   document.getElementById('mp-screen-equipment').innerHTML = `
-    <div style="padding:16px 20px 12px">
+    <div style="padding:16px 20px 12px;position:sticky;top:0;z-index:5;background:var(--mp-white)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="position:relative;flex:1;display:flex;align-items:center">
           <span style="position:absolute;left:14px;color:var(--mp-text-muted);display:flex;pointer-events:none">${mpIcon('search',18)}</span>
