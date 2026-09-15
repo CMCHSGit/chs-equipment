@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 128;
+const APP_VERSION = 129;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2862,17 +2862,32 @@ async function submitReturn(opts) {
   logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Returned', loanTo: prev.loanTo, location: prev.loc });
   scheduleSave(); updateStats(); renderTable(); clearScan();
-  // Delete loanDoc if the whole batch is now returned
+  // Close the Simpro job and delete the loanDoc if the whole batch is now
+  // returned — this was missing entirely until 2026-09-15 (only the
+  // loanDoc got deleted), which is exactly what left Mill Road Veterinary
+  // Clinic's job #209287 open in Simpro after all 3 items were returned
+  // via this function (Scan/item-detail Return, and mobile's Return queue
+  // both go through here — confirmBatchReturn(), the desktop batch-return
+  // modal, already had this right).
   if (batchId) {
     const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
     if (!stillActive) {
+      let simproJobId = window._simproJobCache?.[batchId];
+      if (!simproJobId) {
+        try {
+          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+          const d = await r.json();
+          simproJobId = d?.simproJobId;
+        } catch(e) {}
+      }
+      closeSimproJob(simproJobId, prev.loanTo);
       try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
     }
   }
   if (!(opts && opts.silent)) showToast('success', `${assetNo} returned`);
 }
 
-function submitCount(opts) {
+async function submitCount(opts) {
   if (!currentItem) return;
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
@@ -2884,10 +2899,23 @@ function submitCount(opts) {
     OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null
   });
   logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Count', loanTo: prev.loanTo, location: prev.loc, notes: countedValue });
-  // Close Simpro job if all items in this batch are now returned
+  // Close Simpro job if all items in this batch are now returned — same
+  // Firebase fallback as submitReturn(), since window._simproJobCache can
+  // be empty (e.g. right after a fresh page load) even when a real job
+  // exists, which would otherwise silently skip closing it.
   if (prev.batchId) {
     const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
-    if (!stillActive) closeSimproJob(window._simproJobCache?.[prev.batchId], prev.loanTo);
+    if (!stillActive) {
+      let simproJobId = window._simproJobCache?.[prev.batchId];
+      if (!simproJobId) {
+        try {
+          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(prev.batchId) + '.json');
+          const d = await r.json();
+          simproJobId = d?.simproJobId;
+        } catch(e) {}
+      }
+      closeSimproJob(simproJobId, prev.loanTo);
+    }
   }
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
@@ -13014,7 +13042,7 @@ async function mpConfirmScanCount(cart) {
     const item = equipment.find(e => e.id === c.id);
     if (!item) continue;
     currentItem = item;
-    submitCount({ silent: true });
+    await submitCount({ silent: true }); // now async (Simpro job-close lookup) — await so items in the same batch don't race each other's "any left?" check
   }
   mpHideBlockingLoader();
   showToast('success', `${cart.length} item${cart.length === 1 ? '' : 's'} counted`);
