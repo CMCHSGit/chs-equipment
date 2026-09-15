@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 123;
+const APP_VERSION = 124;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7155,11 +7155,30 @@ async function linkExistingSimproJob(pdfKey) {
 
 // Click-to-correct entry point on a loan card's own "Job #" badge — for a
 // job number that's already recorded but wrong, not one that's missing.
+// Clearing the field (rather than cancelling) removes our record instead,
+// so the loan shows up in Missing Simpro Jobs again — from there, "Create
+// Job" makes a real, fresh one via the Simpro API. This function and
+// linkExistingSimproJob() never call Simpro themselves either way; only
+// retryMissingSimproJob() (Create Job) actually does.
 async function promptEditSimproJob(pdfKey, currentJobId, loanTo) {
-  const raw = prompt('Simpro job number for ' + loanTo + ':', currentJobId != null ? String(currentJobId) : '');
+  const raw = prompt('Simpro job number for ' + loanTo + ' — clear this field if the job no longer exists in Simpro (it\'ll show up in "Missing Simpro Jobs" again, where you can create a fresh one):', currentJobId != null ? String(currentJobId) : '');
   if (raw === null) return; // cancelled
   const trimmed = raw.trim();
-  if (!trimmed || isNaN(Number(trimmed))) { showToast('error', 'Enter a valid numeric Simpro job number.'); return; }
+  if (!trimmed) {
+    if (!confirm('Remove the recorded Simpro job number for ' + loanTo + '? This loan will show up in "Missing Simpro Jobs" again.')) return;
+    try {
+      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', { method: 'DELETE' });
+      if (window._loanDocCache?.[pdfKey]) delete window._loanDocCache[pdfKey].simproJobId;
+      writeAudit('simpro_updated', 'Simpro job number cleared — ' + loanTo, { loanTo, pdfKey });
+      showToast('info', 'Job number cleared for ' + loanTo + ' — open Missing Simpro Jobs to create a fresh one.');
+      if (_dirty.loans === false) renderLoans();
+      renderSimproHealthBadge();
+    } catch(e) {
+      showToast('error', 'Could not clear job number: ' + e.message);
+    }
+    return;
+  }
+  if (isNaN(Number(trimmed))) { showToast('error', 'Enter a valid numeric Simpro job number.'); return; }
   const jobId = Number(trimmed);
   if (jobId === Number(currentJobId)) return; // unchanged
   try {
