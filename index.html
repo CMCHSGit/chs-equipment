@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 125;
+const APP_VERSION = 126;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -9442,24 +9442,39 @@ async function confirmReassignAM() {
   const origDoc = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
   const tgtDoc  = targetBatchId   ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(targetBatchId)   + '.json').then(r => r.json()).catch(() => null) : null;
 
+  // Appended to each side's Simpro notes (not our own editable notesCell —
+  // this is a system-generated trail for whoever looks at the job directly
+  // in Simpro, kept separate from the free-text notes a person wrote there)
+  // so the job record itself explains where its items went/came from,
+  // rather than just showing a changed item list with no explanation.
+  const _movedAssetList = movedItems.map(i => i.CHSAssetNo).join(', ');
+  const _transferOutNote = 'Transferred ' + movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' (' + _movedAssetList + ') to ' + targetLoanData.loanTo + ' on ' + formatDisplayDate(nzDate()) + '.';
+  const _transferInNote  = 'Received ' + movedItems.length + ' item' + (movedItems.length !== 1 ? 's' : '') + ' (' + _movedAssetList + ') from ' + g.loanTo + ' on ' + formatDisplayDate(nzDate()) + '.';
+  const _appendNote = (existing, note) => (existing ? existing + '\n\n' : '') + note;
+
   const origJobId = _reassignPdfKey ? await _getJobId(_reassignPdfKey) : null;
   if (origJobId && remainingItems.length > 0) {
     await _simproPush(_reassignPdfKey, origJobId,
-      { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: origDoc?.notesCell || '', shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
+      { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: _appendNote(origDoc?.notesCell, _transferOutNote), shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
       remainingItems);
     writeAudit('simpro_updated', 'Simpro job #' + origJobId + ' updated — items reassigned out', { loanTo: g.loanTo, jobId: origJobId, pdfKey: _reassignPdfKey });
   } else if (origJobId && remainingItems.length === 0) {
     // Every item just left this loan — it's done, same as a real return
     // emptying a batch (see confirmBatchReturn()). Without this the source
     // job stayed open in Simpro forever with its now-stale item list, since
-    // nothing else ever tells Simpro this job is finished.
+    // nothing else ever tells Simpro this job is finished. Push the transfer
+    // note (and the now-empty item list) before closing — closeSimproJob()
+    // itself only ever sends the close flag, never touches notes/items.
+    await _simproPush(_reassignPdfKey, origJobId,
+      { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: _appendNote(origDoc?.notesCell, _transferOutNote), shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
+      []);
     closeSimproJob(origJobId, g.loanTo);
   }
 
   const tgtJobId = targetBatchId ? await _getJobId(targetBatchId) : null;
   if (tgtJobId) {
     await _simproPush(targetBatchId, tgtJobId,
-      { ...targetLoanData, notes: tgtDoc?.notesCell || '', shippingDetails: tgtDoc?.authCell || '', contactNumber: tgtDoc?.contactNumber || '' },
+      { ...targetLoanData, notes: _appendNote(tgtDoc?.notesCell, _transferInNote), shippingDetails: tgtDoc?.authCell || '', contactNumber: tgtDoc?.contactNumber || '' },
       [...targetGroupItems, ...movedItems]);
     writeAudit('simpro_updated', 'Simpro job #' + tgtJobId + ' updated — items moved in from ' + g.loanTo, { loanTo: targetLoanData.loanTo, jobId: tgtJobId, pdfKey: targetBatchId });
   }
