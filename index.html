@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 127;
+const APP_VERSION = 128;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12082,6 +12082,15 @@ let _mpQrStream = null, _mpQrInterval = null;
 async function mpOpenScan() {
   const video = document.getElementById('mp-scan-video');
   if (!video) return;
+  // Prime the chime's AudioContext as early as possible in the scan
+  // session — iOS suspends a freshly-created one until it's resumed
+  // following a user gesture, and starting the camera (a tap, even when
+  // auto-triggered by opening this screen right after a prior tap) is the
+  // closest thing to one available here.
+  try {
+    if (!_mpAudioCtx) _mpAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_mpAudioCtx.state === 'suspended') _mpAudioCtx.resume();
+  } catch(e) {}
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     // Diagnostic detail included directly in the toast — every standard
     // explanation (HTTPS, private browsing, in-app browser wrapper,
@@ -12787,6 +12796,34 @@ function mpRenderLoanForm() {
 function _mpScanVibrate() {
   try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
 }
+// A short synthesised beep (Web Audio, no audio file needed) — unlike
+// vibration, this DOES work on iOS, so it's the one success cue that
+// actually reaches both platforms. One AudioContext is created lazily and
+// reused rather than one per scan. iOS suspends a context until it's
+// resumed after a user gesture — mpOpenScan() primes it right when the
+// camera starts (tapping "Start camera", or the auto-start that follows
+// opening the Scan screen) so it's normally already running by the time a
+// scan happens; resuming again here as well is a harmless no-op if so, and
+// a recovery path if it somehow wasn't.
+let _mpAudioCtx = null;
+function _mpScanChime() {
+  try {
+    if (!_mpAudioCtx) _mpAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_mpAudioCtx.state === 'suspended') _mpAudioCtx.resume();
+    const osc = _mpAudioCtx.createOscillator();
+    const gain = _mpAudioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, _mpAudioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, _mpAudioCtx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, _mpAudioCtx.currentTime + 0.14);
+    osc.connect(gain);
+    gain.connect(_mpAudioCtx.destination);
+    osc.start();
+    osc.stop(_mpAudioCtx.currentTime + 0.15);
+  } catch(e) {}
+}
+function _mpScanFeedback() { _mpScanVibrate(); _mpScanChime(); }
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
@@ -12825,7 +12862,7 @@ function mpStocktakeProcessScan(val) {
     if (box) box.innerHTML = `<div class="mp-err">"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.</div>`;
     return;
   }
-  _mpScanVibrate();
+  _mpScanFeedback();
   currentItem = item;
   submitCount(); // marks Counted + Returned in one step; shows its own toast
   if (!_mp.stocktake) _mp.stocktake = { count: 0, recent: [] };
@@ -12888,7 +12925,7 @@ function mpScanBatchProcessScan(val) {
   const cart = _mp.scanCart[mode];
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
   if (!item) { mpRenderScanCart(`"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.`); return; }
-  _mpScanVibrate(); // confirms the code was read and matched a real item, even if it turns out not to be actionable below
+  _mpScanFeedback(); // confirms the code was read and matched a real item, even if it turns out not to be actionable below
   if (cart.some(c => c.id === item.id)) { mpRenderScanCart(`${esc(item.CHSAssetNo)} is already in the list below.`); return; }
   const status = mpEquipmentStatus(item, mpToday());
   const onLoan = status.key === 'on-loan' || status.key === 'overdue';
