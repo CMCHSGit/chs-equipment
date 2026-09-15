@@ -1,6 +1,6 @@
 {
-  "name": "CHS Demo Tracker",
-  "short_name": "CHS Tracker",
+  "name": "CMCHS Demo Tracker",
+  "short_name": "CMCHS Tracker",
   "description": "CMCHS demo equipment loan tracker — mobile companion app",
   "start_url": "/?mobile=1",
   "scope": "/",
