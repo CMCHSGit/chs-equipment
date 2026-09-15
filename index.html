@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 133;
+const APP_VERSION = 134;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4874,8 +4874,8 @@ function renderLoans() {
         '</button>' +
         _reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(\'' + key + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Reassign account manager" style="font-size:11px">' +
-        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Edit or reassign this loan" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Edit or Reassign Loan' +
         '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey(\'' + key + '\')" title="Add more devices to this loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
@@ -4956,8 +4956,8 @@ function renderLoans() {
         '</button>' +
         _reportsButtonHtml(_readinessKey(u.id, u.loanTo, u.endDate), u.loanTo) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendUpcomingLoan(\'' + u.id + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Reassign account manager" style="font-size:11px">' +
-        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Edit or reassign this loan" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Edit or Reassign Loan' +
         '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToUpcomingLoan(\'' + u.id + '\')" title="Add more devices to this upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
@@ -5002,8 +5002,8 @@ function renderLoans() {
           </button>
           ${_reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo)}
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}')" title="Reassign account manager" style="font-size:11px">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign
+          <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}')" title="Edit or reassign this loan" style="font-size:11px">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Edit or Reassign Loan
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey('${key}')" title="Add more devices to this loan">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items
