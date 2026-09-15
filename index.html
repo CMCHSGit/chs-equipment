@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 124;
+const APP_VERSION = 125;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -9448,6 +9448,12 @@ async function confirmReassignAM() {
       { loanTo: g.loanTo, location: g.location || '', startDate: g.startDate || '', endDate: g.endDate || '', accountManager: getGroupAM(g), notes: origDoc?.notesCell || '', shippingDetails: origDoc?.authCell || '', contactNumber: origDoc?.contactNumber || '', jobType: origDoc?.jobType || 'Demo' },
       remainingItems);
     writeAudit('simpro_updated', 'Simpro job #' + origJobId + ' updated — items reassigned out', { loanTo: g.loanTo, jobId: origJobId, pdfKey: _reassignPdfKey });
+  } else if (origJobId && remainingItems.length === 0) {
+    // Every item just left this loan — it's done, same as a real return
+    // emptying a batch (see confirmBatchReturn()). Without this the source
+    // job stayed open in Simpro forever with its now-stale item list, since
+    // nothing else ever tells Simpro this job is finished.
+    closeSimproJob(origJobId, g.loanTo);
   }
 
   const tgtJobId = targetBatchId ? await _getJobId(targetBatchId) : null;
