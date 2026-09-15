@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 120;
+const APP_VERSION = 121;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4357,6 +4357,22 @@ function isStartingSoon(today, startDate, island) {
   return businessDays <= maxBusinessDays;
 }
 
+// True when an active loan or upcoming booking already exists for the exact
+// same customer/location/end date — the signature of "someone booked a new
+// loan without realising they could add items to an existing one", which
+// silently produces two loans that look identical but don't share a
+// BatchID (see submitBatchLoan()'s warning below). Reads equipment/
+// upcomingLoans directly rather than window._loanGroups, which is only ever
+// as fresh as the last renderLoans().
+function _findExistingLoanMatch(loanTo, location, endDate) {
+  const lt = loanTo.trim().toLowerCase(), loc = location.trim().toLowerCase();
+  const activeMatch = equipment.some(e => e.OnLoanTo && e.Returned !== 'Yes' &&
+    e.OnLoanTo.trim().toLowerCase() === lt && (e.Location || '').trim().toLowerCase() === loc && e.LoanEndDate === endDate);
+  if (activeMatch) return true;
+  return upcomingLoans.some(u => (TEST_MODE || !isTestBatch(u.id)) &&
+    u.loanTo.trim().toLowerCase() === lt && (u.location || '').trim().toLowerCase() === loc && u.endDate === endDate);
+}
+
 async function submitBatchLoan() {
   // Disable immediately to prevent double-submission
   const _submitBtn = document.getElementById('btn-batch');
@@ -4387,6 +4403,18 @@ async function submitBatchLoan() {
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
   if (!batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
   if (!batchIslandCheck) { showErr('Please select the shipping Island (North or South) — this determines how much notice we get for shipping.'); return; }
+
+  // Warn (don't block) when a loan for the exact same customer/location/end
+  // date already exists — this is exactly what happens when someone books a
+  // new loan without realising they could "Add items" to an existing one
+  // instead, and it silently produces two loans that look identical but
+  // don't share a BatchID, so they never merge into one card. Checked
+  // directly against the live equipment/upcomingLoans arrays rather than
+  // window._loanGroups, which is only ever as fresh as the last renderLoans().
+  if (_findExistingLoanMatch(loanTo, location, endDate)) {
+    const proceed = confirm('A loan for "' + loanTo + '" at this location, ending ' + formatDisplayDate(endDate) + ', already exists.\n\nIf these devices belong on that loan, cancel this and use "Add items" on the existing loan instead — creating a second loan with the same details won\'t merge with it.\n\nClick OK to create this as a separate new loan anyway.');
+    if (!proceed) { if (_submitBtn) { _submitBtn.disabled = false; _submitBtn.textContent = 'Confirm Loan'; } return; }
+  }
 
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
   // True overlap check: new loan [startDate, endDate] vs existing [existingStart, existingEnd].
