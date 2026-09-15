@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 126;
+const APP_VERSION = 127;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12780,6 +12780,13 @@ function mpRenderLoanForm() {
     </div>`;
 }
 
+// Android Chrome only — Safari has never implemented the Vibration API at
+// all, on any iOS version, standalone or not (unlike the camera bug, this
+// has no code-side workaround). Feature-detected so it's silently a no-op
+// on iOS rather than throwing.
+function _mpScanVibrate() {
+  try { if (navigator.vibrate) navigator.vibrate(60); } catch(e) {}
+}
 let _mpScanTimer = null;
 function mpScanDebounce(v) {
   clearTimeout(_mpScanTimer);
@@ -12818,6 +12825,7 @@ function mpStocktakeProcessScan(val) {
     if (box) box.innerHTML = `<div class="mp-err">"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.</div>`;
     return;
   }
+  _mpScanVibrate();
   currentItem = item;
   submitCount(); // marks Counted + Returned in one step; shows its own toast
   if (!_mp.stocktake) _mp.stocktake = { count: 0, recent: [] };
@@ -12880,6 +12888,7 @@ function mpScanBatchProcessScan(val) {
   const cart = _mp.scanCart[mode];
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
   if (!item) { mpRenderScanCart(`"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.`); return; }
+  _mpScanVibrate(); // confirms the code was read and matched a real item, even if it turns out not to be actionable below
   if (cart.some(c => c.id === item.id)) { mpRenderScanCart(`${esc(item.CHSAssetNo)} is already in the list below.`); return; }
   const status = mpEquipmentStatus(item, mpToday());
   const onLoan = status.key === 'on-loan' || status.key === 'overdue';
