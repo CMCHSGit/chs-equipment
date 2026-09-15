@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 119;
+const APP_VERSION = 120;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2371,6 +2371,15 @@ function _auditBadge(type) {
     asset_edited:     'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
     asset_deleted:    'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     asset_retired:    'background:#fdf4ff;color:#7c3aed;border:1px solid #e9d5ff',
+    upcoming_loan_deleted:  'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    upcoming_item_removed:  'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
+    am_removed:             'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    retired_asset_deleted:  'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    kit_deleted:            'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    kit_accessory_removed:  'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
+    test_report_uploaded:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
+    test_report_deleted:    'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
+    history_deleted:        'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
   };
   const labels = {
     loan_created: 'Loan Created', loan_deleted: 'Loan Deleted',
@@ -2381,6 +2390,11 @@ function _auditBadge(type) {
     simpro_created: 'Simpro Created', simpro_updated: 'Simpro Updated', simpro_closed: 'Simpro Closed',
     asset_added: 'Asset Added', asset_edited: 'Asset Edited',
     asset_deleted: 'Asset Deleted', asset_retired: 'Asset Retired',
+    upcoming_loan_deleted: 'Upcoming Loan Cancelled', upcoming_item_removed: 'Item Removed',
+    am_removed: 'AM Removed', retired_asset_deleted: 'Retired Asset Deleted',
+    kit_deleted: 'Kit Group Deleted', kit_accessory_removed: 'Kit Accessory Removed',
+    test_report_uploaded: 'Test Report Uploaded', test_report_deleted: 'Test Report Deleted',
+    history_deleted: 'History Deleted',
   };
   const s = styles[type] || 'background:var(--surface2);color:var(--text2);border:1px solid var(--border)';
   const l = labels[type] || type;
@@ -5635,6 +5649,7 @@ async function deleteSelectedHistory() {
   scheduleSave();
   renderHistoryMgmt();
   renderHistory();
+  writeAudit('history_deleted', toDelete.length + ' history entr' + (toDelete.length>1?'ies':'y') + ' deleted', { ids: toDelete });
   showToast('success', toDelete.length + ' entr' + (toDelete.length>1?'ies':'y') + ' deleted');
 }
 
@@ -7412,19 +7427,23 @@ async function addKitAccessory(k) {
 
 async function removeKitAccessory(k, idx) {
   if (!_kitGroups[k]) return;
+  const removed = _kitGroups[k].accessories[idx];
   _kitGroups[k].accessories.splice(idx, 1);
   await saveKitGroups();
   renderKitGroupsSettings();
   const body = document.getElementById('kg-body-' + k);
   if (body) body.classList.add('open');
+  writeAudit('kit_accessory_removed', (removed?.assetNo || 'Accessory') + ' removed from kit group "' + (_kitGroups[k].label || k) + '"', { kit: _kitGroups[k].label || k, assetNo: removed?.assetNo || '' });
   showToast('success', 'Accessory removed');
 }
 
 async function deleteKitGroup(k) {
   if (!confirm('Delete kit group "' + (_kitGroups[k]?.label || k) + '"? This cannot be undone.')) return;
+  const label = _kitGroups[k]?.label || k;
   delete _kitGroups[k];
   await saveKitGroups();
   renderKitGroupsSettings();
+  writeAudit('kit_deleted', 'Kit group "' + label + '" deleted', { kit: label });
   showToast('success', 'Kit group deleted');
 }
 
@@ -7848,9 +7867,11 @@ async function deleteTestReport(id) {
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!_testReportsKey) return;
+  const report = _testReportsList.find(r => r.id === id);
   try {
     await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
     await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
+    writeAudit('test_report_deleted', (report?.filename || 'Report') + ' deleted — ' + document.getElementById('test-reports-title').textContent.replace('Test Reports — ', ''), { key: _testReportsKey, filename: report?.filename || '' });
     showToast('success', 'Report deleted');
     await refreshTestReportsList();
     if (!_testReportsList.length && window._testReportsKeys) {
@@ -7993,9 +8014,11 @@ function addAccountManager() {
 }
 
 function removeAccountManager(i) {
+  const removed = accountManagers[i];
   accountManagers.splice(i, 1);
   saveAccountManagers();
   renderAMList();
+  if (removed) writeAudit('am_removed', removed.name + ' removed from account managers', { name: removed.name, email: removed.email || '' });
 }
 
 // Get AM email for notifications
@@ -8190,10 +8213,12 @@ async function deleteFromRetiredSelection() {
   if (pw === null) return;
   if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
   if (!confirm(`Permanently delete ${ids.length} item${ids.length>1?'s':''}? This cannot be undone.`)) return;
+  const removedAssets = retiredAssets.filter(e => ids.includes(e.id)).map(e => e.CHSAssetNo);
   retiredAssets = retiredAssets.filter(e => !ids.includes(e.id));
   await saveRetiredAssets();
   clearRetiredSelection();
   renderRetired();
+  writeAudit('retired_asset_deleted', removedAssets.length + ' retired asset' + (removedAssets.length!==1?'s':'') + ' permanently deleted', { items: removedAssets });
   showToast('info', `${ids.length} item${ids.length>1?'s':''} permanently deleted`);
 }
 
@@ -8954,8 +8979,10 @@ async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
     equipment[idx]._upcomingLoanId = null;
   }
   // If the upcoming loan is now empty, remove it entirely
+  let _emptied = false;
   if (u.items.length === 0) {
     upcomingLoans.splice(upcomingLoans.indexOf(u), 1);
+    _emptied = true;
     showToast('info', assetNo + ' removed — upcoming loan cancelled (no items left)');
   } else {
     showToast('info', assetNo + ' removed from upcoming loan for ' + u.loanTo);
@@ -8963,6 +8990,7 @@ async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
   await saveUpcomingLoans();
   scheduleSave();
   renderLoans(); renderTable();
+  writeAudit('upcoming_item_removed', assetNo + ' removed from upcoming loan for ' + u.loanTo + (_emptied ? ' (loan cancelled — no items left)' : ''), { loanTo: u.loanTo, assetNo });
 }
 
 // ── REASSIGN ACCOUNT MANAGER ──────────────────────────────────────────
@@ -9377,6 +9405,7 @@ async function deleteUpcomingLoanPrompt(id) {
   });
   await deleteUpcomingLoan(id);
   scheduleSave(); renderLoans(); renderTable();
+  writeAudit('upcoming_loan_deleted', 'Upcoming loan for ' + u.loanTo + ' cancelled — ' + u.items.length + ' item' + (u.items.length!==1?'s':'') + ' cleared', { loanTo: u.loanTo, items: u.items.map(i => i.CHSAssetNo) });
   showToast('info', 'Upcoming loan for ' + u.loanTo + ' cancelled');
 }
 
@@ -9874,6 +9903,7 @@ async function deleteRetiredItem(id, assetNo) {
   retiredAssets = retiredAssets.filter(e => e.id !== id);
   await saveRetiredAssets();
   renderRetired();
+  writeAudit('retired_asset_deleted', assetNo + ' permanently deleted', { items: [assetNo] });
   showToast('info', assetNo + ' permanently deleted');
 }
 
