@@ -1,6 +1,6 @@
 # To do
 
-Last updated: 2026-09-11
+Last updated: 2026-09-15
 
 ## Infrastructure (shared)
 
@@ -69,6 +69,8 @@ Last updated: 2026-09-11
 - [x] **New 2026-09-15: clearing a loan's Job # sends it back to Missing Simpro Jobs** — if a job turns out not to actually exist in Simpro (rather than just being the wrong number), clearing the "Job #" prompt's field (instead of typing a new one) removes the recorded number and the loan reappears in Missing Simpro Jobs, where "Create Job" makes a real fresh one via the Simpro API.
 - [x] **New 2026-09-15: click a loan's "Job #" badge to correct a wrong Simpro job number** — "Link" (above) only covers a loan with no job recorded at all; there was no way to fix one that's already recorded but wrong (deleted/archived in Simpro afterward, or crossed with a different loan's number — found via a real case, Ciaran Cliff's loans showing job numbers that don't match Simpro's own pending-jobs list). Click the "Job #" text on any loan card (active, scheduled, or upcoming) to type in the correct number. Neither this nor Link ever calls the Simpro API — both only correct our own record. Needs testing.
 - [x] **New 2026-09-15: "Link" an existing Simpro job in Missing Jobs** — "missing" only ever meant `loanDocs/{pdfKey}.simproJobId` wasn't set in Firebase, not that no job actually exists in Simpro; previously the only option was "Create Job," which would make a duplicate if one had already been created directly in Simpro. Added a "Link" action per row — type the existing job number, it's recorded straight away and the loan drops off the missing list. Needs testing.
+- [x] **Fixed 2026-09-15: `submitReturn()` never closed the Simpro job when a return emptied a batch** — the most common return path (desktop Scan/item-detail Return, and every mobile return flow) only ever deleted the loanDoc when a batch's last item came back; it never told Simpro the job was done, leaving it open indefinitely with a stale item list. Root-caused via a real example (Mill Road Veterinary Clinic, job #209287 — created 20/07, all items returned 09/09, job still showing "New" in Simpro afterward). Fixed with the same Firebase-fallback job-ID lookup `confirmBatchReturn()` already used correctly. `submitCount()`'s existing (weaker) close-check hardened the same way. A follow-up audit of historical data (auditLog + history + loanDocs cross-reference) found ~29 real prior loans left open in Simpro by this bug; user cleaned those up by hand in Simpro directly. Needs testing: return the last item of a batch on both desktop and mobile, confirm the job closes.
+- [x] **New 2026-09-15: closing note recorded in Simpro job notes on return** — `closeSimproJob()` itself only ever flips Stage to Complete, never touching the job's own notes, so a job closed by a return alone went quiet with whatever description it had from creation. Added `_closeSimproJobWithNote()` — fetches the loanDoc, appends "All items returned to office on [date]." (or "All items counted and returned to office on [date]." for Count) to the existing notes, pushes that with an empty item list, then closes — mirroring the transfer note already left on reassign. Wired into all three return-triggered close paths: `submitReturn()`, `submitCount()`, `confirmBatchReturn()`. Needs testing.
 
 ### Needs testing
 

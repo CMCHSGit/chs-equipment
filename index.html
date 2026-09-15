@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 129;
+const APP_VERSION = 130;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2872,15 +2872,7 @@ async function submitReturn(opts) {
   if (batchId) {
     const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
     if (!stillActive) {
-      let simproJobId = window._simproJobCache?.[batchId];
-      if (!simproJobId) {
-        try {
-          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
-          const d = await r.json();
-          simproJobId = d?.simproJobId;
-        } catch(e) {}
-      }
-      closeSimproJob(simproJobId, prev.loanTo);
+      await _closeSimproJobWithNote(batchId, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
       try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
     }
   }
@@ -2906,15 +2898,7 @@ async function submitCount(opts) {
   if (prev.batchId) {
     const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
     if (!stillActive) {
-      let simproJobId = window._simproJobCache?.[prev.batchId];
-      if (!simproJobId) {
-        try {
-          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(prev.batchId) + '.json');
-          const d = await r.json();
-          simproJobId = d?.simproJobId;
-        } catch(e) {}
-      }
-      closeSimproJob(simproJobId, prev.loanTo);
+      await _closeSimproJobWithNote(prev.batchId, prev.loanTo, 'All items counted and returned to office on ' + formatDisplayDate(nzDate()) + '.');
     }
   }
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
@@ -5107,16 +5091,7 @@ async function confirmBatchReturn() {
   for (const batchId of batchIdsInvolved) {
     const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
     if (!stillActive) {
-      // Read jobId from Firebase before deleting the loanDoc (cache may be stale after refresh)
-      let simproJobId = window._simproJobCache?.[batchId];
-      if (!simproJobId) {
-        try {
-          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
-          const d = await r.json();
-          simproJobId = d?.simproJobId;
-        } catch(e) {}
-      }
-      closeSimproJob(simproJobId, _auditLoanTo);
+      await _closeSimproJobWithNote(batchId, _auditLoanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
       try {
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
       } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
@@ -6913,6 +6888,32 @@ function closeSimproJob(jobId, loanTo) {
     body, mode: 'no-cors'
   }).catch(e => console.warn('Simpro close failed:', e));
   writeAudit('simpro_closed', 'Simpro job #' + Number(jobId) + ' closed' + (loanTo ? ' — ' + loanTo : ''), { loanTo: loanTo || '', jobId: Number(jobId) });
+}
+
+// Used when a return (submitReturn()/submitCount()/confirmBatchReturn())
+// empties a batch — closeSimproJob() by itself only ever flips Stage to
+// Complete, it never touches the job's own notes/description, so a job
+// closed by a return alone just goes quiet with whatever description it
+// had from creation. Fetches the loanDoc fresh for its existing notes,
+// appends a closing note, pushes that (with an empty item list, since
+// everything's back) before closing — mirrors the transfer note the
+// reassign flow already leaves on its own source job. Resolves the jobId
+// itself (cache, falling back to the loanDoc) so callers don't each have
+// to.
+async function _closeSimproJobWithNote(batchId, loanTo, closeNote) {
+  if (!batchId) return;
+  let doc = null;
+  try {
+    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+    doc = await r.json();
+  } catch(e) {}
+  const simproJobId = window._simproJobCache?.[batchId] || doc?.simproJobId;
+  if (simproJobId) {
+    await _simproPush(batchId, simproJobId,
+      { loanTo: loanTo || '', location: doc?.location || '', startDate: doc?.startDate || '', endDate: doc?.endDate || '', accountManager: getLoanAM(batchId, loanTo, doc?.endDate || ''), notes: (doc?.notesCell ? doc.notesCell + '\n\n' : '') + closeNote, shippingDetails: doc?.authCell || '', contactNumber: doc?.contactNumber || '', jobType: doc?.jobType || 'Demo' },
+      []);
+  }
+  closeSimproJob(simproJobId, loanTo);
 }
 
 // ── MISSING SIMPRO JOBS (ADMIN) ────────────────────────────────────────
