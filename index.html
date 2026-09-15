@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 121;
+const APP_VERSION = 122;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7084,7 +7084,11 @@ function renderMissingSimproJobsModal() {
           <div style="font-weight:600;font-size:13px">${esc(m.loanTo)} <span style="font-weight:400;color:var(--text3);font-size:11px">&middot; ${esc(m.type)}</span></div>
           <div class="loan-device-desc">${esc(m.location)} &middot; ${m.items.length} device${m.items.length!==1?'s':''}${m.startDate ? ' &middot; Starts ' + formatDisplayDate(m.startDate) : ''}${m.endDate ? ' &middot; Due ' + formatDisplayDate(m.endDate) : ''}</div>
         </div>
-        <button class="btn btn-sm btn-primary" onclick="retryMissingSimproJob('${esc(m.pdfKey)}')">Create Job</button>
+        <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
+          <input type="text" inputmode="numeric" placeholder="Existing job #" id="msj-input-${esc(m.pdfKey)}" style="width:100px;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:12px" onkeydown="if(event.key==='Enter')linkExistingSimproJob('${esc(m.pdfKey)}')">
+          <button class="btn btn-sm" onclick="linkExistingSimproJob('${esc(m.pdfKey)}')" title="Already have a Simpro job for this loan? Enter its number and link it, instead of creating a new one.">Link</button>
+          <button class="btn btn-sm btn-primary" onclick="retryMissingSimproJob('${esc(m.pdfKey)}')">Create Job</button>
+        </div>
       </div>`).join('')
     : '<div style="text-align:center;padding:24px;color:var(--text3)">&#10003; No missing Simpro jobs right now.</div>';
 }
@@ -7108,6 +7112,35 @@ async function retryMissingSimproJob(pdfKey) {
   setTimeout(() => {
     if (document.getElementById('missing-simpro-modal').classList.contains('open')) refreshMissingSimproModal();
   }, TEST_MODE ? 300 : 3500);
+}
+
+// For a job that was already created directly in Simpro (outside this
+// app's own create-on-close flow) — "missing" here only ever means
+// loanDocs/{pdfKey}.simproJobId isn't set, not that no job exists in
+// Simpro at all, so this just records the number rather than calling the
+// Simpro API to create a second one.
+async function linkExistingSimproJob(pdfKey) {
+  const input = document.getElementById('msj-input-' + pdfKey);
+  const raw = (input?.value || '').trim();
+  if (!raw || isNaN(Number(raw))) { showToast('error', 'Enter a valid numeric Simpro job number.'); return; }
+  const jobId = Number(raw);
+  const missing = findLoansMissingSimproJob();
+  const m = missing.find(x => x.pdfKey === pdfKey);
+  const btn = document.getElementById('msj_' + pdfKey)?.querySelector('.btn:not(.btn-primary)');
+  if (btn) { btn.disabled = true; btn.textContent = 'Linking…'; }
+  try {
+    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ simproJobId: jobId })
+    });
+    _cacheSimproJobId(pdfKey, jobId);
+    writeAudit('simpro_updated', 'Simpro job #' + jobId + ' manually linked' + (m ? ' — ' + m.loanTo : ''), { loanTo: m?.loanTo || '', jobId, pdfKey });
+    showToast('success', 'Job #' + jobId + ' linked' + (m ? ' to ' + m.loanTo : ''));
+    refreshMissingSimproModal();
+  } catch(e) {
+    showToast('error', 'Could not link job: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Link'; }
+  }
 }
 
 function exportLoanRTF() {
