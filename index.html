@@ -65,6 +65,11 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<!-- ZXing: stronger pure-JS QR decoder than jsQR, used as mobile Scan's live-
+     camera fallback on browsers without BarcodeDetector (iOS Safari) — see
+     mpOpenScan(). jsQR above stays loaded for desktop's file-upload scanner
+     (handleNativeQR()) and as mpOpenScan()'s own fallback if this CDN fails. -->
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.23.0/umd/index.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <!-- Firebase compat SDK (classic script tags, not the ES-module build) —
      used only by the mobile app's push-notification opt-in
@@ -1862,7 +1867,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 136;
+const APP_VERSION = 137;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -1943,7 +1948,7 @@ function updateTestModeUI() {
 const EJS_SERVICE           = 'service_ig1n6ut';
 const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation template
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
-const APP_URL      = 'http://demo.chsnz.co.nz';
+const APP_URL      = 'https://demo.chsnz.co.nz';
 const SIMPRO_PROXY_URL      = 'https://script.google.com/macros/s/AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw/exec'; // paste Google Apps Script web app URL here
 
 // NZ timezone date helper
@@ -12157,6 +12162,10 @@ async function mpUnlockStocktake() {
 }
 
 let _mpQrStream = null, _mpQrInterval = null;
+// Lazily created once and reused across scan sessions — it holds no camera
+// resources itself (just the decoder), so there's nothing to tear down in
+// mpCloseScan() the way there is for the stream/interval above.
+let _mpZxingReader = null;
 async function mpOpenScan() {
   const video = document.getElementById('mp-scan-video');
   if (!video) return;
@@ -12242,16 +12251,36 @@ async function mpOpenScan() {
       }
     }
 
+    // No BarcodeDetector (every iOS Safari version, plus any other browser
+    // without it) — try ZXing first: a proper decode pipeline (multiple
+    // binarization passes) that's noticeably more tolerant of a live video
+    // frame's blur/distance/angle than jsQR's single-pass pixel scan below,
+    // which is exactly why the camera opened fine on iOS but rarely actually
+    // captured anything. `.decode(video)` reads the current frame directly
+    // (no manual canvas draw needed) and throws NotFoundException/
+    // ChecksumException/FormatException for an ordinary "nothing readable in
+    // this frame yet" — expected on almost every tick, not a real failure.
+    if (!_mpZxingReader && window.ZXing) {
+      try { _mpZxingReader = new ZXing.BrowserQRCodeReader(); } catch(e) { console.warn('ZXing init failed:', e); }
+    }
     const canvas = document.createElement('canvas');
     _mpQrInterval = setInterval(() => {
       if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
-      // The camera can now auto-start the instant this screen renders
-      // (rather than waiting for a manual "Start camera" tap, which used to
-      // guarantee the CDN's jsQR script had long since finished loading by
-      // the time anyone could interact) — so a still-loading/slow-network
-      // jsQR is a real possibility here now, not just a theoretical one.
-      // Guarded the same way the BarcodeDetector branch above already is:
-      // skip this tick and let the next one retry.
+      if (_mpZxingReader) {
+        try {
+          const result = _mpZxingReader.decode(video);
+          if (result && result.getText()) { handleDecoded(result.getText()); return; }
+        } catch (e) { /* nothing decodable this frame — fall through to jsQR below */ }
+      }
+      // jsQR as a second attempt per frame (a frame can decode with one
+      // library but not the other) and as the sole fallback if ZXing's CDN
+      // script failed to load. The camera can now auto-start the instant
+      // this screen renders (rather than waiting for a manual "Start
+      // camera" tap, which used to guarantee the CDN scripts had long since
+      // finished loading by the time anyone could interact) — so a
+      // still-loading/slow-network jsQR is a real possibility here now, not
+      // just a theoretical one. Guarded the same way the BarcodeDetector
+      // branch above already is: skip this tick and let the next one retry.
       try {
         if (typeof jsQR !== 'function') return;
         canvas.width = video.videoWidth;
