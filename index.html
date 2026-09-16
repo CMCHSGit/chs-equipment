@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 131;
+const APP_VERSION = 132;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4833,6 +4833,9 @@ function renderLoans() {
     const matchingU = upcomingLoans.find(u => u.id === batchId);
     if (matchingU) { g._pendingItems = matchingU.items; _mergedUpcomingIds.add(matchingU.id); }
   });
+  // Exposed so a Transfer's target-loan dropdown (desktop + mobile) can offer
+  // a Scheduled loan as a destination, not just Active loans/bookings.
+  window._scheduledLoanGroups = filteredScheduled;
   const scheduledCards = filteredScheduled.map((g, sgi) => {
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
@@ -4874,8 +4877,11 @@ function renderLoans() {
         '</button>' +
         _reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey(\'' + key + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\')" title="Reassign account manager" style="font-size:11px">' +
-        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\',\'edit\')" title="Edit this loan\'s details" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit' +
+        '</button>' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey(\'' + key + '\',\'transfer\')" title="Transfer equipment to another loan" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Transfer' +
         '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey(\'' + key + '\')" title="Add more devices to this loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
@@ -5002,8 +5008,8 @@ function renderLoans() {
           </button>
           ${_reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo)}
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
-          <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}')" title="Reassign account manager" style="font-size:11px">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign
+          <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}','transfer')" title="Transfer equipment to another loan" style="font-size:11px">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Transfer
           </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey('${key}')" title="Add more devices to this loan">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items
@@ -7055,11 +7061,12 @@ function openStuckLoanReassign(upcomingId) {
   switchTab('loans');
   setTimeout(async () => {
     renderLoans(); // rebuild _loanGroupMap fresh before looking the blocking loan up in it
-    await openReassignAMByKey(blockingKey);
-    // Only wired up for the "Active loan → move items" view; if the blocking
-    // loan turns out to be Scheduled instead, openReassignAMByKey() shows
-    // its plain edit form instead and these elements won't be present —
-    // harmless no-op, you're still looking at the right loan either way.
+    // Force transfer mode explicitly — the blocking loan may be Scheduled or
+    // Active, and only transfer mode actually lets you move the blocking
+    // item(s) off it. Before 'edit'/'transfer' were separate, a Scheduled
+    // blocking loan silently opened the edit form instead, with no way to
+    // resolve the block from here at all.
+    await openReassignAMByKey(blockingKey, 'transfer');
     const boxes = document.querySelectorAll('#reassign-items-list input[type=checkbox]');
     if (boxes.length) boxes.forEach(cb => { cb.checked = blockedAssetNos.includes(cb.dataset.assetno); });
     const tgtSel = document.getElementById('reassign-target-loan');
@@ -9134,7 +9141,13 @@ async function removeItemFromUpcomingLoan(upcomingId, assetNo) {
 let _reassignLoanKey = null;
 let _reassignUpcomingId = null;
 let _reassignPdfKey = null;
-let _reassignScheduled = false;
+// 'edit' = change the loan's own fields (customer/location/dates/AM/notes/...),
+// 'transfer' = move one or more items in this batch onto a different loan.
+// Only meaningful for a Scheduled loan, which can do either — an Active loan
+// only ever transfers (no "edit all fields" UI exists for it), and an
+// upcoming (unconfirmed) booking only ever edits (nothing to transfer yet,
+// see _reassignUpcomingId's branch in confirmReassignAM()).
+let _reassignMode = 'edit';
 
 // Resolve Simpro job ID from cache then Firebase
 async function _getJobId(pdfKey) {
@@ -9154,19 +9167,22 @@ async function _getJobId(pdfKey) {
   return null;
 }
 
-async function openReassignAMByKey(key) {
+async function openReassignAMByKey(key, mode) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
   _reassignLoanKey = key;
   _reassignUpcomingId = null;
-  _reassignScheduled = !!g.scheduled;
   const batchId = g.items[0]?.BatchID || null;
   _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
+  // An Active loan only ever transfers (no edit-all-fields UI for it); a
+  // Scheduled loan can do either, per the explicit mode the caller passes.
+  const wantsTransfer = mode === 'transfer' || !g.scheduled;
+  _reassignMode = wantsTransfer ? 'transfer' : 'edit';
 
   document.getElementById('reassign-am-subtitle').textContent = g.items.length + ' device' + (g.items.length !== 1 ? 's' : '');
 
-  // ── Scheduled loan → show edit form (same as upcoming loan edit) ──
-  if (g.scheduled) {
+  // ── Edit fields (Scheduled loan only — same as upcoming loan edit) ──
+  if (!wantsTransfer) {
     document.getElementById('reassign-am-title').textContent = 'Edit Loan — ' + g.loanTo;
     document.getElementById('reassign-items-section').style.display = 'none';
     document.getElementById('reassign-target-section').style.display = 'none';
@@ -9200,8 +9216,8 @@ async function openReassignAMByKey(key) {
     return;
   }
 
-  // ── Active loan → show reassign/move view ────────────────────────
-  document.getElementById('reassign-am-title').textContent = 'Reassign Items — ' + g.loanTo;
+  // ── Transfer (Active loan always, or a Scheduled loan in transfer mode) ──
+  document.getElementById('reassign-am-title').textContent = 'Transfer Items — ' + g.loanTo;
 
   // Items checkboxes
   document.getElementById('reassign-items-section').style.display = 'block';
@@ -9229,6 +9245,14 @@ async function openReassignAMByKey(key) {
     const sjLabel = (sj && sj !== 'pending' && typeof sj !== 'object' && !isNaN(Number(sj))) ? ' · Job #' + Number(sj) : '';
     _tgtOpts.push('<option value="active:' + esc(ogKey) + '">Active: ' + esc(og.loanTo) + ' (' + (og.endDate ? formatDisplayDate(og.endDate) : 'no end date') + ')' + sjLabel + '</option>');
   });
+  (window._scheduledLoanGroups || []).forEach(og => {
+    const ogKey = _loanKey(og);
+    if (ogKey === key) return;
+    const ogBId = og.items[0]?.BatchID;
+    const sj = (ogBId && window._simproJobCache?.[ogBId]) || (ogBId && window._loanDocCache?.[ogBId]?.simproJobId);
+    const sjLabel = (sj && sj !== 'pending' && typeof sj !== 'object' && !isNaN(Number(sj))) ? ' · Job #' + Number(sj) : '';
+    _tgtOpts.push('<option value="active:' + esc(ogKey) + '">Scheduled: ' + esc(og.loanTo) + ' (' + (og.startDate ? formatDisplayDate(og.startDate) : '?') + ')' + sjLabel + '</option>');
+  });
   upcomingLoans.forEach(u => {
     _tgtOpts.push('<option value="upcoming:' + esc(u.id) + '">Upcoming: ' + esc(u.loanTo) + ' (' + (u.startDate ? formatDisplayDate(u.startDate) : '?') + ')</option>');
   });
@@ -9242,7 +9266,7 @@ function closeReassignAMModal() {
   _reassignLoanKey = null;
   _reassignUpcomingId = null;
   _reassignPdfKey = null;
-  _reassignScheduled = false;
+  _reassignMode = 'edit';
 }
 
 
@@ -9387,7 +9411,7 @@ async function confirmReassignAM() {
   }
 
   // ── SCHEDULED LOAN EDIT (confirmed loan with future start date) ────
-  if (_reassignScheduled) {
+  if (_reassignMode === 'edit') {
     const g = getLoanGroupByKey(_reassignLoanKey);
     if (g) {
       g.items.forEach(item => {
@@ -11041,7 +11065,7 @@ function mpGoScreen(screen) {
   else if (screen === 'equipmentdetail') { document.getElementById('mp-screen-equipmentdetail').classList.add('mp-active'); mpRenderEquipmentDetail(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.scheduled ? 'Edit loan' : 'Reassign items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : screen === 'equipmentdetail' ? 'Item details' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.mode === 'edit' ? 'Edit loan' : 'Transfer items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : screen === 'equipmentdetail' ? 'Item details' : 'Loans';
   // Service & Projects has no use for the "All loans" text (they see every
   // loan regardless) — that header slot becomes a quick Scan shortcut
   // instead, now that Scan is no longer the tab bar's center button (see
@@ -12452,28 +12476,33 @@ async function mpConfirmExtend() {
 
 // ── REASSIGN / TRANSFER ───────────────────────────────────────────────────
 // Two very different desktop modes hide behind the one openReassignAMByKey():
-// a Scheduled loan opens a plain "Edit Loan" form, an Active loan opens a
-// per-item "move to a different loan" view. confirmReassignAM() reads every
-// field straight off the (hidden here) #reassign-* DOM nodes rather than JS
-// state, so mpConfirmReassign() writes this screen's edited values into
-// those real nodes right before calling it — same technique as Extend's
-// #extend-date, just with a longer field list. Neither desktop mode opens
-// any interactive sub-modal of its own, so it's safe to wrap in the
-// blocking loader.
-function mpOpenReassignFlow(key) {
+// 'edit' opens a plain "Edit Loan" form (changing the loan's own fields),
+// 'transfer' opens a per-item "move to a different loan" view. Only a
+// Scheduled loan can do either, per the mode its caller passes — an Active
+// loan always transfers. confirmReassignAM() reads every field straight off
+// the (hidden here) #reassign-* DOM nodes rather than JS state, so
+// mpConfirmReassign() writes this screen's edited values into those real
+// nodes right before calling it — same technique as Extend's #extend-date,
+// just with a longer field list. Neither desktop mode opens any interactive
+// sub-modal of its own, so it's safe to wrap in the blocking loader.
+function mpOpenReassignFlow(key, mode) {
   renderLoans(); // rebuild _loanGroupMap fresh — same requirement as the other loan-action flows
   const g = getLoanGroupByKey(key);
   if (!g) { showToast('error', 'Could not find that loan.'); return; }
   _reassignLoanKey = key;
   _reassignUpcomingId = null;
-  _reassignScheduled = !!g.scheduled;
   const batchId = g.items[0]?.BatchID || null;
   _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
-  if (g.scheduled) {
+  const wantsTransfer = mode === 'transfer' || !g.scheduled;
+  _reassignMode = wantsTransfer ? 'transfer' : 'edit';
+  if (wantsTransfer) {
+    _mp.reassign = { key, scheduled: !!g.scheduled, mode: 'transfer', g, selected: new Set(g.items.map(i => i.CHSAssetNo)), target: '' };
+    mpGoScreen('reassign');
+  } else {
     const curAMName = getGroupAM(g);
     const curAM = accountManagers.find(a => a.name === curAMName);
     _mp.reassign = {
-      key, scheduled: true, g,
+      key, scheduled: true, mode: 'edit', g,
       loanTo: g.loanTo || '', location: g.location || '',
       startDate: g.startDate || '', endDate: g.endDate || '',
       am: curAMName || '', email: curAM?.email || g.items[0]?.BorrowerEmail || '',
@@ -12491,18 +12520,15 @@ function mpOpenReassignFlow(key) {
         mpRenderReassignForm();
       }
     }).catch(()=>{});
-  } else {
-    _mp.reassign = { key, scheduled: false, g, selected: new Set(g.items.map(i => i.CHSAssetNo)), target: '' };
-    mpGoScreen('reassign');
   }
 }
 function mpRenderReassign() {
   const st = _mp.reassign;
   if (!st) { mpGoScreen('loans'); return; }
-  return st.scheduled ? mpRenderReassignForm() : mpRenderReassignMove();
+  return st.mode === 'edit' ? mpRenderReassignForm() : mpRenderReassignMove();
 }
 function mpCancelReassign() {
-  _reassignLoanKey = null; _reassignUpcomingId = null; _reassignPdfKey = null; _reassignScheduled = false;
+  _reassignLoanKey = null; _reassignUpcomingId = null; _reassignPdfKey = null; _reassignMode = 'edit';
   _mp.reassign = null;
   mpGoScreen('loans');
 }
@@ -12605,6 +12631,11 @@ function mpReassignTargetOptions() {
     if (ogKey === st.key) return;
     opts.push('<option value="active:' + esc(ogKey) + '"' + (st.target === 'active:' + ogKey ? ' selected' : '') + '>Active: ' + esc(og.loanTo) + ' (' + (og.endDate ? formatDisplayDate(og.endDate) : 'no end date') + ')</option>');
   });
+  (window._scheduledLoanGroups || []).forEach(og => {
+    const ogKey = _loanKey(og);
+    if (ogKey === st.key) return;
+    opts.push('<option value="active:' + esc(ogKey) + '"' + (st.target === 'active:' + ogKey ? ' selected' : '') + '>Scheduled: ' + esc(og.loanTo) + ' (' + (og.startDate ? formatDisplayDate(og.startDate) : '?') + ')</option>');
+  });
   upcomingLoans.forEach(u => {
     opts.push('<option value="upcoming:' + esc(u.id) + '"' + (st.target === 'upcoming:' + u.id ? ' selected' : '') + '>Upcoming: ' + esc(u.loanTo) + ' (' + (u.startDate ? formatDisplayDate(u.startDate) : '?') + ')</option>');
   });
@@ -12642,7 +12673,7 @@ function mpReassignSelectAll(val) {
 // so the new loan's own details are entered fresh, with devices pre-picked.
 function mpReassignCreateNewLoan() {
   const st = _mp.reassign;
-  if (!st || st.scheduled) return;
+  if (!st || st.mode !== 'transfer') return;
   if (!st.selected.size) { showToast('error', 'Select at least one item to move.'); return; }
   const g = st.g;
   const movedItems = g.items.filter(i => st.selected.has(i.CHSAssetNo));
@@ -12660,7 +12691,7 @@ function mpReassignCreateNewLoan() {
         loanData: { loanTo: g.loanTo, location: g.location||'', startDate: g.startDate||'', endDate: g.endDate||'', accountManager: getGroupAM(g), notes: srcDoc?.notesCell||'', shippingDetails: srcDoc?.authCell||'', contactNumber: srcDoc?.contactNumber||'', jobType: srcDoc?.jobType||'Demo' },
         savedRows: srcDoc?.savedRows || null
       };
-      _reassignLoanKey = null; _reassignScheduled = false; _reassignPdfKey = null; _reassignUpcomingId = null;
+      _reassignLoanKey = null; _reassignMode = 'edit'; _reassignPdfKey = null; _reassignUpcomingId = null;
       _mp.reassign = null;
       window._mpPendingBookAssets = movedItems.map(i => i.CHSAssetNo);
       mpGoScreen('book');
@@ -12674,7 +12705,7 @@ async function mpConfirmReassign() {
   const st = _mp.reassign;
   if (!st) return;
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-  if (st.scheduled) {
+  if (st.mode === 'edit') {
     setVal('reassign-loan-to', st.loanTo);
     setVal('reassign-location', st.location);
     setVal('reassign-start-date', st.startDate);
@@ -12707,7 +12738,7 @@ async function mpConfirmReassign() {
     const tgtSel = document.getElementById('reassign-target-loan');
     if (tgtSel) tgtSel.innerHTML = '<option value="' + esc(st.target) + '" selected></option>';
   }
-  mpShowBlockingLoader(st.scheduled ? 'Saving changes…' : 'Moving items…', "Please don't close the app or navigate away.");
+  mpShowBlockingLoader(st.mode === 'edit' ? 'Saving changes…' : 'Moving items…', "Please don't close the app or navigate away.");
   try { await confirmReassignAM(); } finally { mpHideBlockingLoader(); }
   _mp.reassign = null;
   mpGoScreen('loans');
@@ -13182,9 +13213,16 @@ function mpOpenLoanActionsForGroup(g) {
               ['Mark as tested', () => toggleReadiness(rKey, 'tested')],
               ['No test required', () => toggleReadiness(rKey, 'noTestRequired')]
             ];
+    // A Scheduled loan can do either — edit its own fields, or transfer one
+    // or more of its items to a different loan — so it gets both as separate
+    // actions. An Active loan only ever transfers (its fields are locked in
+    // once dispatched), so it keeps just the one.
+    const reassignActions = g.scheduled
+      ? [ ['Edit loan', () => mpOpenReassignFlow(key, 'edit')], ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')] ]
+      : [ ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')] ];
     items = _mp.role === 'am'
-      ? [ ['Transfer / reassign', () => mpOpenReassignFlow(key)], ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)] ]
-      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Reassign AM', () => mpOpenReassignFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
+      ? [ ...reassignActions, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)] ]
+      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ...reassignActions, ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
   }
   window._mpSheetActions = items;
   mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
