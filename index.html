@@ -1928,7 +1928,7 @@ input[type="time"].mp-input::-webkit-datetime-edit-meridiem-field{padding:0}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 141;
+const APP_VERSION = 142;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7130,6 +7130,22 @@ function openStuckLoanReassign(upcomingId) {
   });
   if (!blockingKey) {
     showToast('info', 'Could not find what is blocking ' + u.loanTo + '’s booking — it may already be resolved.');
+    return;
+  }
+
+  // Mobile has its own native Transfer screen (mpOpenReassignFlow()) — this
+  // used to always fall through to the desktop modal below regardless of
+  // platform, which is a top-level element outside #app and isn't covered
+  // by mobile's usual UI hiding, so it showed up as a desktop-styled popup
+  // over the mobile UI (reported live from the Today tab / an upcoming
+  // loan's "Reassign / transfer" action, both of which call this directly).
+  if (isMobilePWA()) {
+    mpOpenReassignFlow(blockingKey, 'transfer'); // calls renderLoans() itself
+    if (_mp.reassign && _mp.reassign.mode === 'transfer') {
+      _mp.reassign.selected = new Set(blockedAssetNos);
+      _mp.reassign.target = 'upcoming:' + u.id;
+      mpRenderReassignMove();
+    }
     return;
   }
 
