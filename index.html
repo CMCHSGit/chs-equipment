@@ -1911,7 +1911,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 138;
+const APP_VERSION = 139;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -8685,6 +8685,73 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   const skippedNote = skipped && skipped.length
     ? `<div style="margin-top:10px;padding:10px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);font-size:12px;color:var(--red)"><strong>Skipped (already out in field):</strong> ${skipped.map(b => esc(b.CHSAssetNo)).join(', ')}</div>`
     : '';
+
+  // Rebuilds and saves the loan doc's item list to reflect what was just
+  // added — not just cosmetic, this is what actually merges the new rows
+  // into savedRows and persists them via saveLoanDocChanges(), so it has to
+  // run either way. Desktop does it via generateLoanDoc() opening the real
+  // print-doc editor (the "Done" button below) so an AM can review/send it;
+  // mobile has no such review step, so this same mechanism runs headless
+  // with #loan-doc-modal suppressed (same technique mpBookConfirm() already
+  // uses for a brand-new loan) — the desktop editor should never visibly
+  // pop up over the mobile UI.
+  const finishAddItemsDoc = () => {
+    const _newBasketAssetNos = new Set(itemsToAdd.map(b => (b.CHSAssetNo||'').toLowerCase()));
+    const _allLoanItems = batchId
+      ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
+      : equipment.filter(e => e.OnLoanTo === g.loanTo && (e.LoanEndDate||'') === (g.endDate||'') && e.Returned !== 'Yes');
+    const _loanItems = [
+      ..._allLoanItems.filter(e => !_newBasketAssetNos.has((e.CHSAssetNo||'').toLowerCase())),
+      ..._allLoanItems.filter(e => _newBasketAssetNos.has((e.CHSAssetNo||'').toLowerCase()))
+    ];
+    const _reviewInfo = { loanTo: g.loanTo, location: g.location, startDate: g.startDate || nzDate(), endDate: g.endDate || '', accountManager: getGroupAM(g) };
+    (async () => {
+      let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
+      let _savedRows = null;
+      try {
+        const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+        if (_r.ok) {
+          const _d = await _r.json();
+          if (_d) {
+            _savedExtra = { notesCell: _d.notesCell||'', authCell: _d.authCell||'', batchNotes: _d.notes||'', contactNumber: _d.contactNumber||'' };
+            _savedRows = _d.savedRows || null;
+          }
+        }
+      } catch(e) {}
+      // Append new item rows at bottom of any manually-edited rows
+      let _mergedSavedRows = null;
+      if (_savedRows && _savedRows.length > 0) {
+        const _newItemRows = itemsToAdd.map(b => {
+          const eq = equipment.find(e => e.id === b.id);
+          return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Model||b.Model||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', ''];
+        });
+        _mergedSavedRows = [..._savedRows, ..._newItemRows];
+      }
+      setTimeout(() => {
+        window._autoSendOnClose = false;
+        window._pendingLoanDocPdfKey = batchId || null;
+        generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber||'' }, _mergedSavedRows, _savedExtra);
+        setTimeout(async () => {
+          // If the user has since opened a DIFFERENT loan's doc (e.g. clicked onto
+          // another card while this delayed save was pending), #printable-loan-doc
+          // and _currentLoanDocInfo now belong to that other loan. Saving here would
+          // write ITS content under batchId's key, corrupting the wrong loan's name/
+          // dates. Only proceed if the doc we generated above is still the one open.
+          if (window._currentLoanDocInfo?._pdfKey !== batchId) return;
+          try { await saveLoanDocChanges(); } catch(e) {}
+        }, 600);
+      }, 400);
+    })();
+  };
+
+  if (isMobilePWA()) {
+    document.documentElement.classList.add('mp-suppress-loan-doc');
+    finishAddItemsDoc();
+    setTimeout(() => document.documentElement.classList.remove('mp-suppress-loan-doc'), 2000);
+    showToast('success', added + ' item' + (added !== 1 ? 's' : '') + ' added to ' + g.loanTo + (skipped && skipped.length ? ' (' + skipped.length + ' already out in field, skipped)' : ''));
+    return;
+  }
+
   const addedRows = itemsToAdd.map(b => {
     const eq = equipment.find(e => e.id === b.id);
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
@@ -8697,55 +8764,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
     '✅ Items Added to Loan',
     `<div style="font-size:13px;color:var(--text2);margin-bottom:10px">${added} item${added!==1?'s':''} added to <strong>${esc(g.loanTo)}</strong>${g.startDate ? ' (starts ' + formatDisplayDate(g.startDate) + ')' : ''}:</div>
     ${addedRows}${skippedNote}`,
-    [{ label: 'Done', style: 'btn-primary', action: () => {
-      switchTab('loans');
-      const _newBasketAssetNos = new Set(itemsToAdd.map(b => (b.CHSAssetNo||'').toLowerCase()));
-      const _allLoanItems = batchId
-        ? equipment.filter(e => e.BatchID === batchId && e.Returned !== 'Yes')
-        : equipment.filter(e => e.OnLoanTo === g.loanTo && (e.LoanEndDate||'') === (g.endDate||'') && e.Returned !== 'Yes');
-      const _loanItems = [
-        ..._allLoanItems.filter(e => !_newBasketAssetNos.has((e.CHSAssetNo||'').toLowerCase())),
-        ..._allLoanItems.filter(e => _newBasketAssetNos.has((e.CHSAssetNo||'').toLowerCase()))
-      ];
-      const _reviewInfo = { loanTo: g.loanTo, location: g.location, startDate: g.startDate || nzDate(), endDate: g.endDate || '', accountManager: getGroupAM(g) };
-      (async () => {
-        let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
-        let _savedRows = null;
-        try {
-          const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
-          if (_r.ok) {
-            const _d = await _r.json();
-            if (_d) {
-              _savedExtra = { notesCell: _d.notesCell||'', authCell: _d.authCell||'', batchNotes: _d.notes||'', contactNumber: _d.contactNumber||'' };
-              _savedRows = _d.savedRows || null;
-            }
-          }
-        } catch(e) {}
-        // Append new item rows at bottom of any manually-edited rows
-        let _mergedSavedRows = null;
-        if (_savedRows && _savedRows.length > 0) {
-          const _newItemRows = itemsToAdd.map(b => {
-            const eq = equipment.find(e => e.id === b.id);
-            return [eq?.CHSAssetNo||b.CHSAssetNo||'', eq?.Model||b.Model||'', eq?.Description||eq?.Model||b.Model||'', eq?.SerialNo||b.SerialNo||'', ''];
-          });
-          _mergedSavedRows = [..._savedRows, ..._newItemRows];
-        }
-        setTimeout(() => {
-          window._autoSendOnClose = false;
-          window._pendingLoanDocPdfKey = batchId || null;
-          generateLoanDoc(_loanItems, { ..._reviewInfo, contactNumber: _savedExtra.contactNumber||'' }, _mergedSavedRows, _savedExtra);
-          setTimeout(async () => {
-            // If the user has since opened a DIFFERENT loan's doc (e.g. clicked onto
-            // another card while this delayed save was pending), #printable-loan-doc
-            // and _currentLoanDocInfo now belong to that other loan. Saving here would
-            // write ITS content under batchId's key, corrupting the wrong loan's name/
-            // dates. Only proceed if the doc we generated above is still the one open.
-            if (window._currentLoanDocInfo?._pdfKey !== batchId) return;
-            try { await saveLoanDocChanges(); } catch(e) {}
-          }, 600);
-        }, 400);
-      })();
-    }}]
+    [{ label: 'Done', style: 'btn-primary', action: () => { switchTab('loans'); finishAddItemsDoc(); } }]
   );
 }
 
