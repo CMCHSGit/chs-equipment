@@ -1862,7 +1862,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 132;
+const APP_VERSION = 136;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4962,8 +4962,8 @@ function renderLoans() {
         '</button>' +
         _reportsButtonHtml(_readinessKey(u.id, u.loanTo, u.endDate), u.loanTo) +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openExtendUpcomingLoan(\'' + u.id + '\')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>' +
-        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Reassign account manager" style="font-size:11px">' +
-        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Reassign' +
+        '<button class="btn btn-sm" onclick="event.stopPropagation();openReassignUpcomingAM(\'' + u.id + '\')" title="Edit this booking\'s details" style="font-size:11px">' +
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit' +
         '</button>' +
         '<button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToUpcomingLoan(\'' + u.id + '\')" title="Add more devices to this upcoming loan">' +
         '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items' +
@@ -11470,15 +11470,23 @@ function byAssetNoAsc(a, b) {
 }
 // Same status derivation buildStatusCell()/renderTable() use on desktop —
 // booked/scheduled beats on-loan, overdue is on-loan past its end date.
+// `detail` is a short "who / when" line the Equipment list and loan-action
+// sheets surface at a glance, so account managers can see where a device
+// currently is and when it's due back without drilling into it first.
 function mpEquipmentStatus(e, today) {
   const hidden = isHiddenTestLoan(e);
   const isScheduled = !hidden && e.OnLoanTo && e.Returned !== 'Yes' && e.LoanStartDate && e.LoanStartDate > today;
   const upcoming = !isScheduled && getUpcomingLoanForItem(e.id);
-  if (isScheduled || upcoming) return { key: 'booked', label: 'Booked', bg: 'var(--mp-purple-20)', fg: 'var(--mp-purple)' };
+  if (isScheduled || upcoming) {
+    const loanTo = isScheduled ? e.OnLoanTo : upcoming.loanTo;
+    const startDate = isScheduled ? e.LoanStartDate : upcoming.startDate;
+    const detail = loanTo + (startDate ? ' · from ' + formatDisplayDate(startDate) : '');
+    return { key: 'booked', label: 'Booked', bg: 'var(--mp-purple-20)', fg: 'var(--mp-purple)', detail };
+  }
   const on = !hidden && e.OnLoanTo && e.Returned !== 'Yes';
   const od = on && e.LoanEndDate && e.LoanEndDate < today;
-  if (od) return { key: 'overdue', label: 'Overdue', bg: 'var(--mp-critical-tint)', fg: 'var(--mp-critical)' };
-  if (on) return { key: 'on-loan', label: 'On loan', bg: 'var(--mp-orange-20)', fg: 'var(--mp-orange)' };
+  if (od) return { key: 'overdue', label: 'Overdue', bg: 'var(--mp-critical-tint)', fg: 'var(--mp-critical)', detail: e.OnLoanTo + (e.LoanEndDate ? ' · due back ' + formatDisplayDate(e.LoanEndDate) : '') };
+  if (on) return { key: 'on-loan', label: 'On loan', bg: 'var(--mp-orange-20)', fg: 'var(--mp-orange)', detail: e.OnLoanTo + (e.LoanEndDate ? ' · due back ' + formatDisplayDate(e.LoanEndDate) : '') };
   return { key: 'available', label: 'Available', bg: 'var(--mp-green-20)', fg: '#4d7a00' };
 }
 
@@ -11488,7 +11496,7 @@ function mpRenderEquipment() {
   if (_mp.eqSelectMode === undefined) _mp.eqSelectMode = false;
   if (_mp.eqSelected === undefined) _mp.eqSelected = [];
   document.getElementById('mp-screen-equipment').innerHTML = `
-    <div style="padding:16px 20px 12px">
+    <div style="padding:16px 20px 12px;position:sticky;top:0;z-index:5;background:var(--mp-white)">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="position:relative;flex:1;display:flex;align-items:center">
           <span style="position:absolute;left:14px;color:var(--mp-text-muted);display:flex;pointer-events:none">${mpIcon('search',18)}</span>
@@ -11588,10 +11596,26 @@ function mpRenderEquipmentList() {
   const today = mpToday();
   const selectMode = _mp.eqSelectMode;
   const selectedSet = new Set(_mp.eqSelected);
+  // Picking devices for a NEW loan (mpBookPickDevices()) reuses this same
+  // list — once the draft has its start/end dates, cross-check each busy
+  // item against THOSE dates (not just "is it free right now") so an AM
+  // can tell whether it'll actually be back in time without leaving this
+  // screen. Mirrors submitBatchLoan()'s isDateConflict()/mpBookIsFree().
+  const bookCtx = selectMode && _mp.eqSelectContext === 'book' && _mp.book && _mp.book.startDate && _mp.book.endDate ? _mp.book : null;
   const row = (e, status) => {
     const checked = selectMode && selectedSet.has(e.CHSAssetNo);
     const onclick = selectMode ? `mpToggleEquipmentSelect('${e.CHSAssetNo}')` : `mpOpenEquipmentActions('${e.id}')`;
     const checkbox = selectMode ? `<div style="width:24px;height:24px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:14px;margin-top:2px">${checked?'✓':''}</div>` : '';
+    let noteHtml = '';
+    if (bookCtx && (status.key === 'on-loan' || status.key === 'overdue')) {
+      const free = mpBookIsFree(e, bookCtx.startDate, bookCtx.endDate);
+      const back = e.LoanEndDate ? formatDisplayDate(e.LoanEndDate) : 'an unknown date';
+      noteHtml = free
+        ? `<div style="font:600 12px var(--mp-font-body);color:#4d7a00;margin-top:2px">&#x2713; Free by ${formatDisplayDate(bookCtx.startDate)} &mdash; returns ${back}</div>`
+        : `<div style="font:600 12px var(--mp-font-body);color:var(--mp-orange);margin-top:2px">&#x26A0; Held by ${esc(e.OnLoanTo)} until ${back} &mdash; clashes with your dates</div>`;
+    } else if (status.detail) {
+      noteHtml = `<div style="font:400 12px var(--mp-font-body);color:${status.key==='overdue'?'var(--mp-critical)':'var(--mp-text-muted)'};margin-top:2px">${esc(status.detail)}</div>`;
+    }
     return `
     <div onclick="${onclick}" style="display:flex;align-items:flex-start;gap:10px;padding:14px 20px;border-bottom:1px solid var(--mp-border-hairline);cursor:pointer">
       ${checkbox}
@@ -11600,6 +11624,7 @@ function mpRenderEquipmentList() {
           <div style="font:400 12px var(--mp-font-mono);color:var(--mp-purple);margin-bottom:2px">${esc(e.CHSAssetNo)}</div>
           <div style="font:600 15px var(--mp-font-body);color:var(--mp-text-strong)">${esc(e.Model)}</div>
           <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.Description || '')}${e.Location ? ' · ' + esc(e.Location) : ''}</div>
+          ${noteHtml}
         </div>
         <span style="flex-shrink:0;padding:4px 10px;border-radius:var(--mp-radius-pill);font:700 11px var(--mp-font-body);letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;background:${status.bg};color:${status.fg}">${status.label}</span>
       </div>
@@ -11644,7 +11669,7 @@ function mpOpenEquipmentActions(assetId) {
     const g = mpActiveGroups().find(gr => gr.scheduled && gr.items.some(it => it.id === e.id));
     if (g) return mpOpenLoanActionsForGroup(g);
     const u = getUpcomingLoanForItem(e.id);
-    if (u) return mpOpenLoanActionsForGroup({ isUpcoming: true, id: u.id, loanTo: u.loanTo });
+    if (u) return mpOpenLoanActionsForGroup({ isUpcoming: true, id: u.id, loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '' });
   }
   mpOpenSheet('<div class="mp-sheet-title">' + esc(e.CHSAssetNo) + ' · ' + esc(e.Model) + '</div>',
     '<button class="mp-sheet-item" onclick="mpCloseSheet();setTimeout(()=>mpOpenEquipmentDetail(\'' + e.id + '\'),350)" style="justify-content:space-between;color:var(--mp-purple);font-weight:600">' +
@@ -13225,7 +13250,22 @@ function mpOpenLoanActionsForGroup(g) {
       : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ...reassignActions, ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
   }
   window._mpSheetActions = items;
-  mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>',
+  // Where the devices currently are and when they're due back — otherwise
+  // the only way to see that from the Equipment tab was to open "Loan
+  // form" and read through the whole document just to check a date.
+  const subtitleParts = [];
+  if (g.location) subtitleParts.push(esc(g.location));
+  if (g.isUpcoming) {
+    if (g.startDate) subtitleParts.push('Starts ' + formatDisplayDate(g.startDate));
+  } else if (g.scheduled) {
+    if (g.startDate) subtitleParts.push('Starts ' + formatDisplayDate(g.startDate));
+  } else if (g.endDate) {
+    subtitleParts.push((g.overdue ? 'Overdue since ' : 'Due back ') + formatDisplayDate(g.endDate));
+  }
+  const subtitleHtml = subtitleParts.length
+    ? `<div style="font:400 13px var(--mp-font-body);color:${g.overdue?'var(--mp-critical)':'var(--mp-text-muted)'};margin:2px 0 14px">${subtitleParts.join(' · ')}</div>`
+    : '';
+  mpOpenSheet('<div class="mp-sheet-title">' + esc(g.loanTo) + '</div>' + subtitleHtml,
     items.map((it, idx) => `<button class="mp-sheet-item${it[2]?' mp-danger':''}" onclick="mpRunSheetAction(${idx})">${esc(it[0])}</button>`).join(''));
 }
 function mpRunSheetAction(idx) {
