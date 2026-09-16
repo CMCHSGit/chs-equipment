@@ -1662,6 +1662,50 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
   </div>
 </div>
 
+<!-- TEST PUSH NOTIFICATIONS MODAL -->
+<div class="modal-overlay" id="test-push-modal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">Test Notifications</div>
+      <button class="modal-close" onclick="closeTestPushModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <!-- AUTH -->
+    <div id="test-push-auth-section" style="text-align:center;padding:12px 0 8px">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Enter admin password to send a test push</div>
+      <input type="password" id="test-push-pw-input" placeholder="Admin password" style="padding:9px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:260px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockTestPushModal()">
+      <button class="btn btn-primary" onclick="unlockTestPushModal()">Unlock</button>
+      <div id="test-push-pw-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
+    </div>
+    <!-- MAIN CONTENT -->
+    <div id="test-push-main-section" style="display:none">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Sends a real push notification to the selected person's registered device(s) — use this to confirm delivery and wording on an actual phone.</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Send to</label>
+          <select id="test-push-am" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onchange="updateTestPushDeviceNote()"></select>
+          <div id="test-push-device-note" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Scenario</label>
+          <select id="test-push-scenario" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onchange="applyTestPushScenario()"></select>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Title</label>
+          <input type="text" id="test-push-title" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Body</label>
+          <textarea id="test-push-body" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
+        </div>
+        <button class="btn btn-primary" id="test-push-send-btn" onclick="submitTestPush()" style="margin-top:4px">Send Test Push</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeTestPushModal()">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- BATCH RETURN MODAL -->
 <div class="modal-overlay" id="batch-return-modal">
   <div class="modal" style="max-width:620px">
@@ -1867,7 +1911,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 137;
+const APP_VERSION = 138;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -8109,6 +8153,73 @@ function closeAMModal() {
   _amUnlocked = false;
 }
 
+// ── TEST PUSH NOTIFICATIONS MODAL ────────────────────────────────────────
+// Same auth-then-content shape as the AM modal above; mobile's equivalent
+// is mpOpenTestPushSheet()/mpUnlockTestPush() further down. Sending itself
+// is shared with mobile via sendTestPushNotification() and
+// TEST_PUSH_SCENARIOS (defined next to mpEnablePush()).
+function openTestPushModal() {
+  document.getElementById('test-push-auth-section').style.display = 'block';
+  document.getElementById('test-push-main-section').style.display = 'none';
+  document.getElementById('test-push-pw-input').value = '';
+  document.getElementById('test-push-pw-err').style.display = 'none';
+  document.getElementById('test-push-modal').classList.add('open');
+  setTimeout(() => document.getElementById('test-push-pw-input').focus(), 100);
+}
+function closeTestPushModal() {
+  document.getElementById('test-push-modal').classList.remove('open');
+}
+function unlockTestPushModal() {
+  if (document.getElementById('test-push-pw-input').value !== ADMIN_PASSWORD) {
+    document.getElementById('test-push-pw-err').style.display = 'block';
+    document.getElementById('test-push-pw-input').value = '';
+    return;
+  }
+  document.getElementById('test-push-auth-section').style.display = 'none';
+  document.getElementById('test-push-main-section').style.display = 'block';
+  renderTestPushModal();
+}
+function renderTestPushModal() {
+  const amSel = document.getElementById('test-push-am');
+  amSel.innerHTML = accountManagers.length
+    ? accountManagers.map(am => `<option value="${esc(am.name)}">${esc(am.name)}</option>`).join('')
+    : '<option value="">No account managers configured</option>';
+  const scenSel = document.getElementById('test-push-scenario');
+  scenSel.innerHTML = Object.entries(TEST_PUSH_SCENARIOS).map(([key, s]) => `<option value="${key}">${esc(s.label)}</option>`).join('');
+  updateTestPushDeviceNote();
+  applyTestPushScenario();
+}
+// accountManagers is already loaded client-side, so this is instant —
+// no round trip needed just to tell someone their pick has no device yet.
+function updateTestPushDeviceNote() {
+  const am = accountManagers.find(a => a.name === document.getElementById('test-push-am').value);
+  const count = am && Array.isArray(am.fcmTokens) ? am.fcmTokens.length : 0;
+  const note = document.getElementById('test-push-device-note');
+  const btn = document.getElementById('test-push-send-btn');
+  if (count) {
+    note.textContent = count + ' registered device' + (count > 1 ? 's' : '');
+    note.style.color = 'var(--text3)';
+    if (btn) btn.disabled = false;
+  } else {
+    note.textContent = 'No device registered — ask them to tap "Enable push notifications" on their phone first.';
+    note.style.color = 'var(--red)';
+    if (btn) btn.disabled = true;
+  }
+}
+function applyTestPushScenario() {
+  const s = TEST_PUSH_SCENARIOS[document.getElementById('test-push-scenario').value] || TEST_PUSH_SCENARIOS.custom;
+  document.getElementById('test-push-title').value = s.title;
+  document.getElementById('test-push-body').value = s.body;
+}
+async function submitTestPush() {
+  const amName = document.getElementById('test-push-am').value;
+  if (!amName) { showToast('error', 'Pick who to send to'); return; }
+  const title = document.getElementById('test-push-title').value.trim() || 'Test notification';
+  const body = document.getElementById('test-push-body').value.trim();
+  await sendTestPushNotification(amName, title, body);
+  closeTestPushModal();
+}
+
 function sortAMList() {
   saveAccountManagers(); // sort is applied inside saveAccountManagers
   renderAMList();
@@ -10636,6 +10747,13 @@ function startAutoSync() {
           <span id="simpro-health-count" style="font-size:13px;font-weight:500"></span>
         </div>
       </div>
+
+      <!-- TEST NOTIFICATIONS -->
+      <div class="settings-section">
+        <div class="settings-section-title">🔔 Test Notifications</div>
+        <div class="settings-section-sub">Admin-password protected. Sends a real push notification to a chosen account manager's device — use this to confirm delivery and wording without waiting for a real reminder to fire.</div>
+        <button class="btn btn-primary" onclick="openTestPushModal()" style="margin-top:8px">Send Test Notification</button>
+      </div>
     </div>
 
 
@@ -10875,6 +10993,46 @@ async function mpEnablePush() {
   } catch (e) {
     console.warn('mpEnablePush failed:', e);
     showToast('error', 'Could not enable push notifications.');
+  }
+}
+
+// ── Test push notifications (admin-gated, shared by desktop Settings and
+// mobile More → Test notifications) ─────────────────────────────────────
+// Fires a real FCM push at a chosen account manager's registered device(s)
+// through the same server-side sendPushToPerson_() every real reminder
+// trigger uses (see .gas-proxy/Code.js's sendTestPush_()) — lets someone
+// confirm delivery/wording/tap-through on an actual phone without waiting
+// for a real trigger to fire or faking loan data. Presets below just
+// pre-fill realistic sample copy matching what each real reminder sends;
+// Custom leaves the fields blank. Keyed by a short id, not the scenario
+// label, so relabelling one later doesn't break anything referencing it.
+const TEST_PUSH_SCENARIOS = {
+  custom:  { label: 'Custom message',      title: '',                                body: '' },
+  demo:    { label: 'Demo reminder',       title: 'Upcoming demo: Test Customer',    body: 'Starts 01/01/2026 (North Island) — 2 items' },
+  dueSoon: { label: 'Return due soon',     title: 'Due back soon: Test Customer',    body: '2 items due 01/01/2026 (South Island)' },
+  overdue: { label: 'Overdue',             title: 'Overdue: Test Customer',          body: '2 items overdue since 01/01/2026' },
+  stuck:   { label: 'Stuck-loan reassign', title: 'Action needed: Test Customer',    body: '1 item is still on another loan — tap to reassign.' }
+};
+
+// amName must match an accountManagers[].name exactly — sendTestPush_() on
+// the Apps Script side looks that person's fcmTokens back up from Firebase
+// itself (not whatever this tab currently has in memory). Fire-and-forget
+// like every other SIMPRO_PROXY_URL call (mode:'no-cors' means the response
+// body is never read here) — the "no device registered" check the caller
+// already did against the in-memory accountManagers list before calling
+// this is the real feedback; anything that fails only on the server side
+// shows up in the Apps Script Executions log, not here.
+async function sendTestPushNotification(amName, title, body) {
+  if (!SIMPRO_PROXY_URL) { showToast('error', 'No proxy configured'); return; }
+  try {
+    await fetch(SIMPRO_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
+      body: JSON.stringify({ action: 'testPush', amName, title, body, adminPassword: ADMIN_PASSWORD })
+    });
+    showToast('success', 'Test push sent to ' + amName);
+  } catch (e) {
+    console.warn('Test push failed:', e);
+    showToast('error', 'Could not reach the notification proxy.');
   }
 }
 
@@ -13178,6 +13336,7 @@ function mpRenderMore() {
           ? '<div class="mp-footnote" style="margin-bottom:16px">✓ Push notifications are on for this device.</div>'
           : '<button class="mp-btn mp-btn-secondary" style="margin-bottom:16px" onclick="mpEnablePush()">Enable push notifications</button>'}
       ${_mp.realRole === 'service' ? '<button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTeamRolesSheet()">Manage team roles</button>' : ''}
+      ${_mp.realRole === 'service' ? '<button class="mp-btn mp-btn-secondary" style="margin-bottom:12px" onclick="mpOpenTestPushSheet()">Test notifications</button>' : ''}
       <button class="mp-btn mp-btn-ghost" onclick="mpSignOut()">Sign out</button>
     </div>`;
   window._mpMoreLinks = links;
@@ -13224,6 +13383,83 @@ function mpSetAMRole(i, role) {
   updateAMField(i, 'role', role); // shared with the desktop Account Managers admin UI
   if (accountManagers[i] && accountManagers[i].name === _mp.name) _mp.role = role;
   showToast('success', 'Role updated');
+}
+
+// Same admin-password gate + sheet shape as Team roles above. Sending
+// itself is shared with desktop via sendTestPushNotification() and
+// TEST_PUSH_SCENARIOS (defined next to mpEnablePush()) — this is just a
+// mobile-styled form over the identical proxy call the desktop Settings →
+// Test Notifications modal makes.
+function mpOpenTestPushSheet() {
+  mpOpenSheet('<div class="mp-sheet-title">Test notifications</div>',
+    `<div style="font:400 14px/1.5 var(--mp-font-body);color:var(--mp-text-body);margin-bottom:14px">Enter the admin password to send a test push.</div>
+     <input class="mp-input" type="password" id="mp-testpush-pw" placeholder="Admin password" autocomplete="off" onkeydown="if(event.key==='Enter')mpUnlockTestPush()">
+     <div class="mp-err" id="mp-testpush-pw-err" style="display:none;margin-top:8px">Incorrect password.</div>
+     <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpUnlockTestPush()">Unlock</button>`);
+  setTimeout(() => { const el = document.getElementById('mp-testpush-pw'); if (el) el.focus(); }, 150);
+}
+
+async function mpUnlockTestPush() {
+  if (!ADMIN_PASSWORD) await loadConfig();
+  const val = document.getElementById('mp-testpush-pw').value;
+  if (val !== ADMIN_PASSWORD) { document.getElementById('mp-testpush-pw-err').style.display = 'block'; return; }
+  mpRenderTestPushSheet();
+}
+
+function mpRenderTestPushSheet() {
+  const selStyle = 'width:100%;padding:10px 12px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);font:400 14px var(--mp-font-body);background:var(--mp-white);color:var(--mp-text-strong);margin-bottom:12px';
+  const amOptions = accountManagers.length
+    ? accountManagers.map(am => `<option value="${esc(am.name)}">${esc(am.name)}</option>`).join('')
+    : '<option value="">No account managers configured</option>';
+  const scenarioOptions = Object.entries(TEST_PUSH_SCENARIOS).map(([key, s]) => `<option value="${key}">${esc(s.label)}</option>`).join('');
+  mpOpenSheet('<div class="mp-sheet-title">Test notifications</div>',
+    `<div style="font:400 13px/1.5 var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:12px">Sends a real push to the selected person's registered device(s).</div>
+     <label style="font:600 12px var(--mp-font-body);color:var(--mp-text-muted);display:block;margin-bottom:4px">Send to</label>
+     <select id="mp-testpush-am" style="${selStyle}" onchange="mpUpdateTestPushDeviceNote()">${amOptions}</select>
+     <div id="mp-testpush-device-note" style="font:400 12px var(--mp-font-body);color:var(--mp-text-muted);margin:-6px 0 12px"></div>
+     <label style="font:600 12px var(--mp-font-body);color:var(--mp-text-muted);display:block;margin-bottom:4px">Scenario</label>
+     <select id="mp-testpush-scenario" style="${selStyle}" onchange="mpApplyTestPushScenario()">${scenarioOptions}</select>
+     <label style="font:600 12px var(--mp-font-body);color:var(--mp-text-muted);display:block;margin-bottom:4px">Title</label>
+     <input class="mp-input" type="text" id="mp-testpush-title" style="margin-bottom:12px">
+     <label style="font:600 12px var(--mp-font-body);color:var(--mp-text-muted);display:block;margin-bottom:4px">Body</label>
+     <textarea class="mp-input" id="mp-testpush-body" rows="2" style="margin-bottom:14px;resize:vertical"></textarea>
+     <button class="mp-btn mp-btn-primary" id="mp-testpush-send-btn" onclick="mpSubmitTestPush()">Send test push</button>`);
+  mpUpdateTestPushDeviceNote();
+  mpApplyTestPushScenario();
+}
+
+// accountManagers is already loaded client-side, same shortcut the desktop
+// modal's updateTestPushDeviceNote() takes — no round trip needed just to
+// say "this person has no device yet."
+function mpUpdateTestPushDeviceNote() {
+  const am = accountManagers.find(a => a.name === document.getElementById('mp-testpush-am').value);
+  const count = am && Array.isArray(am.fcmTokens) ? am.fcmTokens.length : 0;
+  const note = document.getElementById('mp-testpush-device-note');
+  const btn = document.getElementById('mp-testpush-send-btn');
+  if (count) {
+    note.textContent = count + ' registered device' + (count > 1 ? 's' : '');
+    note.style.color = 'var(--mp-text-muted)';
+    if (btn) btn.disabled = false;
+  } else {
+    note.textContent = 'No device registered — ask them to enable push notifications first.';
+    note.style.color = 'var(--mp-critical)';
+    if (btn) btn.disabled = true;
+  }
+}
+
+function mpApplyTestPushScenario() {
+  const s = TEST_PUSH_SCENARIOS[document.getElementById('mp-testpush-scenario').value] || TEST_PUSH_SCENARIOS.custom;
+  document.getElementById('mp-testpush-title').value = s.title;
+  document.getElementById('mp-testpush-body').value = s.body;
+}
+
+async function mpSubmitTestPush() {
+  const amName = document.getElementById('mp-testpush-am').value;
+  if (!amName) { showToast('error', 'Pick who to send to'); return; }
+  const title = document.getElementById('mp-testpush-title').value.trim() || 'Test notification';
+  const body = document.getElementById('mp-testpush-body').value.trim();
+  await sendTestPushNotification(amName, title, body);
+  mpCloseSheet();
 }
 
 // Reuses the SAME action handlers the desktop Loans tab buttons already call
