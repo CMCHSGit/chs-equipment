@@ -1867,7 +1867,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 137;
+const APP_VERSION = 138;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11427,10 +11427,12 @@ function mpPendingItemsHtml(pendingItems) {
   return `
     <div style="padding:10px 14px 6px;font:700 11px var(--mp-font-body);color:${pendingCount>0?'var(--mp-purple)':'var(--mp-green)'};text-transform:uppercase;letter-spacing:.03em;border-top:1px solid var(--mp-border-subtle)">${esc(headerLabel)}</div>
     ${rows.map(({eq, currentLoan}) => `
-      <div class="mp-device-row">
-        <span class="mp-device-asset">${esc(eq.CHSAssetNo)}</span>
-        <span class="mp-device-model">${esc(eq.Model||'')}</span>
-        <span style="font-size:11px;flex-shrink:0;color:${currentLoan?'var(--mp-orange)':'var(--mp-green)'}">${currentLoan ? 'On loan to ' + esc(currentLoan) : 'Available'}</span>
+      <div class="mp-device-row" style="flex-direction:column;align-items:flex-start;gap:2px">
+        <div style="display:flex;align-items:center;gap:10px;width:100%">
+          <span class="mp-device-asset">${esc(eq.CHSAssetNo)}</span>
+          <span class="mp-device-model">${esc(eq.Model||'')}</span>
+        </div>
+        <div style="font-size:11px;padding-left:84px;color:${currentLoan?'var(--mp-orange)':'var(--mp-green)'}">${currentLoan ? 'On loan to ' + esc(currentLoan) : 'Available'}</div>
       </div>`).join('')}`;
 }
 function mpToggleCard(id) { const el = document.getElementById(id); if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none'; }
