@@ -564,8 +564,30 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 /* iOS Safari's native date/time control ignores min-height and renders its
    own taller intrinsic box (visibly stretched vs. every other .mp-input) —
    an explicit height forces it to compress into the same box everything
-   else uses, instead of just setting a floor it's free to exceed. */
-input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
+   else uses, instead of just setting a floor it's free to exceed. Fixing
+   the outer height alone wasn't enough, though (reported again on a real
+   iPhone after that first fix): WebKit lays the day/month/year segments
+   out as its own inline-flex row with a default line-height that doesn't
+   match the 48px box, so the text/calendar-icon sat off-center inside it
+   rather than actually centered — line-height:48px fixes that. The
+   ::-webkit-datetime-edit-* segments also carry their own default padding
+   that both pushes the text off-center and can stretch the segments to
+   fill leftover width unevenly; zeroing it keeps them tight against each
+   other and left-aligned instead. */
+input[type="date"].mp-input,input[type="time"].mp-input{height:48px;line-height:48px}
+input[type="date"].mp-input::-webkit-date-and-time-value{text-align:left}
+input[type="date"].mp-input::-webkit-datetime-edit,
+input[type="date"].mp-input::-webkit-datetime-edit-fields-wrapper,
+input[type="date"].mp-input::-webkit-datetime-edit-text,
+input[type="date"].mp-input::-webkit-datetime-edit-day-field,
+input[type="date"].mp-input::-webkit-datetime-edit-month-field,
+input[type="date"].mp-input::-webkit-datetime-edit-year-field,
+input[type="time"].mp-input::-webkit-datetime-edit,
+input[type="time"].mp-input::-webkit-datetime-edit-fields-wrapper,
+input[type="time"].mp-input::-webkit-datetime-edit-text,
+input[type="time"].mp-input::-webkit-datetime-edit-hour-field,
+input[type="time"].mp-input::-webkit-datetime-edit-minute-field,
+input[type="time"].mp-input::-webkit-datetime-edit-meridiem-field{padding:0}
 .mp-btn{min-height:50px;width:100%;border-radius:var(--mp-radius-md);border:none;cursor:pointer;font:600 15px var(--mp-font-body);transition:background var(--mp-fast) var(--mp-ease),opacity var(--mp-fast) var(--mp-ease);display:flex;align-items:center;justify-content:center;gap:8px}
 .mp-btn-primary{background:var(--mp-purple);color:#fff}
 .mp-btn-primary:hover{background:#47397e}
@@ -1906,7 +1928,7 @@ input[type="date"].mp-input,input[type="time"].mp-input{height:48px}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 139;
+const APP_VERSION = 142;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7108,6 +7130,22 @@ function openStuckLoanReassign(upcomingId) {
   });
   if (!blockingKey) {
     showToast('info', 'Could not find what is blocking ' + u.loanTo + '’s booking — it may already be resolved.');
+    return;
+  }
+
+  // Mobile has its own native Transfer screen (mpOpenReassignFlow()) — this
+  // used to always fall through to the desktop modal below regardless of
+  // platform, which is a top-level element outside #app and isn't covered
+  // by mobile's usual UI hiding, so it showed up as a desktop-styled popup
+  // over the mobile UI (reported live from the Today tab / an upcoming
+  // loan's "Reassign / transfer" action, both of which call this directly).
+  if (isMobilePWA()) {
+    mpOpenReassignFlow(blockingKey, 'transfer'); // calls renderLoans() itself
+    if (_mp.reassign && _mp.reassign.mode === 'transfer') {
+      _mp.reassign.selected = new Set(blockedAssetNos);
+      _mp.reassign.target = 'upcoming:' + u.id;
+      mpRenderReassignMove();
+    }
     return;
   }
 
@@ -12522,10 +12560,13 @@ function mpRenderAddItems() {
   const st = _mp.addItems;
   if (!st) { mpGoScreen('loans'); return; }
   document.getElementById('mp-screen-additems').innerHTML = `
-    <div style="padding:16px 20px 10px">
-      <div class="mp-h3" style="margin-bottom:4px">${esc(st.loanTo)}</div>
-      <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:12px">Search and select devices to add to this loan.</div>
-      <input class="mp-input" id="mp-additems-search" placeholder="Search assets" value="${mpFormVal(st.query)}" oninput="_mp.addItems.query=this.value;mpRenderAddItemsList()">
+    <div style="position:sticky;top:0;z-index:5;background:var(--mp-white)">
+      <div style="padding:16px 20px 10px">
+        <div class="mp-h3" style="margin-bottom:4px">${esc(st.loanTo)}</div>
+        <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:12px">Search and select devices to add to this loan.</div>
+        <input class="mp-input" id="mp-additems-search" placeholder="Search assets" value="${mpFormVal(st.query)}" oninput="_mp.addItems.query=this.value;mpRenderAddItemsList()">
+      </div>
+      <div id="mp-additems-selected"></div>
     </div>
     <div id="mp-additems-list"></div>
     <div style="height:90px"></div>
@@ -12552,8 +12593,14 @@ function mpRenderAddItemsList() {
       <div style="width:26px;height:26px;border-radius:6px;border:2px solid ${checked?'var(--mp-purple)':'var(--mp-black-20)'};background:${checked?'var(--mp-purple)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff;font-size:15px">${checked?'✓':''}</div>
     </div>`;
   };
+  // Kept in the sticky header (with the search bar) rather than the
+  // scrolling list below, so what's already picked stays visible while
+  // scrolling through "Free for these dates" — same reasoning as making
+  // the search bar itself sticky.
+  document.getElementById('mp-additems-selected').innerHTML = selectedItems.length
+    ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div style="max-height:33vh;overflow-y:auto;border-bottom:1px solid var(--mp-border-hairline)">${selectedItems.map(e => row(e)).join('')}</div>`
+    : '';
   document.getElementById('mp-additems-list').innerHTML = `
-    ${selectedItems.length ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e)).join('')}</div>` : ''}
     <div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
     <div>${free.length ? free.map(e => row(e)).join('') : '<div style="padding:20px;text-align:center;color:var(--mp-text-muted);font-size:13px">No matching available assets</div>'}</div>
     ${busy.length ? `<div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-orange);text-transform:uppercase;letter-spacing:.04em">Currently on loan</div><div>${busy.map(e => row(e, 'Held by ' + esc(e.OnLoanTo) + (e.LoanEndDate ? ' until ' + esc(formatDisplayDate(e.LoanEndDate)) : ''))).join('')}</div>` : ''}`;
