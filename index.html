@@ -1928,7 +1928,7 @@ input[type="time"].mp-input::-webkit-datetime-edit-meridiem-field{padding:0}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 142;
+const APP_VERSION = 143;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11719,6 +11719,7 @@ function mpRenderEquipment() {
   if (_mp.eqQuery === undefined) _mp.eqQuery = '';
   if (_mp.eqSelectMode === undefined) _mp.eqSelectMode = false;
   if (_mp.eqSelected === undefined) _mp.eqSelected = [];
+  if (_mp.eqSelectedExpanded === undefined) _mp.eqSelectedExpanded = false;
   document.getElementById('mp-screen-equipment').innerHTML = `
     <div style="padding:16px 20px 12px;position:sticky;top:0;z-index:5;background:var(--mp-white)">
       <div style="display:flex;align-items:center;gap:10px">
@@ -11738,7 +11739,7 @@ function mpRenderEquipment() {
 }
 function mpToggleEquipmentSelectMode() {
   _mp.eqSelectMode = !_mp.eqSelectMode;
-  if (!_mp.eqSelectMode) { _mp.eqSelected = []; _mp.eqSelectContext = null; }
+  if (!_mp.eqSelectMode) { _mp.eqSelected = []; _mp.eqSelectContext = null; _mp.eqSelectedExpanded = false; }
   mpRenderEquipment();
 }
 function mpToggleEquipmentSelect(assetNo) {
@@ -11746,6 +11747,10 @@ function mpToggleEquipmentSelect(assetNo) {
   if (i >= 0) _mp.eqSelected.splice(i, 1); else _mp.eqSelected.push(assetNo);
   mpRenderEquipmentList();
   mpRenderEquipmentSelectFooter();
+}
+function mpToggleEquipmentSelectedExpanded() {
+  _mp.eqSelectedExpanded = !_mp.eqSelectedExpanded;
+  mpRenderEquipmentList();
 }
 function mpClearEquipmentSelection() {
   _mp.eqSelected = [];
@@ -11804,6 +11809,7 @@ function mpEquipmentAddSelectedToLoan() {
   _mp.eqSelectMode = false;
   _mp.eqSelected = [];
   _mp.eqSelectContext = null;
+  _mp.eqSelectedExpanded = false;
   mpGoScreen('book');
 }
 
@@ -11866,8 +11872,13 @@ function mpRenderEquipmentList() {
   // easily scroll out of view or get hidden by a filter change, and
   // without this it reads as "lost" even though it's still selected.
   const selectedItems = selectMode ? _mp.eqSelected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean).sort(byAssetNoAsc) : [];
+  const eqSelectedExpanded = _mp.eqSelectedExpanded;
   const selectedHtml = selectedItems.length
-    ? `<div style="padding:12px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div>${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>` : '';
+    ? `<div style="padding-top:12px">${mpSelectedSummaryHtml(selectedItems, eqSelectedExpanded, 'mpToggleEquipmentSelectedExpanded()')}</div>` +
+      (selectedItems.length < MP_SELECTED_LIST_AUTOCOLLAPSE || eqSelectedExpanded
+        ? `<div>${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>`
+        : '')
+    : '';
   const restHtml = rows.length
     ? rows.map(({e, status}) => row(e, status)).join('')
     : (selectedItems.length ? '' : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>');
@@ -12545,6 +12556,21 @@ function mpCloseScan() {
 // is deliberately NOT wrapped in the blocking loader Book-a-demo uses —
 // that would sit on top of and block that modal instead of letting the
 // person actually use it.
+// A picked-items list that's pinned in place (a sticky header, or the top
+// of an otherwise-scrolling list) permanently eats screen space rather
+// than just scrolling past — past a handful of picks that starts crowding
+// out the very thing you're trying to do (search/browse for more). Shared
+// by Add items' sticky "Selected" block and the Equipment tab's pinned
+// selected section when picking devices for a new loan: past this many,
+// collapse to a one-line summary with an Expand toggle instead of listing
+// every pick in full.
+const MP_SELECTED_LIST_AUTOCOLLAPSE = 5;
+function mpSelectedSummaryHtml(items, expanded, toggleOnclick) {
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 20px 6px">
+    <div style="font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${items.length})</div>
+    ${items.length >= MP_SELECTED_LIST_AUTOCOLLAPSE ? `<button onclick="${toggleOnclick}" style="border:none;background:none;color:var(--mp-purple);font:600 12px var(--mp-font-body);cursor:pointer;padding:0;flex-shrink:0">${expanded ? 'Collapse' : '+ Expand'}</button>` : ''}
+  </div>`;
+}
 function mpOpenAddItemsFlow(key) {
   renderLoans(); // rebuild _loanGroupMap fresh — same defensive pattern used elsewhere before looking a key up in it
   const g = getLoanGroupByKey(key);
@@ -12552,7 +12578,7 @@ function mpOpenAddItemsFlow(key) {
   _mp.addItems = {
     key, loanTo: g.loanTo, startDate: g.startDate, endDate: g.endDate,
     existingAssetNos: new Set(g.items.map(i => i.CHSAssetNo)),
-    query: '', selected: []
+    query: '', selected: [], selectedExpanded: false
   };
   mpGoScreen('additems');
 }
@@ -12596,9 +12622,17 @@ function mpRenderAddItemsList() {
   // Kept in the sticky header (with the search bar) rather than the
   // scrolling list below, so what's already picked stays visible while
   // scrolling through "Free for these dates" — same reasoning as making
-  // the search bar itself sticky.
+  // the search bar itself sticky. Since this is sticky (permanently taking
+  // up screen space, not just scrolled past), the full list only shows
+  // itself under MP_SELECTED_LIST_AUTOCOLLAPSE items — past that a single
+  // summary line + Expand keeps the sticky block from eating most of the
+  // screen no matter how many are picked; st.selectedExpanded lets that be
+  // overridden either way.
   document.getElementById('mp-additems-selected').innerHTML = selectedItems.length
-    ? `<div style="padding:0 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${selectedItems.length})</div><div style="max-height:33vh;overflow-y:auto;border-bottom:1px solid var(--mp-border-hairline)">${selectedItems.map(e => row(e)).join('')}</div>`
+    ? mpSelectedSummaryHtml(selectedItems, st.selectedExpanded, 'mpToggleAddItemsSelectedExpanded()') +
+      (selectedItems.length < MP_SELECTED_LIST_AUTOCOLLAPSE || st.selectedExpanded
+        ? `<div style="max-height:33vh;overflow-y:auto;border-bottom:1px solid var(--mp-border-hairline)">${selectedItems.map(e => row(e)).join('')}</div>`
+        : '')
     : '';
   document.getElementById('mp-additems-list').innerHTML = `
     <div style="padding:16px 20px 6px;font:700 11px var(--mp-font-body);color:var(--mp-text-muted);text-transform:uppercase;letter-spacing:.04em">Free for these dates</div>
@@ -12610,6 +12644,10 @@ function mpRenderAddItemsList() {
 function mpAddItemsToggleDevice(assetNo) {
   const i = _mp.addItems.selected.indexOf(assetNo);
   if (i >= 0) _mp.addItems.selected.splice(i, 1); else _mp.addItems.selected.push(assetNo);
+  mpRenderAddItemsList();
+}
+function mpToggleAddItemsSelectedExpanded() {
+  _mp.addItems.selectedExpanded = !_mp.addItems.selectedExpanded;
   mpRenderAddItemsList();
 }
 function mpConfirmAddItems() {
