@@ -561,33 +561,23 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 #mp-signin .mp-signin-body,#mp-resume .mp-signin-body{font:300 15px/1.55 var(--mp-font-body);color:var(--mp-text-body);max-width:280px}
 .mp-input{width:100%;min-height:48px;padding:0 14px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);font-size:16px;outline:none;background:var(--mp-white);color:var(--mp-text-strong);transition:border-color var(--mp-fast) var(--mp-ease),box-shadow var(--mp-fast) var(--mp-ease)}
 .mp-input:focus{border-color:var(--mp-purple);box-shadow:var(--mp-focus-ring)}
-/* iOS Safari's native date/time control ignores min-height and renders its
-   own taller intrinsic box (visibly stretched vs. every other .mp-input) —
-   an explicit height forces it to compress into the same box everything
-   else uses, instead of just setting a floor it's free to exceed. Fixing
-   the outer height alone wasn't enough, though (reported again on a real
-   iPhone after that first fix): WebKit lays the day/month/year segments
-   out as its own inline-flex row with a default line-height that doesn't
-   match the 48px box, so the text/calendar-icon sat off-center inside it
-   rather than actually centered — line-height:48px fixes that. The
-   ::-webkit-datetime-edit-* segments also carry their own default padding
-   that both pushes the text off-center and can stretch the segments to
-   fill leftover width unevenly; zeroing it keeps them tight against each
-   other and left-aligned instead. */
-input[type="date"].mp-input,input[type="time"].mp-input{height:48px;line-height:48px}
-input[type="date"].mp-input::-webkit-date-and-time-value{text-align:left}
-input[type="date"].mp-input::-webkit-datetime-edit,
-input[type="date"].mp-input::-webkit-datetime-edit-fields-wrapper,
-input[type="date"].mp-input::-webkit-datetime-edit-text,
-input[type="date"].mp-input::-webkit-datetime-edit-day-field,
-input[type="date"].mp-input::-webkit-datetime-edit-month-field,
-input[type="date"].mp-input::-webkit-datetime-edit-year-field,
-input[type="time"].mp-input::-webkit-datetime-edit,
-input[type="time"].mp-input::-webkit-datetime-edit-fields-wrapper,
-input[type="time"].mp-input::-webkit-datetime-edit-text,
-input[type="time"].mp-input::-webkit-datetime-edit-hour-field,
-input[type="time"].mp-input::-webkit-datetime-edit-minute-field,
-input[type="time"].mp-input::-webkit-datetime-edit-meridiem-field{padding:0}
+/* Two earlier attempts here (an explicit height, then an explicit
+   line-height + zeroing the internal segments' padding) never actually
+   fixed this on a real iPhone — confirmed still visibly taller/"stretched"
+   vs. every other .mp-input after both. iOS Safari's native date/time
+   control is documented to ignore an author-specified height/line-height
+   on the input itself; no further CSS on the input can reliably force it
+   to comply. So stop fighting the input's own box: wrap it in a plain div
+   that owns the border/background/height instead, and clip anything the
+   native control renders past that with overflow:hidden — completely
+   ordinary CSS on a completely ordinary div, so it holds regardless of
+   whatever the input does internally. The input itself goes borderless/
+   transparent/height:100%, filling that wrapper; oversized native content
+   simply gets clipped rather than pushing the wrapper's own box taller. */
+.mp-date-wrap{height:48px;border:1px solid var(--mp-border-hairline);border-radius:var(--mp-radius-md);overflow:hidden;background:var(--mp-white);transition:border-color var(--mp-fast) var(--mp-ease),box-shadow var(--mp-fast) var(--mp-ease)}
+.mp-date-wrap:focus-within{border-color:var(--mp-purple);box-shadow:var(--mp-focus-ring)}
+.mp-date-wrap input.mp-input{border:none;background:transparent;height:100%;padding:0 14px}
+.mp-date-wrap input.mp-input::-webkit-date-and-time-value{text-align:left}
 .mp-btn{min-height:50px;width:100%;border-radius:var(--mp-radius-md);border:none;cursor:pointer;font:600 15px var(--mp-font-body);transition:background var(--mp-fast) var(--mp-ease),opacity var(--mp-fast) var(--mp-ease);display:flex;align-items:center;justify-content:center;gap:8px}
 .mp-btn-primary{background:var(--mp-purple);color:#fff}
 .mp-btn-primary:hover{background:#47397e}
@@ -1928,7 +1918,7 @@ input[type="time"].mp-input::-webkit-datetime-edit-meridiem-field{padding:0}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 145;
+const APP_VERSION = 147;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11729,6 +11719,7 @@ function mpRenderEquipment() {
         </div>
         <button onclick="mpToggleEquipmentSelectMode()" style="flex:none;padding:9px 14px;border-radius:var(--mp-radius-pill);border:1px solid ${_mp.eqSelectMode?'var(--mp-purple)':'var(--mp-border-hairline)'};background:${_mp.eqSelectMode?'var(--mp-purple)':'var(--mp-white)'};color:${_mp.eqSelectMode?'#fff':'var(--mp-text-body)'};font:600 13px var(--mp-font-body);white-space:nowrap;cursor:pointer">${_mp.eqSelectMode?'Cancel':'Select'}</button>
       </div>
+      <div id="mp-eq-selected"></div>
     </div>
     <div id="mp-eq-pills" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
     <div id="mp-eq-list" style="padding-bottom:${_mp.eqSelectMode?'90px':'0'}"></div>
@@ -11866,23 +11857,27 @@ function mpRenderEquipmentList() {
     .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter)
     .filter(r => !selectMode || !selectedSet.has(r.e.CHSAssetNo))
     .sort((a, b) => byAssetNoAsc(a.e, b.e));
-  // Shopping-cart behaviour: selected devices pin to their own section at
-  // the top, regardless of the current search text or filter pill — with
-  // a long real inventory (unlike a handful of test items), a pick can
-  // easily scroll out of view or get hidden by a filter change, and
-  // without this it reads as "lost" even though it's still selected.
+  // Shopping-cart behaviour: selected devices stay in the sticky header
+  // with the search bar (same as Add items' "Selected" block) rather than
+  // just pinned to the top of the scrolling list — with a long real
+  // inventory (unlike a handful of test items), a pick can easily scroll
+  // out of view or get hidden by a filter change, and without this it
+  // reads as "lost" even though it's still selected.
   const selectedItems = selectMode ? _mp.eqSelected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean).sort(byAssetNoAsc) : [];
   const eqSelectedExpanded = _mp.eqSelectedExpanded;
-  const selectedHtml = selectedItems.length
-    ? `<div style="padding-top:12px">${mpSelectedSummaryHtml(selectedItems, eqSelectedExpanded, 'mpToggleEquipmentSelectedExpanded()')}</div>` +
-      (selectedItems.length < MP_SELECTED_LIST_AUTOCOLLAPSE || eqSelectedExpanded
-        ? `<div>${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>`
-        : '')
-    : '';
+  const eqSelectedEl = document.getElementById('mp-eq-selected');
+  if (eqSelectedEl) {
+    eqSelectedEl.innerHTML = selectedItems.length
+      ? mpSelectedSummaryHtml(selectedItems, eqSelectedExpanded, 'mpToggleEquipmentSelectedExpanded()') +
+        (selectedItems.length < MP_SELECTED_LIST_AUTOCOLLAPSE || eqSelectedExpanded
+          ? `<div style="max-height:33vh;overflow-y:auto;border-bottom:1px solid var(--mp-border-hairline)">${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>`
+          : '')
+      : '';
+  }
   const restHtml = rows.length
     ? rows.map(({e, status}) => row(e, status)).join('')
     : (selectedItems.length ? '' : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>');
-  document.getElementById('mp-eq-list').innerHTML = selectedHtml + restHtml;
+  document.getElementById('mp-eq-list').innerHTML = restHtml;
 }
 
 function mpSetEquipmentQuery(v) { _mp.eqQuery = v; mpRenderEquipmentList(); }
@@ -12071,8 +12066,8 @@ function mpRenderBookStep1() {
       <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${mpFormVal(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${mpFormVal(b.location)}" oninput="_mp.book.location=this.value"></div>
       <div onclick="mpOpenIslandSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Shipping island *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.island?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${b.island==='North'?'North Island':b.island==='South'?'South Island':'Select…'}<span style="color:var(--mp-black-40)">›</span></div></div>
-      <div><label style="${mpFieldLabel()}">Start date *</label><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div>
-      <div><label style="${mpFieldLabel()}">End date *</label><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Start date *</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div></div>
+      <div><label style="${mpFieldLabel()}">End date *</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div></div>
       ${isAM
         ? `<div><label style="${mpFieldLabel()}">Account manager</label><div class="mp-input" style="display:flex;align-items:center;color:var(--mp-text-muted);background:var(--mp-black-05)">${esc(b.am)}</div></div>`
         : `<div><label style="${mpFieldLabel()}">Account manager *</label><select class="mp-input" onchange="mpBookSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>`}
@@ -12774,7 +12769,7 @@ function mpRenderExtend() {
       <div class="mp-h3" style="margin-bottom:4px">${esc(g.loanTo)}</div>
       <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:16px">${g.items.length} device${g.items.length!==1?'s':''} · Current due date: ${g.endDate ? formatDisplayDate(g.endDate) : 'none'}</div>
       <label style="${mpFieldLabel()}">New due date *</label>
-      <input class="mp-input" type="date" id="mp-extend-date" value="${mpFormVal(g.endDate || nzDate())}">
+      <div class="mp-date-wrap"><input class="mp-input" type="date" id="mp-extend-date" value="${mpFormVal(g.endDate || nzDate())}"></div>
     </div>
     <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
       <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelExtend()">Cancel</button>
@@ -12862,8 +12857,8 @@ function mpRenderReassignForm() {
       <div class="mp-h3" style="margin-bottom:-6px">${esc(st.g.loanTo)}</div>
       <div><label style="${mpFieldLabel()}">Event / customer name</label><input class="mp-input" value="${mpFormVal(st.loanTo)}" oninput="_mp.reassign.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location</label><input class="mp-input" value="${mpFormVal(st.location)}" oninput="_mp.reassign.location=this.value"></div>
-      <div><label style="${mpFieldLabel()}">Start date</label><input class="mp-input" type="date" value="${mpFormVal(st.startDate)}" onchange="_mp.reassign.startDate=this.value"></div>
-      <div><label style="${mpFieldLabel()}">End date</label><input class="mp-input" type="date" value="${mpFormVal(st.endDate)}" onchange="_mp.reassign.endDate=this.value"></div>
+      <div><label style="${mpFieldLabel()}">Start date</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(st.startDate)}" onchange="_mp.reassign.startDate=this.value"></div></div>
+      <div><label style="${mpFieldLabel()}">End date</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(st.endDate)}" onchange="_mp.reassign.endDate=this.value"></div></div>
       <div><label style="${mpFieldLabel()}">Account manager</label><select class="mp-input" onchange="mpReassignSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>
       <div><label style="${mpFieldLabel()}">Account manager email</label><input class="mp-input" type="email" value="${mpFormVal(st.email)}" oninput="_mp.reassign.email=this.value"></div>
       <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${mpFormVal(st.contact)}" oninput="_mp.reassign.contact=this.value"></div>
