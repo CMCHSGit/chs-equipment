@@ -58,7 +58,14 @@ self.addEventListener('fetch', event => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        // ignoreSearch matters here: the install step only ever pre-caches
+        // the bare '/' (CACHED_URLS below), but every real entry point has
+        // a query string (start_url is '/?mobile=1', deep links add
+        // ?reassign=/?return=). Without it, offline-with-no-prior-visit to
+        // any of those falls through to a cache MISS on an exact-URL match
+        // against that bare '/' entry and fails outright, even though the
+        // identical index.html would happily serve it.
+        .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
     return;
   }
