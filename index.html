@@ -1918,7 +1918,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 145;
+const APP_VERSION = 146;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11719,6 +11719,7 @@ function mpRenderEquipment() {
         </div>
         <button onclick="mpToggleEquipmentSelectMode()" style="flex:none;padding:9px 14px;border-radius:var(--mp-radius-pill);border:1px solid ${_mp.eqSelectMode?'var(--mp-purple)':'var(--mp-border-hairline)'};background:${_mp.eqSelectMode?'var(--mp-purple)':'var(--mp-white)'};color:${_mp.eqSelectMode?'#fff':'var(--mp-text-body)'};font:600 13px var(--mp-font-body);white-space:nowrap;cursor:pointer">${_mp.eqSelectMode?'Cancel':'Select'}</button>
       </div>
+      <div id="mp-eq-selected"></div>
     </div>
     <div id="mp-eq-pills" style="display:flex;gap:8px;overflow-x:auto;padding:0 20px 14px"></div>
     <div id="mp-eq-list" style="padding-bottom:${_mp.eqSelectMode?'90px':'0'}"></div>
@@ -11856,23 +11857,27 @@ function mpRenderEquipmentList() {
     .filter(r => _mp.eqFilter === 'all' || r.status.key === _mp.eqFilter)
     .filter(r => !selectMode || !selectedSet.has(r.e.CHSAssetNo))
     .sort((a, b) => byAssetNoAsc(a.e, b.e));
-  // Shopping-cart behaviour: selected devices pin to their own section at
-  // the top, regardless of the current search text or filter pill — with
-  // a long real inventory (unlike a handful of test items), a pick can
-  // easily scroll out of view or get hidden by a filter change, and
-  // without this it reads as "lost" even though it's still selected.
+  // Shopping-cart behaviour: selected devices stay in the sticky header
+  // with the search bar (same as Add items' "Selected" block) rather than
+  // just pinned to the top of the scrolling list — with a long real
+  // inventory (unlike a handful of test items), a pick can easily scroll
+  // out of view or get hidden by a filter change, and without this it
+  // reads as "lost" even though it's still selected.
   const selectedItems = selectMode ? _mp.eqSelected.map(a => equipment.find(e => e.CHSAssetNo === a)).filter(Boolean).sort(byAssetNoAsc) : [];
   const eqSelectedExpanded = _mp.eqSelectedExpanded;
-  const selectedHtml = selectedItems.length
-    ? `<div style="padding-top:12px">${mpSelectedSummaryHtml(selectedItems, eqSelectedExpanded, 'mpToggleEquipmentSelectedExpanded()')}</div>` +
-      (selectedItems.length < MP_SELECTED_LIST_AUTOCOLLAPSE || eqSelectedExpanded
-        ? `<div>${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>`
-        : '')
-    : '';
+  const eqSelectedEl = document.getElementById('mp-eq-selected');
+  if (eqSelectedEl) {
+    eqSelectedEl.innerHTML = selectedItems.length
+      ? mpSelectedSummaryHtml(selectedItems, eqSelectedExpanded, 'mpToggleEquipmentSelectedExpanded()') +
+        (selectedItems.length < MP_SELECTED_LIST_AUTOCOLLAPSE || eqSelectedExpanded
+          ? `<div style="max-height:33vh;overflow-y:auto;border-bottom:1px solid var(--mp-border-hairline)">${selectedItems.map(e => row(e, mpEquipmentStatus(e, today))).join('')}</div>`
+          : '')
+      : '';
+  }
   const restHtml = rows.length
     ? rows.map(({e, status}) => row(e, status)).join('')
     : (selectedItems.length ? '' : '<div style="padding:40px 20px;text-align:center;font:400 14px var(--mp-font-body);color:var(--mp-text-muted)">No matching assets</div>');
-  document.getElementById('mp-eq-list').innerHTML = selectedHtml + restHtml;
+  document.getElementById('mp-eq-list').innerHTML = restHtml;
 }
 
 function mpSetEquipmentQuery(v) { _mp.eqQuery = v; mpRenderEquipmentList(); }
