@@ -1928,7 +1928,7 @@ input[type="time"].mp-input::-webkit-datetime-edit-meridiem-field{padding:0}
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 143;
+const APP_VERSION = 144;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12564,7 +12564,7 @@ function mpCloseScan() {
 // selected section when picking devices for a new loan: past this many,
 // collapse to a one-line summary with an Expand toggle instead of listing
 // every pick in full.
-const MP_SELECTED_LIST_AUTOCOLLAPSE = 5;
+const MP_SELECTED_LIST_AUTOCOLLAPSE = 2;
 function mpSelectedSummaryHtml(items, expanded, toggleOnclick) {
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 20px 6px">
     <div style="font:700 11px var(--mp-font-body);color:var(--mp-purple);text-transform:uppercase;letter-spacing:.04em">Selected (${items.length})</div>
