@@ -1919,7 +1919,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 148;
+const APP_VERSION = 149;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2940,6 +2940,11 @@ async function submitReturn(opts) {
     if (!stillActive) {
       await _closeSimproJobWithNote(batchId, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
       try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
+    } else {
+      // Batch isn't empty yet — the loanDoc survives, so prune just this
+      // item out of it (see _pruneLoanDocItems()) instead of leaving it
+      // stale in the printable/emailed loan form.
+      await _pruneLoanDocItems(batchId, [assetNo]);
     }
   }
   if (!(opts && opts.silent)) showToast('success', `${assetNo} returned`);
@@ -2965,6 +2970,11 @@ async function submitCount(opts) {
     const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
     if (!stillActive) {
       await _closeSimproJobWithNote(prev.batchId, prev.loanTo, 'All items counted and returned to office on ' + formatDisplayDate(nzDate()) + '.');
+    } else {
+      // Batch isn't empty yet — prune just this item out of the loanDoc
+      // instead of leaving it stale in the printable/emailed loan form
+      // (see _pruneLoanDocItems()).
+      await _pruneLoanDocItems(prev.batchId, [assetNo]);
     }
   }
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
@@ -5143,12 +5153,18 @@ async function confirmBatchReturn() {
   if (!toReturn.length) { showToast('error','No items selected'); return; }
   const _auditLoanTo = currentBatchGroup?.loanTo || '';
   const _auditAssets = toReturn.map(id => equipment.find(e => e.id === id)?.CHSAssetNo).filter(Boolean);
-  // Collect batchIds before clearing, so we can delete loanDocs afterward
+  // Collect batchIds (and which asset numbers left each one) before
+  // clearing, so we can delete/prune loanDocs afterward
   const batchIdsInvolved = new Set();
+  const returnedByBatch = {};
   toReturn.forEach(id => {
     const idx = equipment.findIndex(e => e.id === id);
     if (idx < 0) return;
-    if (equipment[idx].BatchID) batchIdsInvolved.add(equipment[idx].BatchID);
+    const batchId = equipment[idx].BatchID;
+    if (batchId) {
+      batchIdsInvolved.add(batchId);
+      (returnedByBatch[batchId] = returnedByBatch[batchId] || []).push(equipment[idx].CHSAssetNo);
+    }
     const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
     Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
     logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
@@ -5159,7 +5175,10 @@ async function confirmBatchReturn() {
     setSync('ok', 'Saved');
   } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
   // Delete loanDocs whose batch has no remaining active items, so the orphan
-  // detector doesn't flag them as failed saves on next load
+  // detector doesn't flag them as failed saves on next load; otherwise prune
+  // just the returned item(s) out of the loanDoc that survives (see
+  // _pruneLoanDocItems()) instead of leaving them stale in the printable/
+  // emailed loan form.
   for (const batchId of batchIdsInvolved) {
     const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
     if (!stillActive) {
@@ -5167,6 +5186,8 @@ async function confirmBatchReturn() {
       try {
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
       } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
+    } else {
+      await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
     }
   }
   renderTable(); updateStats();
@@ -6986,6 +7007,40 @@ async function _closeSimproJobWithNote(batchId, loanTo, closeNote) {
       []);
   }
   closeSimproJob(simproJobId, loanTo);
+}
+
+// Used when a return/count takes SOME (not all) of a batch's items —
+// closeSimproJob()/_closeSimproJobWithNote() above only ever run once the
+// whole batch is empty, so an item leaving a batch that still has others
+// active never touched the loanDoc at all. Real-world result (found via a
+// live loan): the printable/emailed loan form (generateLoanDoc() prefers
+// savedRows over the live equipment list whenever savedRows exists) kept
+// showing items that had actually been returned or counted days earlier,
+// since nothing ever pruned them out. confirmReassignAM() already does
+// this correctly for its own transfer-out case; this mirrors that for the
+// return-triggered paths (submitReturn()/submitCount()/confirmBatchReturn()).
+async function _pruneLoanDocItems(batchId, removedAssetNos) {
+  if (!batchId || !removedAssetNos || !removedAssetNos.length) return;
+  try {
+    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+    if (!r.ok) return;
+    const doc = await r.json();
+    if (!doc) return;
+    const removedSet = new Set(removedAssetNos.map(a => (a || '').trim().toLowerCase()));
+    const patch = {};
+    if (Array.isArray(doc.savedRows)) {
+      patch.savedRows = doc.savedRows.filter(row => !removedSet.has((row[0] || '').trim().toLowerCase()));
+    }
+    if (Array.isArray(doc.items)) {
+      patch.items = doc.items.filter(i => !removedSet.has((i.CHSAssetNo || '').trim().toLowerCase()));
+    }
+    if (Object.keys(patch).length) {
+      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+    }
+  } catch(e) {}
 }
 
 // ── MISSING SIMPRO JOBS (ADMIN) ────────────────────────────────────────
