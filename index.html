@@ -805,7 +805,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       </button>
       <button class="mobile-nav-item" onclick="openAMModal();closeMobileMenu()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Account Managers
+        Manage your staff
       </button>
       <button class="mobile-nav-item" onclick="promptAddAsset();closeMobileMenu()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -1638,12 +1638,12 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 <div class="modal-overlay" id="am-modal">
   <div class="modal" style="max-width:460px">
     <div class="modal-header">
-      <div class="modal-title">Account Managers</div>
+      <div class="modal-title">Manage your staff</div>
       <button class="modal-close" onclick="closeAMModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <!-- AUTH -->
     <div id="am-auth-section" style="text-align:center;padding:12px 0 8px">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Enter admin password to manage account managers</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Enter admin password to manage your staff</div>
       <input type="password" id="am-pw-input" placeholder="Admin password" style="padding:9px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:260px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockAMModal()">
       <button class="btn btn-primary" onclick="unlockAMModal()">Unlock</button>
       <div id="am-pw-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
@@ -1656,6 +1656,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>A–Z
         </button>
       </div>
+      <input type="text" id="am-search" placeholder="Search by name or email..." oninput="renderAMList()" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;margin-bottom:8px">
       <div id="am-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto"></div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Add New</div>
@@ -1918,7 +1919,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 147;
+const APP_VERSION = 148;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2162,7 +2163,7 @@ function showUserSelectModal(allowClose) {
   if (!list || !overlay) return;
   const people = accountManagers.length ? accountManagers : [];
   if (!people.length) {
-    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">No users configured. Add people under Account Managers first.</div>';
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">No users configured. Add people under Manage your staff first.</div>';
   } else {
     list.innerHTML = people.map(am => {
       const color = _opColor(am.name);
@@ -7058,8 +7059,8 @@ function findLoansMissingSimproJob() {
 const SERVICE_TEAM_OPERATORS = ['Peter Lin', 'Jonathan Nasrun'];
 
 // A person's role is an explicit field on their accountManagers record
-// (set via Settings → Account Managers), falling back to the legacy
-// hardcoded list above for anyone who hasn't had a role set yet.
+// (set via Manage your staff), falling back to the legacy hardcoded list
+// above for anyone who hasn't had a role set yet.
 function amEffectiveRole(am) {
   return am.role || (SERVICE_TEAM_OPERATORS.includes(am.name) ? 'service' : 'am');
 }
@@ -8163,6 +8164,8 @@ function openAMModal() {
   document.getElementById('am-main-section').style.display = 'none';
   document.getElementById('am-pw-input').value = '';
   document.getElementById('am-pw-err').style.display = 'none';
+  const searchEl = document.getElementById('am-search');
+  if (searchEl) searchEl.value = '';
   document.getElementById('am-modal').classList.add('open');
   setTimeout(() => document.getElementById('am-pw-input').focus(), 100);
 }
@@ -8252,8 +8255,19 @@ function sortAMList() {
 }
 
 function renderAMList() {
-  document.getElementById('am-list').innerHTML = accountManagers.length
-    ? accountManagers.map((am, i) => {
+  const q = (document.getElementById('am-search')?.value || '').trim().toLowerCase();
+  // Filter first, but keep each row's ORIGINAL index into accountManagers —
+  // updateAMField()/removeAccountManager() both index straight into that
+  // array, so a row rendered from a filtered/re-numbered array would edit
+  // or remove the wrong person the moment a search narrows the list.
+  const visible = accountManagers
+    .map((am, i) => ({ am, i }))
+    .filter(({am}) => !q || (am.name||'').toLowerCase().includes(q) || (am.email||'').toLowerCase().includes(q));
+  document.getElementById('am-list').innerHTML = !accountManagers.length
+    ? '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers yet</div>'
+    : !visible.length
+    ? '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No matches</div>'
+    : visible.map(({am, i}) => {
       const role = amEffectiveRole(am);
       return `
       <div style="background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border);padding:10px 12px">
@@ -8274,8 +8288,7 @@ function renderAMList() {
           <option value="service"${role==='service'?' selected':''}>Service &amp; Projects</option>
         </select>
       </div>`;
-    }).join('')
-    : '<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No account managers yet</div>';
+    }).join('');
 }
 
 function updateAMField(i, field, val) {
@@ -13470,8 +13483,8 @@ function mpRunMoreLink(i) {
 }
 
 // Same accountManagers[].role field, updateAMField()/saveAccountManagers()
-// the desktop Settings → Account Managers dropdown uses — this is a
-// mobile-styled sheet over the identical data, not a parallel admin path.
+// the desktop "Manage your staff" dropdown uses — this is a mobile-styled
+// sheet over the identical data, not a parallel admin path.
 function mpOpenTeamRolesSheet() {
   mpOpenSheet('<div class="mp-sheet-title">Team roles</div>',
     `<div style="font:400 14px/1.5 var(--mp-font-body);color:var(--mp-text-body);margin-bottom:14px">Enter the admin password to manage roles.</div>
@@ -13503,7 +13516,7 @@ function mpRenderTeamRolesSheet() {
 }
 
 function mpSetAMRole(i, role) {
-  updateAMField(i, 'role', role); // shared with the desktop Account Managers admin UI
+  updateAMField(i, 'role', role); // shared with the desktop "Manage your staff" admin UI
   if (accountManagers[i] && accountManagers[i].name === _mp.name) _mp.role = role;
   showToast('success', 'Role updated');
 }
