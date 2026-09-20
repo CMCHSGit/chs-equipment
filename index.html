@@ -1919,7 +1919,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 149;
+const APP_VERSION = 150;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2287,14 +2287,6 @@ async function saveBin(data) {
             ourHistory.forEach(h => { if (h.id && !seenIds.has(h.id)) mergedHistory.push(h); });
             mergedHistory.sort((a, b) => (b.ts || 0) - (a.ts || 0));
 
-            // Merge audit log: union by id, newest first, keep latest 300
-            const freshAudit = Array.isArray(fresh.auditLog) ? fresh.auditLog : [];
-            const seenAuditIds = new Set(freshAudit.map(e => e.id));
-            const mergedAudit = [...freshAudit];
-            auditLog.forEach(e => { if (e.id && !seenAuditIds.has(e.id)) mergedAudit.push(e); });
-            mergedAudit.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
-            auditLog = mergedAudit.slice(0, 300);
-
             data = { equipment: merged, history: mergedHistory };
             equipment  = merged;
             historyLog = mergedHistory;
@@ -2311,7 +2303,10 @@ async function saveBin(data) {
   // Sanitize loanMeta keys before saving — Firebase forbids . # $ [ ] / in keys
   const _safeMeta = {};
   Object.entries(loanMeta).forEach(([k, v]) => { _safeMeta[k.replace(/[.#$[\]/]/g, '_')] = v; });
-  const payload = Object.assign({}, data, { _v: newVersion, auditLog: auditLog.slice(0, 300), loanMeta: _safeMeta });
+  // auditLog is no longer part of this document (see writeAudit()) — not
+  // included here at all any more, so a save from here can never overwrite
+  // another session's newer audit entries.
+  const payload = Object.assign({}, data, { _v: newVersion, loanMeta: _safeMeta });
   const r = await fetchWithTimeout(FB_URL + '/data.json', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -2342,7 +2337,9 @@ async function loadData() {
     _dataVersion = data._v || null; // record version token for stale-save detection
     equipment  = Array.isArray(data.equipment)  ? data.equipment  : [];
     historyLog = Array.isArray(data.history)     ? data.history    : [];
-    auditLog   = Array.isArray(data.auditLog)    ? data.auditLog   : [];
+    // auditLog now lives at its own /auditLog/{id}.json path (see
+    // writeAudit()) — loaded below alongside the other independent paths,
+    // not from this document any more.
     // loanMeta is now embedded in data.json; fall back to legacy /loanMeta.json on first migration
     if (data.loanMeta && typeof data.loanMeta === 'object') {
       loanMeta = data.loanMeta;
@@ -2364,6 +2361,7 @@ async function loadData() {
     await Promise.all([
       loadUpcomingLoans(),
       loadLoanMeta(),
+      loadAuditLog(),
       loadLoanDocNotes(),
       loadTestReportsIndex(),
       loadKitGroups()
@@ -2406,6 +2404,21 @@ async function loadData() {
 }
 
 // ── AUDIT LOG ─────────────────────────────────────────────────────────
+// Lives at its own /auditLog/{id}.json path (migrated 2026-09-21 off the
+// auditLog field that used to be embedded in /data.json's single shared
+// document). That document is saved via saveBin()'s full-overwrite PUT,
+// gated by a check-then-act version guard with a genuine (if narrow) race
+// window — two near-simultaneous saves from different sessions could each
+// pass the conflict check before either's write lands, and whichever's PUT
+// landed second would silently overwrite the other's newer audit entries.
+// Confirmed happening for real: cross-referencing every loan creation in
+// the (separately-stored, unaffected) device history log against the
+// audit log found 7 loans across two months with no loan_created entry at
+// all, despite writeAudit() being unconditional in that code path — a
+// ~16% miss rate, far too frequent to be coincidence. Writing each entry
+// to its own key sidesteps the whole-document-overwrite race entirely,
+// since two sessions writing different keys under /auditLog can never
+// collide the way two PUTs to the same /data.json document can.
 function writeAudit(type, summary, detail, op) {
   // Mobile actions reuse these exact same confirm functions (see index.html's
   // mobile script — mpOpenReassignFlow() etc.), so this is the one place that
@@ -2415,7 +2428,22 @@ function writeAudit(type, summary, detail, op) {
   const entry = { id: uid(), ts: nzNow(), type, summary, detail: detail || {}, operator: arguments.length >= 4 ? op : currentOperator, source };
   auditLog.unshift(entry);
   if (auditLog.length > 300) auditLog.length = 300;
-  scheduleSave(); // persists via /data.json on next debounced save
+  // Independent write, not bundled into scheduleSave()'s equipment/history
+  // save cycle — fire-and-forget since writeAudit() itself isn't async
+  // (dozens of call sites don't await it). bumpRemoteVersion() is what
+  // makes other open sessions' live sync (syncFromFirebase(), gated on
+  // /data/_v.json) actually notice and reload it — see saveLoanMeta()'s
+  // identical need for the same reason (this path never touches /data.json
+  // either, so nothing else would nudge that _v marker).
+  (async () => {
+    try {
+      await fetch(FB_URL + '/auditLog/' + encodeURIComponent(entry.id) + '.json', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry)
+      });
+      await bumpRemoteVersion();
+    } catch(e) { console.warn('Could not save audit entry', e); }
+  })();
 }
 
 function _auditBadge(type) {
@@ -7965,6 +7993,24 @@ async function loadLoanMeta() {
     }
   } catch(e) { console.warn('loadLoanMeta failed:', e); }
 }
+// /auditLog is a plain {id: entry} map in Firebase (each entry written to
+// its own key by writeAudit()), not an array — this is the sole authority
+// now, so a straight replace rather than a merge like loadLoanMeta() above
+// (that one merges because of an old-data-format transition; there's no
+// equivalent older auditLog format left to reconcile with here). Capped at
+// 300 for the in-memory array/UI exactly like before; older entries stay
+// in Firebase rather than being actively deleted — no cleanup job for that
+// yet, but a modest team's audit volume is in no danger of being a real
+// storage concern for a long while.
+async function loadAuditLog() {
+  try {
+    const r = await fetch(FB_URL + '/auditLog.json');
+    const d = await r.json();
+    if (d && typeof d === 'object') {
+      auditLog = Object.values(d).sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).slice(0, 300);
+    }
+  } catch(e) { console.warn('loadAuditLog failed:', e); }
+}
 async function saveLoanMeta() {
   // Write loanMeta directly to its own Firebase node immediately
   // (don't rely on scheduleSave debounce which can lose state on rapid interactions)
@@ -10698,13 +10744,15 @@ async function syncFromFirebase() {
     historyLog = mergedHistory;
     _dataVersion = fresh._v || null;
 
-    // Also reload upcoming loans and loan-readiness state so real-time
-    // changes from other users appear — loadLoanMeta() hits /loanMeta.json
-    // directly (the authoritative, most-current source, since saveLoanMeta()
-    // writes there instead of through saveBin()), not just whatever loanMeta
-    // snapshot happened to be embedded in this /data.json read.
+    // Also reload upcoming loans, loan-readiness state, and the audit log
+    // so real-time changes from other users appear — loadLoanMeta()/
+    // loadAuditLog() hit their own Firebase paths directly (the
+    // authoritative, most-current source, since saveLoanMeta()/writeAudit()
+    // write there instead of through saveBin()), not just whatever snapshot
+    // happened to be embedded in this /data.json read.
     await loadUpcomingLoans();
     await loadLoanMeta();
+    await loadAuditLog();
 
     // Only re-render the panel that is currently visible — avoids disrupting
     // the user if they are filling out a loan form or have a modal open.
