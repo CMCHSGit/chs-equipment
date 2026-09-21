@@ -1919,7 +1919,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 151;
+const APP_VERSION = 152;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6418,25 +6418,37 @@ async function saveLoanDocChanges() {
 
   // Persist to Firebase — this is what makes it survive page reloads
   try {
-    // Preserve any real simproJobId so a PUT doesn't wipe out what GAS wrote
+    // Preserve any real simproJobId so a PUT doesn't wipe out what GAS
+    // wrote — also the source of truth for demoType/island/jobType, since
+    // callers that trigger a re-save without the person actually looking
+    // at this form (in particular "Add items", whether from desktop's own
+    // "Done" button or mobile's headless equivalent) only ever pass through
+    // loanTo/location/dates/accountManager, never those three. This PUT
+    // replaces the whole document, so anything missing from saveBody is
+    // gone, not just left alone — that combination silently reset a loan's
+    // own Demo type/Shipping island/Job type to blank on its very next
+    // "Add items" action. Root-caused via a real loan whose Demo type
+    // badge disappeared after a few such actions. Always reading the
+    // existing doc now (previously only done when the simproJobId wasn't
+    // already cached) so there's always something to fall back to.
     window._simproJobCache = window._simproJobCache || JSON.parse(localStorage.getItem('_simproJobCache') || '{}');
     const _cachedJobId = window._simproJobCache[pdfKey];
     const _isPendingId = _cachedJobId === 'pending' || (typeof _cachedJobId === 'object' && _cachedJobId?.status === 'pending');
     let _realJobId = (_cachedJobId && !_isPendingId) ? _cachedJobId : undefined;
-    // If not in local cache, read Firebase before the PUT so we don't overwrite a stored job ID
-    if (_realJobId === undefined && pdfKey) {
+    let _existDoc = null;
+    if (pdfKey) {
       try {
         const _existR = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
-        const _exist  = _existR.ok ? await _existR.json() : null;
-        if (_exist?.simproJobId) {
-          const _existPending = _exist.simproJobId === 'pending' || (typeof _exist.simproJobId === 'object' && _exist.simproJobId?.status === 'pending');
-          if (!_existPending) {
-            _realJobId = _exist.simproJobId;
-            window._simproJobCache[pdfKey] = _realJobId;
-            localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
-          }
-        }
+        _existDoc = _existR.ok ? await _existR.json() : null;
       } catch(e) {}
+    }
+    if (_realJobId === undefined && _existDoc?.simproJobId) {
+      const _existPending = _existDoc.simproJobId === 'pending' || (typeof _existDoc.simproJobId === 'object' && _existDoc.simproJobId?.status === 'pending');
+      if (!_existPending) {
+        _realJobId = _existDoc.simproJobId;
+        window._simproJobCache[pdfKey] = _realJobId;
+        localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+      }
     }
     const saveBody = {
       loanTo: newLoanTo || info.loanTo || '',
@@ -6445,7 +6457,9 @@ async function saveLoanDocChanges() {
       endDate: toISO(newEndDate) || info.endDate || '',
       accountManager: newAM || info.accountManager || '',
       contactNumber: newContactNumber || info.contactNumber || '',
-      jobType: info.jobType || '',
+      jobType: info.jobType || _existDoc?.jobType || '',
+      demoType: info.demoType || _existDoc?.demoType || '',
+      island: info.island || _existDoc?.island || '',
       items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
       savedRows,
       notesCell,
