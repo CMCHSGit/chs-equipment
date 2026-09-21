@@ -905,7 +905,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
               <div class="form-group"><label>Job Type</label><select id="b-job-type"><option value="Demo">Demo</option><option value="PMV">PMV</option><option value="Repair">Repair</option></select></div>
-              <div class="form-group" style="grid-column:1/-1"><label>Demo Type <span style="color:var(--red)">*</span></label><select id="b-demo-type" required><option value="">Select demo type…</option><option value="Conference/Presentation">Conference/Presentation</option><option value="Clinical Trial">Clinical Trial</option><option value="Hotswap">Hotswap</option></select></div>
+              <div class="form-group" style="grid-column:1/-1"><label>Demo Type <span style="color:var(--red)">*</span></label><select id="b-demo-type" required onchange="onDemoTypeSelectChange(this)"><option value="">Select demo type…</option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
               <div class="form-group" style="grid-column:1/-1"><label>Shipping Details</label><textarea id="b-shipping-details" rows="2" style="resize:vertical"></textarea></div>
             </div>
@@ -1530,11 +1530,8 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Demo Type</label>
-        <select id="reassign-demo-type" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <select id="reassign-demo-type" onchange="onDemoTypeSelectChange(this)" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
           <option value="">Select demo type…</option>
-          <option value="Conference/Presentation">Conference/Presentation</option>
-          <option value="Clinical Trial">Clinical Trial</option>
-          <option value="Hotswap">Hotswap</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom:8px">
@@ -1919,7 +1916,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 153;
+const APP_VERSION = 154;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2326,6 +2323,52 @@ let upcomingLoans = []; // [{id,loanTo,location,startDate,endDate,accountManager
 let loanMeta = {};     // { [batchId]: { accountManager } } — AM stored per loan, not per item
 let scanMode = 'batch', currentItem = null, editingId = null, sessionItems = [];
 let saveTimer = null;
+// ── DEMO TYPE ──────────────────────────────────────────────────────────
+// The 3 fixed choices, plus whatever custom ("Other…") values AMs have
+// typed in before — persisted at /customDemoTypes.json so a value someone
+// enters once shows up as a real dropdown option for everyone afterward,
+// instead of staying free text that has to be retyped (and re-matched by
+// eye against past loans) every time.
+const DEMO_TYPE_FIXED = ['Conference/Presentation', 'Clinical Trial', 'Hotswap'];
+let customDemoTypes = [];
+async function loadCustomDemoTypes() {
+  try {
+    const r = await fetch(FB_URL + '/customDemoTypes.json');
+    const d = await r.json();
+    customDemoTypes = Array.isArray(d) ? d : [];
+  } catch(e) { console.warn('loadCustomDemoTypes failed:', e); }
+}
+async function addCustomDemoTypeIfNew(val) {
+  val = (val || '').trim();
+  if (!val || DEMO_TYPE_FIXED.includes(val) || customDemoTypes.includes(val)) return;
+  customDemoTypes.push(val);
+  try {
+    await fetch(FB_URL + '/customDemoTypes.json', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(customDemoTypes)
+    });
+  } catch(e) { console.warn('Could not save custom demo type', e); }
+}
+// Builds the <option> list for a plain desktop <select> — fixed types,
+// then any persisted custom ones, then an explicit "Other…" for entering
+// a new one. selected can be any of those, or a not-yet-persisted custom
+// value (kept as its own option so the select doesn't silently show
+// nothing selected for it).
+function demoTypeOptionsHtml(selected) {
+  const known = [...DEMO_TYPE_FIXED, ...customDemoTypes];
+  const extra = selected && !known.includes(selected) ? [selected] : [];
+  return '<option value="">Select demo type…</option>' +
+    [...known, ...extra].map(t => `<option value="${esc(t)}"${t === selected ? ' selected' : ''}>${esc(t)}</option>`).join('') +
+    '<option value="__other__">Other…</option>';
+}
+// Shared onchange handler for #b-demo-type and #reassign-demo-type.
+function onDemoTypeSelectChange(selectEl) {
+  if (selectEl.value !== '__other__') return;
+  const val = (prompt('Enter the demo type:') || '').trim();
+  if (!val) { selectEl.value = ''; return; }
+  addCustomDemoTypeIfNew(val);
+  selectEl.innerHTML = demoTypeOptionsHtml(val);
+}
 
 // ── DIRTY FLAGS — only re-render a tab if data has changed since last render ──
 const _dirty = { database: true, loans: true, history: true, retired: true, calendar: true };
@@ -2368,8 +2411,15 @@ async function loadData() {
       loadAuditLog(),
       loadLoanDocNotes(),
       loadTestReportsIndex(),
-      loadKitGroups()
+      loadKitGroups(),
+      loadCustomDemoTypes()
     ]);
+    // Now that customDemoTypes is loaded, populate the New Loan form's
+    // Demo type select with the full current list — it's always present
+    // in the DOM (not opened fresh each time), so nothing else does this
+    // on a plain page load otherwise.
+    const _btEl = document.getElementById('b-demo-type');
+    if (_btEl) _btEl.innerHTML = demoTypeOptionsHtml(_btEl.value);
     // hideLoading() ran earlier in this sequence, so the Loans tab could
     // already have been opened (and rendered) before this data arrived —
     // if so, _dirty.loans is already consumed and nothing else will trigger
@@ -3041,7 +3091,7 @@ function clearScan() {
   window._batchStatus = {};
   ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
   const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
-  const dtEl2 = document.getElementById('b-demo-type'); if(dtEl2) dtEl2.value = '';
+  const dtEl2 = document.getElementById('b-demo-type'); if(dtEl2) dtEl2.innerHTML = demoTypeOptionsHtml('');
   const isEl2 = document.getElementById('b-island'); if(isEl2) isEl2.value = '';
   const bsEl = document.getElementById('b-start-date'); if(bsEl) bsEl.value = nzDate();
   const fb = document.getElementById('batch-feedback'); if(fb) { fb.style.display='none'; fb.innerHTML=''; }
@@ -4710,7 +4760,7 @@ async function submitBatchLoan() {
     ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
     const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
-    const dtEl = document.getElementById('b-demo-type'); if(dtEl) dtEl.value = '';
+    const dtEl = document.getElementById('b-demo-type'); if(dtEl) dtEl.innerHTML = demoTypeOptionsHtml('');
     const isEl = document.getElementById('b-island'); if(isEl) isEl.value = '';
     document.getElementById('b-start-date').value = nzDate();
     document.getElementById('batch-feedback').style.display = 'none';
@@ -6723,7 +6773,7 @@ async function openReassignUpcomingAM(upcomingId) {
   document.getElementById('reassign-contact').value  = '';
   document.getElementById('reassign-notes').value    = '';
   document.getElementById('reassign-shipping').value = '';
-  document.getElementById('reassign-demo-type').value = '';
+  document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml('');
   try {
     const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
     if (r.ok) {
@@ -6732,7 +6782,7 @@ async function openReassignUpcomingAM(upcomingId) {
         document.getElementById('reassign-contact').value  = d.contactNumber || '';
         document.getElementById('reassign-notes').value    = d.notesCell || d.notes || '';
         document.getElementById('reassign-shipping').value = d.authCell || '';
-        document.getElementById('reassign-demo-type').value = d.demoType || '';
+        document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml(d.demoType || '');
       }
     }
   } catch(e) {}
@@ -9507,10 +9557,10 @@ async function openReassignAMByKey(key, mode) {
     document.getElementById('reassign-contact').value  = '';
     document.getElementById('reassign-notes').value    = '';
     document.getElementById('reassign-shipping').value = '';
-    document.getElementById('reassign-demo-type').value = '';
+    document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml('');
     try {
       const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
-      if (r.ok) { const d = await r.json(); if (d) { document.getElementById('reassign-contact').value = d.contactNumber || ''; document.getElementById('reassign-notes').value = d.notesCell || d.notes || ''; document.getElementById('reassign-shipping').value = d.authCell || ''; document.getElementById('reassign-demo-type').value = d.demoType || ''; } }
+      if (r.ok) { const d = await r.json(); if (d) { document.getElementById('reassign-contact').value = d.contactNumber || ''; document.getElementById('reassign-notes').value = d.notesCell || d.notes || ''; document.getElementById('reassign-shipping').value = d.authCell || ''; document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml(d.demoType || ''); } }
     } catch(e) {}
     document.getElementById('reassign-am-modal').classList.add('open');
     return;
@@ -12266,13 +12316,17 @@ function mpOpenIslandSheet() {
     opts.map(([v, label]) => `<button class="mp-sheet-item" onclick="mpBookSetIsland('${v}')">${_mp.book.island===v?'✓ ':''}${label}</button>`).join(''));
 }
 function mpBookSetIsland(v) { _mp.book.island = v; mpCloseSheet(); mpRenderBookStep1(); }
-const MP_DEMO_TYPE_FIXED = ['Conference/Presentation', 'Clinical Trial', 'Hotswap'];
+const MP_DEMO_TYPE_FIXED = DEMO_TYPE_FIXED;
 function mpOpenDemoTypeSheet() {
-  // A current value that isn't one of the fixed options is a previously
-  // entered custom ("Other") type — show it ticked instead of losing track
-  // of it, and let them tap it again to edit rather than re-typing from scratch.
-  const isCustom = _mp.book.demoType && !MP_DEMO_TYPE_FIXED.includes(_mp.book.demoType);
-  const opts = [...MP_DEMO_TYPE_FIXED, 'Other'];
+  // A current value that isn't one of the fixed or persisted-custom
+  // options is one not seen/saved before — show it ticked under "Other"
+  // instead of losing track of it, and let them tap it again to edit
+  // rather than re-typing from scratch. Anything already in
+  // customDemoTypes (typed in before, by anyone) shows as its own real
+  // option here, not buried under "Other" every time.
+  const known = [...MP_DEMO_TYPE_FIXED, ...customDemoTypes];
+  const isCustom = _mp.book.demoType && !known.includes(_mp.book.demoType);
+  const opts = [...known, 'Other'];
   mpOpenSheet('<div class="mp-sheet-title">Demo type</div>',
     opts.map((o, i) => {
       const checked = o === 'Other' ? isCustom : _mp.book.demoType === o;
@@ -12289,7 +12343,7 @@ function mpBookSetDemoType(i) {
   mpRenderBookStep1();
 }
 function mpOpenDemoTypeOtherSheet() {
-  const isCustom = _mp.book.demoType && !MP_DEMO_TYPE_FIXED.includes(_mp.book.demoType);
+  const isCustom = _mp.book.demoType && ![...MP_DEMO_TYPE_FIXED, ...customDemoTypes].includes(_mp.book.demoType);
   mpOpenSheet('<div class="mp-sheet-title">Please specify</div>',
     `<input class="mp-input" id="mp-demo-type-other" placeholder="Demo type" autocomplete="off" value="${mpFormVal(isCustom ? _mp.book.demoType : '')}" onkeydown="if(event.key==='Enter')mpBookSetDemoTypeOther()">
      <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpBookSetDemoTypeOther()">Save</button>`);
@@ -12299,6 +12353,7 @@ function mpBookSetDemoTypeOther() {
   const val = (document.getElementById('mp-demo-type-other').value || '').trim();
   if (!val) { showToast('error', 'Please enter a demo type.'); return; }
   _mp.book.demoType = val;
+  addCustomDemoTypeIfNew(val); // so it shows up as a real option for everyone next time
   mpCloseSheet();
   mpRenderBookStep1();
 }
@@ -13055,8 +13110,9 @@ function mpReassignSetAM(name) {
 }
 const MP_REASSIGN_DEMO_TYPE_FIXED = MP_DEMO_TYPE_FIXED;
 function mpOpenReassignDemoTypeSheet() {
-  const isCustom = _mp.reassign.demoType && !MP_REASSIGN_DEMO_TYPE_FIXED.includes(_mp.reassign.demoType);
-  const opts = [...MP_REASSIGN_DEMO_TYPE_FIXED, 'Other'];
+  const known = [...MP_REASSIGN_DEMO_TYPE_FIXED, ...customDemoTypes];
+  const isCustom = _mp.reassign.demoType && !known.includes(_mp.reassign.demoType);
+  const opts = [...known, 'Other'];
   mpOpenSheet('<div class="mp-sheet-title">Demo type</div>',
     opts.map((o, i) => {
       const checked = o === 'Other' ? isCustom : _mp.reassign.demoType === o;
@@ -13073,7 +13129,7 @@ function mpReassignSetDemoType(i) {
   mpRenderReassignForm();
 }
 function mpOpenReassignDemoTypeOtherSheet() {
-  const isCustom = _mp.reassign.demoType && !MP_REASSIGN_DEMO_TYPE_FIXED.includes(_mp.reassign.demoType);
+  const isCustom = _mp.reassign.demoType && ![...MP_REASSIGN_DEMO_TYPE_FIXED, ...customDemoTypes].includes(_mp.reassign.demoType);
   mpOpenSheet('<div class="mp-sheet-title">Please specify</div>',
     `<input class="mp-input" id="mp-reassign-demo-type-other" placeholder="Demo type" autocomplete="off" value="${mpFormVal(isCustom ? _mp.reassign.demoType : '')}" onkeydown="if(event.key==='Enter')mpReassignSetDemoTypeOther()">
      <button class="mp-btn mp-btn-primary" style="margin-top:14px" onclick="mpReassignSetDemoTypeOther()">Save</button>`);
@@ -13083,6 +13139,7 @@ function mpReassignSetDemoTypeOther() {
   const val = (document.getElementById('mp-reassign-demo-type-other').value || '').trim();
   if (!val) { showToast('error', 'Please enter a demo type.'); return; }
   _mp.reassign.demoType = val;
+  addCustomDemoTypeIfNew(val); // so it shows up as a real option for everyone next time
   mpCloseSheet();
   mpRenderReassignForm();
 }
