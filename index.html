@@ -1919,7 +1919,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 152;
+const APP_VERSION = 153;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5116,6 +5116,9 @@ function renderLoans() {
           </button>
           ${_reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo)}
           <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}','edit')" title="Edit this loan's details" style="font-size:11px">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
+          </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}','transfer')" title="Transfer equipment to another loan" style="font-size:11px">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Transfer
           </button>
@@ -9466,14 +9469,19 @@ async function openReassignAMByKey(key, mode) {
   _reassignUpcomingId = null;
   const batchId = g.items[0]?.BatchID || null;
   _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
-  // An Active loan only ever transfers (no edit-all-fields UI for it); a
-  // Scheduled loan can do either, per the explicit mode the caller passes.
-  const wantsTransfer = mode === 'transfer' || !g.scheduled;
+  // Both Active and Scheduled loans can now do either, per the explicit
+  // mode the caller passes — Active gaining Edit was a deliberate follow-up
+  // once a real case showed up needing to correct a field (Demo type) on
+  // an already-dispatched loan, with no way to do that at all before this.
+  // Falls back to the old scheduled-only inference only if some future
+  // caller omits mode entirely.
+  const wantsTransfer = mode ? mode === 'transfer' : !g.scheduled;
   _reassignMode = wantsTransfer ? 'transfer' : 'edit';
 
   document.getElementById('reassign-am-subtitle').textContent = g.items.length + ' device' + (g.items.length !== 1 ? 's' : '');
 
-  // ── Edit fields (Scheduled loan only — same as upcoming loan edit) ──
+  // ── Edit fields (same form regardless of Scheduled vs Active — an
+  // Active loan just already has equipment physically out) ──
   if (!wantsTransfer) {
     document.getElementById('reassign-am-title').textContent = 'Edit Loan — ' + g.loanTo;
     document.getElementById('reassign-items-section').style.display = 'none';
@@ -12955,14 +12963,17 @@ async function mpConfirmExtend() {
 // ── REASSIGN / TRANSFER ───────────────────────────────────────────────────
 // Two very different desktop modes hide behind the one openReassignAMByKey():
 // 'edit' opens a plain "Edit Loan" form (changing the loan's own fields),
-// 'transfer' opens a per-item "move to a different loan" view. Only a
-// Scheduled loan can do either, per the mode its caller passes — an Active
-// loan always transfers. confirmReassignAM() reads every field straight off
-// the (hidden here) #reassign-* DOM nodes rather than JS state, so
-// mpConfirmReassign() writes this screen's edited values into those real
-// nodes right before calling it — same technique as Extend's #extend-date,
-// just with a longer field list. Neither desktop mode opens any interactive
-// sub-modal of its own, so it's safe to wrap in the blocking loader.
+// 'transfer' opens a per-item "move to a different loan" view. Both
+// Scheduled and Active loans can do either, per the mode the caller
+// passes — Active gaining Edit was a deliberate follow-up once a real
+// case needed to correct a field (Demo type) on an already-dispatched
+// loan, with no way to do that at all before this. confirmReassignAM()
+// reads every field straight off the (hidden here) #reassign-* DOM nodes
+// rather than JS state, so mpConfirmReassign() writes this screen's
+// edited values into those real nodes right before calling it — same
+// technique as Extend's #extend-date, just with a longer field list.
+// Neither desktop mode opens any interactive sub-modal of its own, so
+// it's safe to wrap in the blocking loader.
 function mpOpenReassignFlow(key, mode) {
   renderLoans(); // rebuild _loanGroupMap fresh — same requirement as the other loan-action flows
   const g = getLoanGroupByKey(key);
@@ -12971,7 +12982,9 @@ function mpOpenReassignFlow(key, mode) {
   _reassignUpcomingId = null;
   const batchId = g.items[0]?.BatchID || null;
   _reassignPdfKey = batchId || ('loandoc_' + encodeURIComponent(g.loanTo + '|||' + g.endDate));
-  const wantsTransfer = mode === 'transfer' || !g.scheduled;
+  // Falls back to the old scheduled-only inference only if some future
+  // caller omits mode entirely.
+  const wantsTransfer = mode ? mode === 'transfer' : !g.scheduled;
   _reassignMode = wantsTransfer ? 'transfer' : 'edit';
   if (wantsTransfer) {
     _mp.reassign = { key, scheduled: !!g.scheduled, mode: 'transfer', g, selected: new Set(g.items.map(i => i.CHSAssetNo)), target: '' };
@@ -12980,7 +12993,7 @@ function mpOpenReassignFlow(key, mode) {
     const curAMName = getGroupAM(g);
     const curAM = accountManagers.find(a => a.name === curAMName);
     _mp.reassign = {
-      key, scheduled: true, mode: 'edit', g,
+      key, scheduled: !!g.scheduled, mode: 'edit', g,
       loanTo: g.loanTo || '', location: g.location || '',
       startDate: g.startDate || '', endDate: g.endDate || '',
       am: curAMName || '', email: curAM?.email || g.items[0]?.BorrowerEmail || '',
@@ -13773,13 +13786,15 @@ function mpOpenLoanActionsForGroup(g) {
               ['Mark as tested', () => toggleReadiness(rKey, 'tested')],
               ['No test required', () => toggleReadiness(rKey, 'noTestRequired')]
             ];
-    // A Scheduled loan can do either — edit its own fields, or transfer one
-    // or more of its items to a different loan — so it gets both as separate
-    // actions. An Active loan only ever transfers (its fields are locked in
-    // once dispatched), so it keeps just the one.
-    const reassignActions = g.scheduled
-      ? [ ['Edit loan', () => mpOpenReassignFlow(key, 'edit')], ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')] ]
-      : [ ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')] ];
+    // Either edit the loan's own fields, or transfer one or more of its
+    // items to a different loan — offered as two separate actions
+    // regardless of Scheduled vs Active. Active gaining Edit was a
+    // deliberate follow-up: a real loan needed its Demo type corrected
+    // after dispatch, with no way to do that at all before this.
+    const reassignActions = [
+      ['Edit loan', () => mpOpenReassignFlow(key, 'edit')],
+      ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')]
+    ];
     items = _mp.role === 'am'
       ? [ ...reassignActions, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)] ]
       : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ...reassignActions, ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
