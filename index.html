@@ -1919,7 +1919,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 150;
+const APP_VERSION = 151;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2219,7 +2219,11 @@ async function loadConfig() {
     if (!APP_PASSWORD || !ADMIN_PASSWORD) throw new Error('Missing passwords in config');
   } catch(e) {
     console.error('Could not load config:', e);
-    // Fallback — show error on login screen
+    // Fallback — show error on login screen (desktop only — #login-sub
+    // doesn't exist in the mobile DOM, so this was previously silent there;
+    // every mobile caller now separately checks for APP_PASSWORD/
+    // ADMIN_PASSWORD still being unset after awaiting this and shows its
+    // own accurate message instead of a misleading "Incorrect password").
     const sub = document.getElementById('login-sub');
     if (sub) sub.textContent = 'Configuration error — please contact your administrator.';
   }
@@ -11216,6 +11220,19 @@ async function mpSignInStep() {
   if (nameField.style.display === 'none') {
     // Step 1: team password — same gate as the desktop app (APP_PASSWORD)
     if (!APP_PASSWORD) await loadConfig();
+    // loadConfig() failing (e.g. a dropped connection) leaves APP_PASSWORD
+    // null — its own error handling only updates #login-sub, a desktop-only
+    // element that doesn't exist here, so on mobile that failure was
+    // completely silent. The password check below can't tell "never loaded"
+    // apart from "wrong password" on its own (pwField.value is always a
+    // real string, never null), so it showed "Incorrect password" even for
+    // a correctly-typed one — reported live as "can't log in any more."
+    // Check for the load failure explicitly first, with an accurate message.
+    if (!APP_PASSWORD) {
+      err.textContent = 'Could not connect — check your connection and try again.';
+      err.style.display = 'block';
+      return;
+    }
     if (pwField.value !== APP_PASSWORD) { err.textContent = 'Incorrect password.'; err.style.display = 'block'; return; }
     btn.disabled = true; btn.textContent = 'Loading…';
     await loadData();
@@ -12495,6 +12512,10 @@ function mpRequestStocktakeMode() {
 }
 async function mpUnlockStocktake() {
   if (!ADMIN_PASSWORD) await loadConfig();
+  // loadConfig() failing (dropped connection) leaves ADMIN_PASSWORD unset —
+  // without this check, a correct password would still show "Incorrect
+  // password" below with no way to tell the two apart (see mpSignInStep()).
+  if (!ADMIN_PASSWORD) { showToast('error', 'Could not connect — check your connection and try again.'); return; }
   const val = document.getElementById('mp-stocktake-pw').value;
   if (val !== ADMIN_PASSWORD) { document.getElementById('mp-stocktake-pw-err').style.display = 'block'; return; }
   _mp.stocktakeUnlocked = true;
@@ -13599,6 +13620,10 @@ function mpOpenTeamRolesSheet() {
 
 async function mpUnlockTeamRoles() {
   if (!ADMIN_PASSWORD) await loadConfig();
+  // See mpSignInStep()/mpUnlockStocktake() — loadConfig() failing leaves
+  // ADMIN_PASSWORD unset, which a plain mismatch check can't tell apart
+  // from a genuinely wrong password.
+  if (!ADMIN_PASSWORD) { showToast('error', 'Could not connect — check your connection and try again.'); return; }
   const val = document.getElementById('mp-admin-pw').value;
   if (val !== ADMIN_PASSWORD) { document.getElementById('mp-admin-pw-err').style.display = 'block'; return; }
   mpRenderTeamRolesSheet();
