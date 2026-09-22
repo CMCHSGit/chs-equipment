@@ -1,8 +1,10 @@
 # To do
 
-Last updated: 2026-09-21
+Last updated: 2026-09-23
 
 ## Infrastructure (shared)
+
+- [x] **New 2026-09-23 (Jonathan): removed repeating overdue reminder emails, added a due-back calendar invite instead** — `sendReturnReminders()` (`.gas-proxy/Code.js`) no longer sends/pushes an "Overdue" nag every 7 days once a loan passes its due date (`sendOverdueReminder_()` deleted); the due-soon reminder ahead of the due date is unchanged. In its place, every new loan now gets an Outlook/Gmail/Apple Calendar `.ics` invite for its due-back date the moment it's created (`index.html`'s `sendReturnCalendarInvite()`, called from `submitBatchLoan()`'s `doLoan()`, hits a new `action:'returnInvite'` branch on the same Simpro proxy endpoint — `sendReturnCalendarInvite_()`). The invite's built-in reminder is island-aware, same rationale as the existing shipping-notice window: **North Island** gets a 3-day-ahead reminder, **South Island** a full week (7 days), to cover the extra inter-island return freight time. Needs testing: confirm a new loan's AM actually receives the `.ics` invite and it opens correctly in Outlook, with the reminder firing at the right offset for each island.
 
 - [x] **Fixed 2026-09-17: DNS/HTTPS fix for demo.chsnz.co.nz landed** — IT enforced HTTPS; confirmed via `curl -I http://demo.chsnz.co.nz/` returning a real `301` to `https://` (previously a `200` with no redirect at all) and `https://demo.chsnz.co.nz/` serving normally. Unblocks everything below that was held on it.
   - [x] **Done 2026-09-17**: `index.html`'s `APP_URL` changed from `http://demo.chsnz.co.nz` to `https://` — every loan confirmation/extend/manage link sent by email now points at the secure URL.

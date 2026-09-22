@@ -124,11 +124,13 @@ The form is editable directly in the browser before printing or saving. Changes 
 
 ## Notifications & Emails
 
-The system sends automatic emails via EmailJS for:
-- **Loan confirmation** — sent to the account manager when a loan is created
-- **Overdue reminders** — sent when a loan passes its due date (checked every minute)
-- **Upcoming loan start** — sent 2 days before a scheduled loan begins
-- **Due soon reminders** — sent when a loan is due within 2 days
+- **Loan confirmation** — sent to the account manager via EmailJS when a loan is created (or when the loan form is reviewed/sent from the Loans tab)
+- **Return calendar invite** — the moment a new loan is created, the account manager gets an .ics calendar invite (opens in Outlook, Gmail, or Apple Calendar) for the loan's due-back date, with a built-in reminder: **North Island** gets a few days' notice, **South Island** a full week, to allow for the extra inter-island return shipping time
+- **Demo reminder** — an .ics calendar invite emailed ahead of a Demo-type loan's start date, island-aware (North: 3 business days' notice; South: 5)
+- **Due soon reminders** — emailed and pushed to the account manager once a loan's due-back date enters the same island-aware notice window as the demo reminder above
+- **Stuck-loan reminders** — emailed to the account manager if an upcoming booking's start date arrives but its equipment is still checked out on another loan
+
+Loans no longer get repeated automatic "overdue" emails once a loan passes its due date — the return calendar invite above (sent at loan creation) is the standing reminder instead.
 
 ---
 

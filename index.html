@@ -1916,7 +1916,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 154;
+const APP_VERSION = 155;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4747,6 +4747,19 @@ async function submitBatchLoan() {
     // Only auto-send on close when this is a brand new loan just confirmed
     window._autoSendOnClose = !!amEmailForConfirm;
     window._autoCreateSimproOnClose = true;
+
+    // Fire the due-back calendar invite immediately — unlike the confirmation
+    // email above (deferred until the loan-doc modal closes), this doesn't
+    // depend on anyone opening/sending the PDF, so every new loan reliably
+    // gets one. Needs an AM email to invite; skip silently if none is on file
+    // (mirrors sendReturnDueSoonReminder_() on the server, which does the same).
+    if (amEmailForConfirm) {
+      sendReturnCalendarInvite({
+        pdfKey: batchId, loanTo, location, endDate, island: batchIsland,
+        accountManager: batchAM, amEmail: amEmailForConfirm,
+        items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo }))
+      });
+    }
     const _rem = document.getElementById('loan-doc-confirm-reminder');
     if (_rem) _rem.style.display = 'flex';
 
@@ -5591,15 +5604,29 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
   }
 }
 
-// Overdue reminders (and the "due back soon" heads-up before that) are now
-// entirely server-side — see .gas-proxy/Code.js's sendReturnReminders(),
-// which runs on a real daily trigger regardless of whether anyone has this
-// app open, and pushes to the AM's phone as well as emailing them. This
-// used to be a client-side check (loadSentNotifications()/
-// checkOverdueNotifications()/sendOverdueEmail(), gated on someone having a
-// tab open at 9am on a Monday NZ time) — removed 2026-09-11 along with its
-// /notifications.json store, now replaced by /returnDueSoonReminders/ and
-// /overdueReminders/ on the Firebase side.
+// The "due back soon" heads-up is entirely server-side — see
+// .gas-proxy/Code.js's sendReturnReminders(), which runs on a real daily
+// trigger regardless of whether anyone has this app open, and pushes to the
+// AM's phone as well as emailing them. This used to be a client-side check
+// (loadSentNotifications()/checkOverdueNotifications()/sendOverdueEmail(),
+// gated on someone having a tab open at 9am on a Monday NZ time) — removed
+// 2026-09-11 along with its /notifications.json store, replaced by
+// /returnDueSoonReminders/ on the Firebase side.
+//
+// Repeating overdue emails (sendReturnReminders() used to also nag every 7
+// days once a loan passed its due date) were removed 2026-09-23 — see
+// sendReturnCalendarInvite() below, which puts a due-back reminder on the
+// AM's own calendar instead.
+async function sendReturnCalendarInvite(payload) {
+  if (!SIMPRO_PROXY_URL) return;
+  if (TEST_MODE) { console.log('TEST MODE: return calendar invite simulated for', payload.amEmail); return; }
+  try {
+    await fetch(SIMPRO_PROXY_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
+      body: JSON.stringify({ action: 'returnInvite', ...payload })
+    });
+  } catch(e) { console.warn('Return calendar invite failed:', e); }
+}
 
 // Handle return/extend links from email
 function handleReturnLink() {
@@ -5750,17 +5777,14 @@ async function confirmExtendLoan() {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx >= 0) equipment[idx].LoanEndDate = newDate;
   });
-  // Clear any reminder already sent against the OLD end date — see
-  // .gas-proxy/Code.js's sendReturnReminders(), which keys its due-soon/
-  // overdue dedup the same way (loanTo|||endDate). A new end date gets a
-  // fresh key of its own regardless, but this avoids leaving a stale,
-  // orphaned entry behind under the old one.
+  // Clear any due-soon reminder already sent against the OLD end date — see
+  // .gas-proxy/Code.js's sendReturnReminders(), which keys its dedup the
+  // same way (loanTo|||endDate). A new end date gets a fresh key of its own
+  // regardless, but this avoids leaving a stale, orphaned entry behind under
+  // the old one.
   try {
-    await Promise.all([
-      fetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' }),
-      fetch(FB_URL + '/overdueReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' })
-    ]);
-  } catch(e) { console.warn('Could not clear old return-reminder dedup entries', e); }
+    await fetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' });
+  } catch(e) { console.warn('Could not clear old return-reminder dedup entry', e); }
   setSync('saving', 'Saving...');
   try {
     await saveBin({ equipment, history: historyLog });
@@ -11246,7 +11270,6 @@ const TEST_PUSH_SCENARIOS = {
   custom:  { label: 'Custom message',      title: '',                                body: '' },
   demo:    { label: 'Demo reminder',       title: 'Upcoming demo: Test Customer',    body: 'Starts 01/01/2026 (North Island) — 2 items' },
   dueSoon: { label: 'Return due soon',     title: 'Due back soon: Test Customer',    body: '2 items due 01/01/2026 (South Island)' },
-  overdue: { label: 'Overdue',             title: 'Overdue: Test Customer',          body: '2 items overdue since 01/01/2026' },
   stuck:   { label: 'Stuck-loan reassign', title: 'Action needed: Test Customer',    body: '1 item is still on another loan — tap to reassign.' }
 };
 
