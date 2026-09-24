@@ -1916,7 +1916,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 155;
+const APP_VERSION = 156;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -9920,6 +9920,24 @@ async function confirmReassignAM() {
     equipment[idx].LoanEndDate   = targetLoanData.endDate;
     equipment[idx].BatchID       = targetBatchId;
   });
+
+  // If the target was an upcoming (unconfirmed) booking, the moved items are
+  // now real equipment records sharing its BatchID — remove them from the
+  // upcoming loan's own items list (or delete the whole entry once it's
+  // empty), same cleanup the normal activateUpcomingLoans() path already
+  // does. Without this, upcomingLoans still has an entry with id === this
+  // BatchID, so renderLoans()'s _pendingItems merge matches it again and
+  // shows the item a second time under "Awaiting return before pickup"
+  // right after the transfer, even though a render just ran.
+  if (isUpcoming) {
+    const uTarget = upcomingLoans.find(x => x.id === targetKey);
+    if (uTarget) {
+      const movedNos = new Set(movedItems.map(i => (i.CHSAssetNo || '').trim().toLowerCase()));
+      uTarget.items = (uTarget.items || []).filter(i => !movedNos.has((i.CHSAssetNo || '').trim().toLowerCase()));
+      if (uTarget.items.length === 0) await deleteUpcomingLoan(uTarget.id);
+      else await saveUpcomingLoans();
+    }
+  }
 
   if (_reassignPdfKey && origDoc?.savedRows) {
     const movedNos     = new Set(movedItems.map(i => (i.CHSAssetNo || '').trim().toLowerCase()));
