@@ -109,13 +109,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
 .app-logo{font-size:16px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
 .app-logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%}
-.header-right{display:flex;gap:8px;align-items:center}
-.sync-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);font-size:12px;color:var(--text2)}
+.header-right{display:flex;gap:8px;align-items:center;min-width:0}
+/* Everything in the header stays full-size and un-clipped except the nav
+   tabs — that's the one element allowed to shrink, becoming a horizontally
+   scrollable strip on a narrower window instead of any element's text
+   wrapping onto a second line (which is what made the header look
+   "scrunched" on a smaller laptop screen — .nav-tab/.sync-pill had no
+   white-space:nowrap, so their own labels wrapped mid-phrase). */
+.header-right>*{flex-shrink:0}
+.sync-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;border:1px solid var(--border2);background:var(--surface2);font-size:12px;color:var(--text2);white-space:nowrap}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0}
 .sync-dot.ok{background:var(--green)}.sync-dot.saving{background:var(--amber);animation:pulse .8s infinite}.sync-dot.err{background:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.nav-tabs{display:flex;gap:2px;background:var(--bg);border-radius:var(--radius);padding:3px}
-.nav-tab{padding:5px 14px;border-radius:6px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s}
+.nav-tabs{display:flex;gap:2px;background:var(--bg);border-radius:var(--radius);padding:3px;flex-shrink:1;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.nav-tabs::-webkit-scrollbar{height:4px}
+.nav-tabs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.nav-tab{padding:5px 14px;border-radius:6px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
 .nav-tab:hover:not(.active){color:var(--text)}
 
@@ -1951,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 161;
+const APP_VERSION = 162;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
