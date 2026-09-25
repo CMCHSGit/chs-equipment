@@ -1951,7 +1951,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 159;
+const APP_VERSION = 160;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3074,6 +3074,12 @@ async function submitReturn(opts) {
       await _pruneLoanDocItems(batchId, [assetNo]);
     }
   }
+  // If this was the item some overdue ("stuck") upcoming booking was
+  // waiting on, it's now unblocked — try activating any due booking right
+  // now instead of leaving it sitting there until the next page load
+  // (activateUpcomingLoans() otherwise only runs once, 500ms after
+  // loadData()). Cheap no-op when nothing is actually due/blocked.
+  await activateUpcomingLoans();
   if (!(opts && opts.silent)) showToast('success', `${assetNo} returned`);
 }
 
@@ -3107,6 +3113,9 @@ async function submitCount(opts) {
   addSession({ assetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Counted' });
   scheduleSave(); updateStats(); renderTable(); clearScan();
   if (scanMode === 'count') renderCountOverview();
+  // See submitReturn() — this also frees the item up for any stuck upcoming
+  // booking that was waiting on it.
+  await activateUpcomingLoans();
   if (!(opts && opts.silent)) showToast('success', `${assetNo} counted and marked as returned`);
 }
 
@@ -5351,6 +5360,10 @@ async function confirmBatchReturn() {
         await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
       }
     }
+    // See submitReturn() — these items may be exactly what an overdue
+    // ("stuck") upcoming booking was waiting on; try activating any due
+    // booking right now instead of leaving it stuck until the next page load.
+    await activateUpcomingLoans();
     renderTable(); updateStats();
     closeBatchReturn();
     renderLoans();
