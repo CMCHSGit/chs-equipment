@@ -904,8 +904,8 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
               <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
-              <div class="form-group"><label>Job Type</label><select id="b-job-type"><option value="Demo">Demo</option><option value="PMV">PMV</option><option value="Repair">Repair</option></select></div>
-              <div class="form-group" style="grid-column:1/-1"><label>Demo Type <span style="color:var(--red)">*</span></label><select id="b-demo-type" required onchange="onDemoTypeSelectChange(this)"><option value="">Select demo type…</option></select></div>
+              <div class="form-group"><label>Job Type</label><select id="b-job-type" onchange="onJobTypeChange(this)"><option value="Demo">Demo</option><option value="PMV - On site">PMV - On site</option><option value="PMV - Back to base">PMV - Back to base</option><option value="Repair">Repair</option><option value="Install/EquipChk">Install/EquipChk</option><option value="AED">AED</option></select></div>
+              <div class="form-group" style="grid-column:1/-1" id="b-demo-type-group"><label>Demo Type <span style="color:var(--red)">*</span></label><select id="b-demo-type" required onchange="onDemoTypeSelectChange(this)"><option value="">Select demo type…</option></select></div>
               <div class="form-group" style="grid-column:1/-1"><label>Notes</label><textarea id="b-notes" rows="2" style="resize:vertical"></textarea></div>
               <div class="form-group" style="grid-column:1/-1"><label>Shipping Details</label><textarea id="b-shipping-details" rows="2" style="resize:vertical"></textarea></div>
             </div>
@@ -1951,7 +1951,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 157;
+const APP_VERSION = 158;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2403,6 +2403,16 @@ function onDemoTypeSelectChange(selectEl) {
   if (!val) { selectEl.value = ''; return; }
   addCustomDemoTypeIfNew(val);
   selectEl.innerHTML = demoTypeOptionsHtml(val);
+}
+
+// Demo Type only means anything for a Demo job — for any other Job Type
+// (PMV, Repair, etc.) it isn't asked at all, since it doesn't apply.
+function onJobTypeChange(selectEl) {
+  const isDemo = selectEl.value === 'Demo';
+  const grp = document.getElementById('b-demo-type-group');
+  if (grp) grp.style.display = isDemo ? '' : 'none';
+  const dtEl = document.getElementById('b-demo-type');
+  if (dtEl) dtEl.required = isDemo;
 }
 
 // ── DIRTY FLAGS — only re-render a tab if data has changed since last render ──
@@ -4590,6 +4600,7 @@ async function submitBatchLoan() {
   const endDate   = document.getElementById('b-end-date').value;
   const batchEmailCheck = document.getElementById('b-email').value.trim();
   const batchAMCheck    = document.getElementById('b-account-manager')?.value || '';
+  const batchJobTypeCheck = document.getElementById('b-job-type')?.value || 'Demo';
   const batchDemoTypeCheck = document.getElementById('b-demo-type')?.value || '';
   const batchIslandCheck = document.getElementById('b-island')?.value || '';
 
@@ -4606,7 +4617,7 @@ async function submitBatchLoan() {
   if (endDate < startDate) { showErr('Loan End Date must be on or after the Start Date.'); return; }
   if (!batchAMCheck) { showErr('Please select an Account Manager.'); return; }
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
-  if (!batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
+  if (batchJobTypeCheck === 'Demo' && !batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
   if (!batchIslandCheck) { showErr('Please select the shipping Island (North or South) — this determines how much notice we get for shipping.'); return; }
 
   // Warn (don't block) when a loan for the exact same customer/location/end
@@ -4807,7 +4818,7 @@ async function submitBatchLoan() {
     window._batchStatus = {};
     ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
-    const jtEl = document.getElementById('b-job-type'); if(jtEl) jtEl.value = 'Demo';
+    const jtEl = document.getElementById('b-job-type'); if(jtEl) { jtEl.value = 'Demo'; onJobTypeChange(jtEl); }
     const dtEl = document.getElementById('b-demo-type'); if(dtEl) dtEl.innerHTML = demoTypeOptionsHtml('');
     const isEl = document.getElementById('b-island'); if(isEl) isEl.value = '';
     document.getElementById('b-start-date').value = nzDate();
@@ -12394,7 +12405,7 @@ function mpRenderBookStep1() {
       <div><label style="${mpFieldLabel()}">Account manager email *</label><input class="mp-input" type="email" value="${mpFormVal(b.email)}" oninput="_mp.book.email=this.value"></div>
       <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${mpFormVal(b.contact)}" oninput="_mp.book.contact=this.value"></div>
       <div onclick="mpOpenJobTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Job type</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between">${esc(b.jobType)}<span style="color:var(--mp-black-40)">›</span></div></div>
-      <div onclick="mpOpenDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(b.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>
+      ${b.jobType === 'Demo' ? `<div onclick="mpOpenDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(b.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>` : ''}
       <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.notes=this.value">${mpFormVal(b.notes)}</textarea></div>
       <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.shipping=this.value">${mpFormVal(b.shipping)}</textarea></div>
     </div>
@@ -12416,7 +12427,7 @@ function mpBookSetAM(name) {
   mpRenderBookStep1();
 }
 function mpOpenJobTypeSheet() {
-  const opts = ['Demo', 'PMV', 'Repair'];
+  const opts = ['Demo', 'PMV - On site', 'PMV - Back to base', 'Repair', 'Install/EquipChk', 'AED'];
   mpOpenSheet('<div class="mp-sheet-title">Job type</div>',
     opts.map(o => `<button class="mp-sheet-item" onclick="mpBookSetJobType('${o}')">${_mp.book.jobType===o?'✓ ':''}${o}</button>`).join(''));
 }
@@ -12474,7 +12485,7 @@ function mpBookSetDemoTypeOther() {
 }
 function mpBookGoStep2() {
   const b = _mp.book;
-  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || !b.demoType || !b.island) {
+  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || (b.jobType === 'Demo' && !b.demoType) || !b.island) {
     showToast('error', 'Fill in all required fields first.'); return;
   }
   if (b.endDate < b.startDate) { showToast('error', 'End date must be on or after the start date.'); return; }
