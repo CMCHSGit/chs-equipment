@@ -1469,6 +1469,41 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
   </div>
 </div>
 
+<!-- EDIT RETIRED ASSET MODAL -->
+<div class="modal-overlay" id="retired-edit-modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="retired-edit-modal-title">Edit Retired Asset</div>
+      <button class="modal-close" onclick="closeRetiredEditModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Serial number, dates and other equipment details are locked once retired — only the reason and notes can be corrected here.</div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Reason</label>
+      <select id="retired-edit-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <option value="">Optional…</option>
+        <option>Sold</option>
+        <option>Retired / End of life</option>
+        <option>Lost</option>
+        <option>Damaged / Written off</option>
+        <option>Returned to manufacturer</option>
+        <option>Other</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label>Retired Notes</label>
+      <textarea id="retired-edit-retirednotes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical" placeholder="e.g. Sold to Southland Hospital, invoice #1234"></textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Notes</label>
+      <textarea id="retired-edit-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeRetiredEditModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRetiredEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- REASSIGN ACCOUNT MANAGER MODAL -->
 <div class="modal-overlay" id="reassign-am-modal">
   <div class="modal" style="max-width:420px">
@@ -1916,7 +1951,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 156;
+const APP_VERSION = 157;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5304,6 +5339,7 @@ function closeBatchReturn() {
 
 // ── DETAIL PANEL ──────────────────────────────────────────────────────
 let currentDetailItem = null;
+let _detailIsRetired = false; // whether the open detail panel is showing a retiredAssets item, not an equipment item — editFromDetail() branches on this
 
 function openDetailByAssetNo(assetNo) {
   const item = equipment.find(e => e.CHSAssetNo === assetNo);
@@ -5316,6 +5352,7 @@ function openDetail(id) {
   const item = equipment.find(e => e.id === id);
   if (!item) return;
   currentDetailItem = item;
+  _detailIsRetired = false;
   const today = nzDate();
   const on = item.OnLoanTo && item.Returned !== 'Yes';
   const od = on && item.LoanEndDate && item.LoanEndDate < today;
@@ -5424,6 +5461,7 @@ function openRetiredDetail(id) {
   if (!item) return;
   // Use the existing detail panel but show retired-specific info
   currentDetailItem = item;
+  _detailIsRetired = true;
   document.getElementById('dp-title').textContent = item.CHSAssetNo || '—';
   document.getElementById('dp-subtitle').textContent = [item.Model, item.Description].filter(Boolean).join(' · ') || '—';
 
@@ -5476,8 +5514,10 @@ function tileBtn(uuid) {
 function editFromDetail() {
   if (!currentDetailItem) return;
   const id = currentDetailItem.id;
+  const isRetired = _detailIsRetired;
   closeDetail();
-  openEditModal(id);
+  if (isRetired) openRetiredEditModal(id);
+  else openEditModal(id);
 }
 
 function detailAction(action) {
@@ -10479,6 +10519,40 @@ async function deleteRetiredItem(id, assetNo) {
   renderRetired();
   writeAudit('retired_asset_deleted', assetNo + ' permanently deleted', { items: [assetNo] });
   showToast('info', assetNo + ' permanently deleted');
+}
+
+let _retiredEditId = null;
+
+function openRetiredEditModal(id) {
+  const item = retiredAssets.find(e => e.id === id);
+  if (!item) return;
+  _retiredEditId = id;
+  document.getElementById('retired-edit-modal-title').textContent = 'Edit ' + (item.CHSAssetNo || '') + (item.Model ? ' — ' + item.Model : '');
+  document.getElementById('retired-edit-reason').value = item.RetiredReason || '';
+  document.getElementById('retired-edit-retirednotes').value = item.RetiredNotes || '';
+  document.getElementById('retired-edit-notes').value = item.Notes || '';
+  document.getElementById('retired-edit-modal').classList.add('open');
+}
+
+function closeRetiredEditModal() {
+  document.getElementById('retired-edit-modal').classList.remove('open');
+  _retiredEditId = null;
+}
+
+async function saveRetiredEdit() {
+  const id = _retiredEditId;
+  const idx = retiredAssets.findIndex(e => e.id === id);
+  if (idx < 0) { closeRetiredEditModal(); return; }
+  const reason = document.getElementById('retired-edit-reason').value;
+  const retiredNotes = document.getElementById('retired-edit-retirednotes').value.trim();
+  const notes = document.getElementById('retired-edit-notes').value.trim();
+  const assetNo = retiredAssets[idx].CHSAssetNo;
+  retiredAssets[idx] = { ...retiredAssets[idx], RetiredReason: reason, RetiredNotes: retiredNotes, Notes: notes };
+  await saveRetiredAssets();
+  closeRetiredEditModal();
+  renderRetired();
+  showToast('success', (assetNo || 'Item') + ' updated');
+  writeAudit('asset_edited', (assetNo || 'Item') + ' — retired record updated', { assetNo, reason, retiredNotes });
 }
 
 // ── FILTER DB FROM STATS ──────────────────────────────────────────────
