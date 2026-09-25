@@ -1763,8 +1763,8 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       <button class="btn btn-sm" onclick="selectAllBatchReturn(false)">Deselect all</button>
       <div style="margin-left:auto;display:flex;gap:8px">
         <button class="btn" onclick="closeBatchReturn()">Cancel</button>
-        <button class="btn btn-green" onclick="confirmBatchReturn()">
-          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Confirm Returns
+        <button class="btn btn-green" id="btn-confirm-batch-return" onclick="confirmBatchReturn()">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span id="btn-confirm-batch-return-label">Confirm Returns</span>
         </button>
       </div>
     </div>
@@ -1951,7 +1951,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 158;
+const APP_VERSION = 159;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5292,55 +5292,77 @@ function selectAllBatchReturn(val) {
   renderBatchReturnItems();
 }
 
+let _confirmingBatchReturn = false; // re-entrancy guard — see below
+
 async function confirmBatchReturn() {
+  // The Simpro job-close/loanDoc-prune work below can take a few seconds,
+  // and nothing previously stopped a second click on "Confirm Returns"
+  // (or a second mpConfirmReturnItems() call) from running this whole
+  // function again on the same still-ticked items before the first run
+  // finished — each run logs its own history entry, and the second run's
+  // logHistory() reads OnLoanTo/Location AFTER the first run already
+  // blanked them, producing a duplicate row with the customer/location
+  // blank. Guarded the same way submitBatchLoan() guards its button.
+  if (_confirmingBatchReturn) return;
   const toReturn = Object.entries(batchReturnChecked).filter(([k,v])=>v).map(([k])=>k);
   if (!toReturn.length) { showToast('error','No items selected'); return; }
-  const _auditLoanTo = currentBatchGroup?.loanTo || '';
-  const _auditAssets = toReturn.map(id => equipment.find(e => e.id === id)?.CHSAssetNo).filter(Boolean);
-  // Collect batchIds (and which asset numbers left each one) before
-  // clearing, so we can delete/prune loanDocs afterward
-  const batchIdsInvolved = new Set();
-  const returnedByBatch = {};
-  toReturn.forEach(id => {
-    const idx = equipment.findIndex(e => e.id === id);
-    if (idx < 0) return;
-    const batchId = equipment[idx].BatchID;
-    if (batchId) {
-      batchIdsInvolved.add(batchId);
-      (returnedByBatch[batchId] = returnedByBatch[batchId] || []).push(equipment[idx].CHSAssetNo);
-    }
-    const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
-    Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
-    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
-  });
-  setSync('saving', 'Saving...');
+  _confirmingBatchReturn = true;
+  const _btn = document.getElementById('btn-confirm-batch-return');
+  const _btnLabel = document.getElementById('btn-confirm-batch-return-label');
+  if (_btn) _btn.disabled = true;
+  if (_btnLabel) _btnLabel.textContent = 'Returning…';
   try {
-    await saveBin({ equipment, history: historyLog });
-    setSync('ok', 'Saved');
-  } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
-  // Delete loanDocs whose batch has no remaining active items, so the orphan
-  // detector doesn't flag them as failed saves on next load; otherwise prune
-  // just the returned item(s) out of the loanDoc that survives (see
-  // _pruneLoanDocItems()) instead of leaving them stale in the printable/
-  // emailed loan form.
-  for (const batchId of batchIdsInvolved) {
-    const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
-    if (!stillActive) {
-      await _closeSimproJobWithNote(batchId, _auditLoanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
-      try {
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
-      } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
-    } else {
-      await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
+    const _auditLoanTo = currentBatchGroup?.loanTo || '';
+    const _auditAssets = toReturn.map(id => equipment.find(e => e.id === id)?.CHSAssetNo).filter(Boolean);
+    // Collect batchIds (and which asset numbers left each one) before
+    // clearing, so we can delete/prune loanDocs afterward
+    const batchIdsInvolved = new Set();
+    const returnedByBatch = {};
+    toReturn.forEach(id => {
+      const idx = equipment.findIndex(e => e.id === id);
+      if (idx < 0) return;
+      const batchId = equipment[idx].BatchID;
+      if (batchId) {
+        batchIdsInvolved.add(batchId);
+        (returnedByBatch[batchId] = returnedByBatch[batchId] || []).push(equipment[idx].CHSAssetNo);
+      }
+      const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+      Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
+    });
+    setSync('saving', 'Saving...');
+    try {
+      await saveBin({ equipment, history: historyLog });
+      setSync('ok', 'Saved');
+    } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
+    // Delete loanDocs whose batch has no remaining active items, so the orphan
+    // detector doesn't flag them as failed saves on next load; otherwise prune
+    // just the returned item(s) out of the loanDoc that survives (see
+    // _pruneLoanDocItems()) instead of leaving them stale in the printable/
+    // emailed loan form.
+    for (const batchId of batchIdsInvolved) {
+      const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
+      if (!stillActive) {
+        await _closeSimproJobWithNote(batchId, _auditLoanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
+        try {
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
+        } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
+      } else {
+        await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
+      }
     }
+    renderTable(); updateStats();
+    closeBatchReturn();
+    renderLoans();
+    writeAudit('items_returned',
+      toReturn.length + ' item' + (toReturn.length !== 1 ? 's' : '') + ' returned' + (_auditLoanTo ? ' from ' + _auditLoanTo : ''),
+      { loanTo: _auditLoanTo, items: _auditAssets });
+    showToast('success', `${toReturn.length} item${toReturn.length>1?'s':''} returned`);
+  } finally {
+    _confirmingBatchReturn = false;
+    if (_btn) _btn.disabled = false;
+    if (_btnLabel) _btnLabel.textContent = 'Confirm Returns';
   }
-  renderTable(); updateStats();
-  closeBatchReturn();
-  renderLoans();
-  writeAudit('items_returned',
-    toReturn.length + ' item' + (toReturn.length !== 1 ? 's' : '') + ' returned' + (_auditLoanTo ? ' from ' + _auditLoanTo : ''),
-    { loanTo: _auditLoanTo, items: _auditAssets });
-  showToast('success', `${toReturn.length} item${toReturn.length>1?'s':''} returned`);
 }
 
 function closeBatchReturn() {
