@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 163;
+const APP_VERSION = 164;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12044,6 +12044,70 @@ function mpOpenSheet(titleHtml, bodyHtml) {
 }
 function mpCloseSheet() { document.getElementById('mp-sheet-scrim').classList.remove('mp-open'); }
 
+// Mobile equivalent of checkKitSuggestion()/addSelectedKitItems() — desktop's
+// kit-suggestion popup only ever fires from the checkbox-driven Database tab
+// selection (issueLoanFromSelection()), which mobile has no equivalent of.
+// Reimplemented as a bottom sheet so mobile users adding a registered
+// kit-trigger device get the same "this usually comes with X, Y" reminder,
+// from whichever screen they're picking devices on (Equipment tab / Book
+// wizard's device picker, or Add items). `currentSelection` is the caller's
+// own array of CHSAssetNo strings already picked (used only to filter out
+// accessories already selected); `onAdd(assetNo)` is called once per
+// accessory chosen — the caller owns actually pushing it into its own
+// selection state and re-rendering, since Book wizard (_mp.eqSelected) and
+// Add items (_mp.addItems.selected) each track that separately.
+function mpCheckKitSuggestion(addedAssetNo, currentSelection, onAdd) {
+  const assetNo = (addedAssetNo || '').trim();
+  const kitKey = Object.keys(_kitGroups).find(k =>
+    (_kitGroups[k].triggers || []).map(t => t.trim()).includes(assetNo)
+  );
+  if (!kitKey) return;
+  const kit = _kitGroups[kitKey];
+  const selectedSet = new Set((currentSelection || []).map(a => (a || '').trim()));
+  const suggestions = (kit.accessories || []).map(acc => {
+    const eq = equipment.find(e => (e.CHSAssetNo || '').trim() === (acc.assetNo || '').trim());
+    const inSelection = selectedSet.has((acc.assetNo || '').trim());
+    const onLoan = eq && eq.OnLoanTo && eq.Returned !== 'Yes';
+    return { ...acc, eq, onLoan, available: !!eq && !onLoan && !inSelection, inSelection };
+  }).filter(s => !s.inSelection);
+  if (!suggestions.length) return;
+  window._mpKitSuggestOpts = suggestions;
+  window._mpKitSuggestOnAdd = onAdd;
+  const rowsHtml = suggestions.map((s, i) => {
+    const unavail = s.onLoan || !s.eq;
+    const badgeText = !s.eq ? 'Not in stock' : s.onLoan ? 'On loan' : 'Available';
+    const badgeColor = s.available ? '#4d7a00' : (s.onLoan ? 'var(--mp-orange)' : 'var(--mp-text-muted)');
+    return `<label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--mp-border-hairline);${unavail ? 'opacity:.5' : ''}">
+      <input type="checkbox" data-kit-idx="${i}" ${s.available ? 'checked' : ''} ${unavail ? 'disabled' : ''} style="width:20px;height:20px;flex-shrink:0;accent-color:var(--mp-purple)">
+      <div style="flex:1;min-width:0">
+        <div style="font:600 14px var(--mp-font-body);color:var(--mp-text-strong)">${esc(s.eq ? s.eq.Model : (s.model || ''))}</div>
+        <div style="font:400 12px var(--mp-font-body);color:var(--mp-text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.eq ? (s.eq.Description || s.eq.Notes || s.desc || '') : (s.desc || ''))}</div>
+        ${s.eq ? `<div style="font:400 11px var(--mp-font-mono);color:var(--mp-purple);margin-top:1px">${esc(s.eq.CHSAssetNo)}</div>` : ''}
+      </div>
+      <span style="flex-shrink:0;font:700 11px var(--mp-font-body);color:${badgeColor}">${badgeText}</span>
+    </label>`;
+  }).join('');
+  mpOpenSheet(
+    `<div class="mp-sheet-title">📦 ${esc(kit.label || kitKey)}</div>
+     <div style="margin-top:4px;font:400 13px var(--mp-font-body);color:var(--mp-text-muted)">This kit usually includes the following accessories. Select what you'd like to add:</div>`,
+    `<div style="margin-top:8px">${rowsHtml}</div>
+     <div style="display:flex;gap:10px;margin-top:14px">
+       <button class="mp-btn mp-btn-ghost" onclick="mpCloseSheet()">Skip</button>
+       <button class="mp-btn mp-btn-primary" onclick="mpAddSelectedKitItems()">+ Add Selected</button>
+     </div>`
+  );
+}
+function mpAddSelectedKitItems() {
+  const opts = window._mpKitSuggestOpts || [];
+  const onAdd = window._mpKitSuggestOnAdd;
+  document.querySelectorAll('#mp-sheet-content input[type=checkbox]:checked').forEach(cb => {
+    const s = opts[Number(cb.dataset.kitIdx)];
+    if (s && s.eq && onAdd) onAdd(s.eq.CHSAssetNo);
+  });
+  mpCloseSheet();
+  showToast('success', 'Kit accessories added');
+}
+
 // Full-screen, non-dismissible loader for async writes where leaving
 // mid-flight could half-apply something (e.g. Book-a-demo's confirm step).
 // Always pair with mpHideBlockingLoader() in a finally block.
@@ -12128,7 +12192,16 @@ function mpToggleEquipmentSelectMode() {
 }
 function mpToggleEquipmentSelect(assetNo) {
   const i = _mp.eqSelected.indexOf(assetNo);
-  if (i >= 0) _mp.eqSelected.splice(i, 1); else _mp.eqSelected.push(assetNo);
+  if (i >= 0) {
+    _mp.eqSelected.splice(i, 1);
+  } else {
+    _mp.eqSelected.push(assetNo);
+    mpCheckKitSuggestion(assetNo, _mp.eqSelected, acc => {
+      if (!_mp.eqSelected.includes(acc)) _mp.eqSelected.push(acc);
+      mpRenderEquipmentList();
+      mpRenderEquipmentSelectFooter();
+    });
+  }
   mpRenderEquipmentList();
   mpRenderEquipmentSelectFooter();
 }
@@ -13052,7 +13125,15 @@ function mpRenderAddItemsList() {
 }
 function mpAddItemsToggleDevice(assetNo) {
   const i = _mp.addItems.selected.indexOf(assetNo);
-  if (i >= 0) _mp.addItems.selected.splice(i, 1); else _mp.addItems.selected.push(assetNo);
+  if (i >= 0) {
+    _mp.addItems.selected.splice(i, 1);
+  } else {
+    _mp.addItems.selected.push(assetNo);
+    mpCheckKitSuggestion(assetNo, _mp.addItems.selected, acc => {
+      if (!_mp.addItems.selected.includes(acc)) _mp.addItems.selected.push(acc);
+      mpRenderAddItemsList();
+    });
+  }
   mpRenderAddItemsList();
 }
 function mpToggleAddItemsSelectedExpanded() {
