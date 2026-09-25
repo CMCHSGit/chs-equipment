@@ -1951,7 +1951,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 160;
+const APP_VERSION = 161;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -10286,6 +10286,17 @@ async function _tryActivateUpcomingLoan(upcoming) {
   let thisLoanActivated = false;
   let changed = false;
   const stillBlocked = [];
+  // If this booking's own end date has already passed too (the AM never
+  // physically handed the item over before the second loan's whole window
+  // closed), don't silently activate it just because the item happens to be
+  // free now — e.g. an admin returning it straight to the office because it
+  // was actually done, not because it's about to start a now-moot loan.
+  // That would flip a freshly-returned item back to "on loan" (Returned:
+  // 'No') with an end date already in the past, instantly overdue. Leave it
+  // blocked instead, same as any other item this booking can't claim yet —
+  // it keeps surfacing via the stuck-loan reminder until an admin either
+  // extends the dates or cancels the booking.
+  const isExpired = upcoming.endDate && upcoming.endDate < nzDate();
   for (const uItem of upcoming.items) {
     const idx = equipment.findIndex(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
     if (idx < 0) continue;
@@ -10294,7 +10305,7 @@ async function _tryActivateUpcomingLoan(upcoming) {
     const prevLoc     = prev.Location    || '';
     const prevBatchId = prev.BatchID     || '';
     const prevEndDate = prev.LoanEndDate || '';
-    const isBlocked = prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes';
+    const isBlocked = isExpired || (prevLoanTo && prevLoanTo !== upcoming.loanTo && prev.Returned !== 'Yes');
     // Item is still genuinely checked out on a DIFFERENT active loan — it hasn't actually
     // been returned yet, so don't rip it away from that loan just because this booking's
     // start date arrived. Leave it pending here until it's actually available (returned,
