@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 165;
+const APP_VERSION = 166;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2289,76 +2289,104 @@ function fetchWithTimeout(url, opts = {}, ms = 8000) {
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
-async function saveBin(data) {
+// Reconciles our about-to-be-saved equipment/history against another
+// session's fresher save — same rules saveBin() always used (fresh wins for
+// a genuinely newer loan/return; ours wins if we have a later start date;
+// history is a straight union by entry id, so nothing on either side is
+// ever dropped). Pulled out of saveBin() so its retry loop (see below) can
+// call it fresh on every attempt, not just once.
+function _mergeEquipmentAndHistory(ourData, fresh) {
+  const freshEquip   = Array.isArray(fresh.equipment) ? fresh.equipment : [];
+  const freshHistory = Array.isArray(fresh.history)   ? fresh.history   : [];
+  const ourEquip     = Array.isArray(ourData.equipment) ? ourData.equipment : [];
+  const ourHistory   = Array.isArray(ourData.history)   ? ourData.history   : [];
 
-  // Concurrent-save guard: before writing, check whether another session has
-  // saved since we loaded. If so, auto-merge rather than silently overwriting.
-  try {
-    const vr = await fetchWithTimeout(FB_URL + '/data/_v.json', {}, 5000);
-    if (vr.ok) {
-      const remoteV = await vr.json();
-      if (remoteV && _dataVersion && remoteV !== _dataVersion) {
-        // Another session saved — fetch their latest state and merge
-        const freshResp = await fetchWithTimeout(FB_URL + '/data.json', {}, 8000);
-        if (freshResp.ok) {
-          const fresh = await freshResp.json();
-          if (fresh) {
-            const freshEquip   = Array.isArray(fresh.equipment) ? fresh.equipment : [];
-            const freshHistory = Array.isArray(fresh.history)   ? fresh.history   : [];
-            const ourEquip     = Array.isArray(data.equipment)  ? data.equipment  : [];
-            const ourHistory   = Array.isArray(data.history)    ? data.history    : [];
-
-            // Merge equipment: reconcile by id, preserving active loan data
-            const ourMap = {};
-            ourEquip.forEach(e => { if (e.id) ourMap[e.id] = e; });
-            const merged = freshEquip.map(freshItem => {
-              const ours = ourMap[freshItem.id];
-              if (!ours) return freshItem;
-              delete ourMap[freshItem.id];
-              const freshOnLoan = freshItem.OnLoanTo && freshItem.Returned !== 'Yes';
-              const ourOnLoan   = ours.OnLoanTo      && ours.Returned      !== 'Yes';
-              if (freshOnLoan && !ourOnLoan) return freshItem;
-              if (!freshOnLoan && ourOnLoan) return ours;
-              if (freshOnLoan && ourOnLoan) {
-                return (ours.LoanStartDate || '') >= (freshItem.LoanStartDate || '') ? ours : freshItem;
-              }
-              return ours;
-            });
-            Object.values(ourMap).forEach(e => merged.push(e));
-
-            // Merge history: union by entry id, sorted newest-first
-            const seenIds = new Set(freshHistory.map(h => h.id));
-            const mergedHistory = [...freshHistory];
-            ourHistory.forEach(h => { if (h.id && !seenIds.has(h.id)) mergedHistory.push(h); });
-            mergedHistory.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-
-            data = { equipment: merged, history: mergedHistory };
-            equipment  = merged;
-            historyLog = mergedHistory;
-            _dataVersion = fresh._v || null;
-            renderTable(); updateStats(); renderLoans();
-            showToast('info', 'Auto-merged concurrent changes from another session.');
-          }
-        }
-      }
+  const ourMap = {};
+  ourEquip.forEach(e => { if (e.id) ourMap[e.id] = e; });
+  const merged = freshEquip.map(freshItem => {
+    const ours = ourMap[freshItem.id];
+    if (!ours) return freshItem;
+    delete ourMap[freshItem.id];
+    const freshOnLoan = freshItem.OnLoanTo && freshItem.Returned !== 'Yes';
+    const ourOnLoan   = ours.OnLoanTo      && ours.Returned      !== 'Yes';
+    if (freshOnLoan && !ourOnLoan) return freshItem;
+    if (!freshOnLoan && ourOnLoan) return ours;
+    if (freshOnLoan && ourOnLoan) {
+      return (ours.LoanStartDate || '') >= (freshItem.LoanStartDate || '') ? ours : freshItem;
     }
-  } catch(e) { /* version check unavailable — proceed to avoid blocking the save */ }
+    return ours;
+  });
+  Object.values(ourMap).forEach(e => merged.push(e));
 
-  const newVersion = Date.now().toString();
-  // Sanitize loanMeta keys before saving — Firebase forbids . # $ [ ] / in keys
-  const _safeMeta = {};
-  Object.entries(loanMeta).forEach(([k, v]) => { _safeMeta[k.replace(/[.#$[\]/]/g, '_')] = v; });
-  // auditLog is no longer part of this document (see writeAudit()) — not
-  // included here at all any more, so a save from here can never overwrite
-  // another session's newer audit entries.
-  const payload = Object.assign({}, data, { _v: newVersion, loanMeta: _safeMeta });
-  const r = await fetchWithTimeout(FB_URL + '/data.json', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }, 12000);
-  if (!r.ok) throw new Error('Save failed: ' + r.status);
-  _dataVersion = newVersion;
+  const seenIds = new Set(freshHistory.map(h => h.id));
+  const mergedHistory = [...freshHistory];
+  ourHistory.forEach(h => { if (h.id && !seenIds.has(h.id)) mergedHistory.push(h); });
+  mergedHistory.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+
+  return { equipment: merged, history: mergedHistory };
+}
+
+// Saves equipment+history to /data.json using Firebase's ETag conditional
+// write (If-Match) instead of the old "check /data/_v.json, then separately
+// decide whether to write" pattern — that had a real gap between the check
+// and the write: two near-simultaneous saves could each see no conflict
+// (since neither had learned about the other's write yet) and both proceed
+// to blind-write, with whichever PUT physically landed second winning
+// outright and silently discarding the other's equipment/history changes —
+// no merge, no error, nothing. Confirmed as the real cause of several loans
+// whose Return was never recorded in the history log even though the
+// equipment record itself did end up marked returned (found 2026-09-30
+// while investigating a report of a scanned, overdue item coming back as
+// "not on loan" — same root-cause class as the auditLog race fixed
+// 2026-09-21, just for equipment/history instead).
+//
+// Fetching the ETag and the data it describes together, then conditioning
+// the write on that exact ETag still being current server-side, closes the
+// gap: Firebase itself rejects the write (412) if anything changed in
+// between, rather than us having to notice it ourselves after the fact.
+async function saveBin(data) {
+  const MAX_ATTEMPTS = 5;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let etag = null, remote = null;
+    try {
+      const getResp = await fetchWithTimeout(FB_URL + '/data.json', { headers: { 'X-Firebase-ETag': 'true' } }, 8000);
+      if (getResp.ok) {
+        etag = getResp.headers.get('ETag');
+        remote = await getResp.json();
+      }
+    } catch(e) { /* ETag fetch unavailable (offline/timeout) — fall through to an unconditional write below rather than blocking the save entirely */ }
+
+    let toSave = data;
+    if (remote && _dataVersion && remote._v && remote._v !== _dataVersion) {
+      toSave = _mergeEquipmentAndHistory(data, remote);
+      equipment  = toSave.equipment;
+      historyLog = toSave.history;
+      renderTable(); updateStats(); renderLoans();
+      showToast('info', 'Auto-merged concurrent changes from another session.');
+    }
+
+    const newVersion = Date.now().toString();
+    // Sanitize loanMeta keys before saving — Firebase forbids . # $ [ ] / in keys
+    const _safeMeta = {};
+    Object.entries(loanMeta).forEach(([k, v]) => { _safeMeta[k.replace(/[.#$[\]/]/g, '_')] = v; });
+    // auditLog is no longer part of this document (see writeAudit()) — not
+    // included here at all any more, so a save from here can never overwrite
+    // another session's newer audit entries.
+    const payload = Object.assign({}, toSave, { _v: newVersion, loanMeta: _safeMeta });
+    const headers = { 'Content-Type': 'application/json' };
+    if (etag) headers['if-match'] = etag;
+    const r = await fetchWithTimeout(FB_URL + '/data.json', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload)
+    }, 12000);
+
+    if (r.status === 412) continue; // someone else wrote between our read and our write — retry with fresh data
+    if (!r.ok) throw new Error('Save failed: ' + r.status);
+    _dataVersion = newVersion;
+    return;
+  }
+  throw new Error('Save failed: too many concurrent write conflicts, please try again');
 }
 
 // ── STATE ──────────────────────────────────────────────────────────────
