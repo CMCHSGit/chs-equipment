@@ -1,6 +1,6 @@
 # To do
 
-Last updated: 2026-09-25
+Last updated: 2026-09-30
 
 ## Infrastructure (shared)
 
@@ -36,6 +36,7 @@ Last updated: 2026-09-25
 
 ### Pending work
 
+- [x] **Fixed 2026-09-30: manual asset-number entry (Check out/Return/Count/Stocktake) wiped itself mid-typing** — reported on iOS, where camera scanning is noticeably slower so typing the number in is the common fallback: the field wouldn't wait for the whole number before resetting. Root cause: the manual field is wired to a 400ms debounce that fires a lookup once 3+ characters have been typed and paused on (`mpScanDebounce()`) — a completely normal pause mid-typing (e.g. after "100" of "100516") triggered a lookup, and both `mpScanBatchProcessScan()` and `mpStocktakeProcessScan()` unconditionally cleared the input *before* checking whether it matched a real asset, wiping out everything typed so far and forcing a full restart. Desktop's equivalent (`lookupAsset()`) never clears the input on a failed match, for exactly this reason. Moved the clear in both mobile functions to after the not-found check — a partial number now just sits there (still shows "not found" until complete, same as desktop) instead of being wiped. Needs testing on a real iPhone: type a 6-digit asset number with a natural pause partway through, confirm it isn't reset.
 - [x] **Fixed 2026-09-17: `openStuckLoanReassign()` now opens the mobile Transfer screen, not desktop's** — reported live: tapping a stuck-loan alert on mobile (Today tab, or an upcoming loan's "Reassign / transfer" action) opened the desktop reassign modal instead of `mpOpenReassignFlow()`, showing up as a desktop-styled popup over the mobile UI (the modal is a top-level element outside `#app`, not covered by mobile's usual UI hiding). Now branches on `isMobilePWA()` — mobile gets the native Transfer screen, pre-ticked to just the blocking item(s) with the stuck booking pre-picked as the move-to target, same as desktop's own pre-fill. Needs testing: tap a stuck-loan alert on mobile and confirm the native Transfer screen opens correctly pre-filled, not the desktop popup.
 - [x] **Push notifications** — confirmed fully working end-to-end 2026-09-11 (see Infrastructure section above) on Android. Firebase console setup (VAPID key, service-account key) is done. The DNS/HTTPS fix landed 2026-09-17, so iOS testing (install-to-home-screen, then opt in) is now unblocked — not yet actually tested there.
 - [ ] **App icon badge only updates while the app is open** — no push-driven update yet, so it won't tick up while the app is closed/backgrounded. Would need the push payload to carry the AM's current count and `sw.js`'s push handler to call `self.registration.setAppBadge()`.
