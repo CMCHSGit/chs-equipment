@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 166;
+const APP_VERSION = 167;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -12828,7 +12828,7 @@ function mpRenderScan() {
         <button class="mp-seg-btn${_mp.scanMode==='stocktake'?' mp-active':''}" onclick="mpRequestStocktakeMode()">Stocktake</button>
       </div>
       <div style="font:400 12px/1.4 var(--mp-font-body);color:var(--mp-text-muted);text-align:center;margin-bottom:18px" id="mp-scan-hint">${_mp.scanMode==='stocktake' ? 'Keep scanning — each item is counted &amp; returned automatically. The camera stays on between scans.' : 'Keep scanning to add items to the list below, then tap Confirm — or enter the asset number manually.'}</div>
-      <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters"
+      <input class="mp-input" id="mp-scan-input" placeholder="CHS Asset Number" autocomplete="off" autocapitalize="characters" inputmode="numeric"
         oninput="mpScanDebounce(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();mpScanLookup(this.value)}">
       <div id="mp-scan-result" style="margin-top:16px"></div>
     </div>`;
