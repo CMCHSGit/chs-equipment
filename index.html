@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 164;
+const APP_VERSION = 165;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -13731,14 +13731,19 @@ function mpStocktakeProcessScan(val) {
   if (val === _mp.stocktakeLastScanned && (now - (_mp.stocktakeLastScanTime || 0)) < MP_STOCKTAKE_COOLDOWN_MS) return;
   _mp.stocktakeLastScanned = val;
   _mp.stocktakeLastScanTime = now;
-  const input = document.getElementById('mp-scan-input');
-  if (input) input.value = '';
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
   if (!item) {
+    // Don't clear the field here — this fires on every debounced keystroke
+    // pause while someone is still manually typing a number (camera scanning
+    // is noticeably slower on iOS, so typing it in is the common fallback
+    // there), and a partial number is expected to look "not found" until
+    // it's complete. Wiping it on every pause forced retyping from scratch.
     const box = document.getElementById('mp-scan-result');
     if (box) box.innerHTML = `<div class="mp-err">"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.</div>`;
     return;
   }
+  const input = document.getElementById('mp-scan-input');
+  if (input) input.value = '';
   _mpScanFeedback();
   currentItem = item;
   submitCount(); // marks Counted + Returned in one step; shows its own toast
@@ -13796,12 +13801,18 @@ function mpScanBatchProcessScan(val) {
   if (val === _mp.scanBatchLastScanned && (now - (_mp.scanBatchLastScanTime || 0)) < MP_SCAN_BATCH_COOLDOWN_MS) return;
   _mp.scanBatchLastScanned = val;
   _mp.scanBatchLastScanTime = now;
-  const input = document.getElementById('mp-scan-input');
-  if (input) input.value = '';
   const mode = _mp.scanMode || 'checkout';
   const cart = _mp.scanCart[mode];
   const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === val.toLowerCase());
+  // Don't clear the field on a "not found" — this fires on every debounced
+  // keystroke pause while someone is still manually typing a number (camera
+  // scanning is noticeably slower on iOS, so typing it in is the common
+  // fallback there), and a partial number is expected to look "not found"
+  // until it's complete. Wiping it on every pause forced retyping the whole
+  // thing from scratch. Only clear once we know it's a real, complete match.
   if (!item) { mpRenderScanCart(`"${esc(val)}" not found. Check the number, or add it on the desktop Database tab first.`); return; }
+  const input = document.getElementById('mp-scan-input');
+  if (input) input.value = '';
   _mpScanFeedback(); // confirms the code was read and matched a real item, even if it turns out not to be actionable below
   if (cart.some(c => c.id === item.id)) { mpRenderScanCart(`${esc(item.CHSAssetNo)} is already in the list below.`); return; }
   const status = mpEquipmentStatus(item, mpToday());
