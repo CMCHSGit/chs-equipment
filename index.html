@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 169;
+const APP_VERSION = 170;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -11939,7 +11939,7 @@ function mpRenderOverview() {
     <div class="mp-section-title">By account manager</div>
     <div class="mp-card">
       ${Object.keys(byAM).length ? Object.entries(byAM).map(([am, v]) => `
-        <div class="mp-am-row" onclick="mpScopeToAM('${esc(am).replace(/'/g,"\\'")}')">
+        <div class="mp-am-row" onclick="mpScopeToAM('${esc(am).replace(/'/g,"\\'")}', ${v.overdue > 0})">
           <div style="flex:1"><div style="font-weight:600;font-size:14px">${esc(am)}</div></div>
           ${v.overdue ? `<span class="mp-pill-red">${v.overdue} overdue</span>` : ''}
           <span class="mp-mono" style="font-size:13px;color:var(--mp-text-muted)">${v.n}</span>
@@ -11948,7 +11948,14 @@ function mpRenderOverview() {
     </div>
   `;
 }
-function mpScopeToAM(am) { _mp.scope = am; mpGoScreen('loans'); }
+// This list is built purely from active (non-scheduled) loans, so its own
+// count badge already means "their active loans" — tapping used to always
+// land on whichever segment the Loans tab happened to be left on (usually
+// 'upcoming', _mp.seg's initial default), which had nothing to do with what
+// was just tapped. Now jumps to 'overdue' when this AM has any (matching
+// the red pill shown), otherwise 'active' — the segment the row's own count
+// actually represents.
+function mpScopeToAM(am, hasOverdue) { _mp.scope = am; _mp.seg = hasOverdue ? 'overdue' : 'active'; mpGoScreen('loans'); }
 // Overview's stat tiles — each jumps to Loans pre-filtered to the segment
 // that number came from, scoped to every AM (mpRenderLoans() overrides
 // this back to self anyway if ever reached as an AM, so 'all' is safe
