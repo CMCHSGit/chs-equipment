@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 167;
+const APP_VERSION = 168;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3640,20 +3640,42 @@ function openEditModal(id) {
 }
 function closeModal() { document.getElementById('item-modal').classList.remove('open'); }
 
+// Fields every dedicated loan action (Return/Transfer/Count/etc.) already
+// pairs with a logHistory() call when it changes them. Nothing stopped this
+// plain Edit form from changing the same fields directly, silently — no
+// history entry, no way to tell later who moved an item or when. Confirmed
+// as a real, recurring gap (not hypothetical): asset 100332 was edited this
+// way twice with zero History trail either time, only visible at all
+// because of the (separate) audit-log fix — and audit entries don't show up
+// on a device's own History tab or say what changed, just "updated in
+// database".
+const LOAN_RELEVANT_FIELDS = { OnLoanTo: 'On Loan To', Location: 'Location', LoanStartDate: 'Start date', LoanEndDate: 'Due date', Returned: 'Returned' };
+
 async function saveItem() {
   const assetNo = document.getElementById('m-CHSAssetNo').value.trim();
   if (!assetNo) { showToast('error','CHS Asset Number is required'); return; }
   const obj = { id: editingId || uid() };
   MF.forEach(f => { const el = document.getElementById('m-'+f); if(el) obj[f] = el.value.trim(); });
-  if (editingId) {
+  const isEdit = !!editingId;
+  let loanFieldChanges = null;
+  if (isEdit) {
     const idx = equipment.findIndex(e=>e.id===editingId);
-    if (idx >= 0) equipment[idx] = { ...equipment[idx], ...obj };
+    if (idx >= 0) {
+      const prev = equipment[idx];
+      const changed = Object.keys(LOAN_RELEVANT_FIELDS).filter(f => (prev[f] || '') !== (obj[f] || ''));
+      if (changed.length) {
+        loanFieldChanges = changed.map(f => `${LOAN_RELEVANT_FIELDS[f]}: '${prev[f] || '—'}' → '${obj[f] || '—'}'`).join('; ');
+      }
+      equipment[idx] = { ...prev, ...obj };
+    }
   } else {
     equipment.unshift(obj);
   }
-  const isEdit = !!editingId;
   const savedAssetNo = obj.CHSAssetNo;
   const savedModel   = obj.Model;
+  if (loanFieldChanges) {
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: savedAssetNo, model: savedModel, action: 'Edited', notes: loanFieldChanges });
+  }
   closeModal(); renderTable(); updateStats();
   markDirty('loans', 'history', 'calendar');
   setSync('saving', 'Saving...');
