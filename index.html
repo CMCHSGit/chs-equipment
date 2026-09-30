@@ -1960,7 +1960,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 168;
+const APP_VERSION = 169;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -13352,6 +13352,14 @@ function mpOpenReassignFlow(key, mode) {
   renderLoans(); // rebuild _loanGroupMap fresh — same requirement as the other loan-action flows
   const g = getLoanGroupByKey(key);
   if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  // Cancelling (or finishing) this flow should return to whichever screen it
+  // was actually opened from — Overview's "Awaiting action" card, Today's
+  // action-required list, a stuck-loan notification deep link, or a loan's
+  // own action sheet on the Loans tab all reach this same function, but it
+  // always dumped back to Loans regardless, which was disorienting when you
+  // came from anywhere else. _mp.screen is still the CALLING screen here —
+  // mpGoScreen('reassign') below is what overwrites it.
+  const returnTo = _mp.screen;
   _reassignLoanKey = key;
   _reassignUpcomingId = null;
   const batchId = g.items[0]?.BatchID || null;
@@ -13361,7 +13369,7 @@ function mpOpenReassignFlow(key, mode) {
   const wantsTransfer = mode ? mode === 'transfer' : !g.scheduled;
   _reassignMode = wantsTransfer ? 'transfer' : 'edit';
   if (wantsTransfer) {
-    _mp.reassign = { key, scheduled: !!g.scheduled, mode: 'transfer', g, selected: new Set(g.items.map(i => i.CHSAssetNo)), target: '' };
+    _mp.reassign = { key, scheduled: !!g.scheduled, mode: 'transfer', g, selected: new Set(g.items.map(i => i.CHSAssetNo)), target: '', returnTo };
     mpGoScreen('reassign');
   } else {
     const curAMName = getGroupAM(g);
@@ -13371,7 +13379,7 @@ function mpOpenReassignFlow(key, mode) {
       loanTo: g.loanTo || '', location: g.location || '',
       startDate: g.startDate || '', endDate: g.endDate || '',
       am: curAMName || '', email: curAM?.email || g.items[0]?.BorrowerEmail || '',
-      contact: '', notes: '', shipping: '', demoType: ''
+      contact: '', notes: '', shipping: '', demoType: '', returnTo
     };
     mpGoScreen('reassign');
     // Contact/notes/shipping/demoType live in the loan doc, not on equipment —
@@ -13393,9 +13401,10 @@ function mpRenderReassign() {
   return st.mode === 'edit' ? mpRenderReassignForm() : mpRenderReassignMove();
 }
 function mpCancelReassign() {
+  const returnTo = _mp.reassign?.returnTo || 'loans';
   _reassignLoanKey = null; _reassignUpcomingId = null; _reassignPdfKey = null; _reassignMode = 'edit';
   _mp.reassign = null;
-  mpGoScreen('loans');
+  mpGoScreen(returnTo);
 }
 
 // ── Scheduled loan → edit form ──
@@ -13606,9 +13615,10 @@ async function mpConfirmReassign() {
     if (tgtSel) tgtSel.innerHTML = '<option value="' + esc(st.target) + '" selected></option>';
   }
   mpShowBlockingLoader(st.mode === 'edit' ? 'Saving changes…' : 'Moving items…', "Please don't close the app or navigate away.");
+  const returnTo = st.returnTo || 'loans';
   try { await confirmReassignAM(); } finally { mpHideBlockingLoader(); }
   _mp.reassign = null;
-  mpGoScreen('loans');
+  mpGoScreen(returnTo);
 }
 
 // ── DELETE LOAN ──────────────────────────────────────────────────────────
