@@ -425,6 +425,10 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .loan-card.loan-longterm .loan-card-header:hover{background:#dbf8fd}
 .loan-card.loan-longterm .loan-card-body{border-top-color:var(--lt-border)}
 .loan-card.loan-longterm .loan-device{border-bottom-color:var(--lt-border)}
+.loan-card.loan-needs-reassign{background:var(--amber-light);border-color:var(--amber-border)}
+.loan-card.loan-needs-reassign .loan-card-header:hover{background:#fef3c7}
+.loan-card.loan-needs-reassign .loan-card-body{border-top-color:var(--amber-border)}
+.loan-card.loan-needs-reassign .loan-device{border-bottom-color:var(--amber-border)}
 .loan-card-header{padding:14px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;justify-content:space-between;cursor:pointer;transition:background .1s}
 .loan-card-header:hover{background:var(--surface2)}
 .loan-card-customer{font-size:15px;font-weight:600}
@@ -1994,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 179;
+const APP_VERSION = 180;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5355,7 +5359,7 @@ function renderLoans() {
   // a loan appears here INSTEAD of under Upcoming/Current, not as well as.
   const needsReassignScheduled = filteredScheduled.filter(g => g._pendingItems?.length);
   filteredScheduled = filteredScheduled.filter(g => !g._pendingItems?.length);
-  function _buildScheduledLoanCard(g, sgi, idPrefix) {
+  function _buildScheduledLoanCard(g, sgi, idPrefix, needsReassign) {
     const today = nzDate();
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
@@ -5370,12 +5374,12 @@ function renderLoans() {
     const totalDevices = g.items.length;
     // Bug 3 fix: don't auto-open the card just because items have transfer notes
     const _bodyOpen = 'display:none';
-    return '<div class="loan-card" style="border-color:' + (isSoon ? 'var(--amber-border)' : '#c4b5fd') + '">' +
+    return '<div class="loan-card' + (needsReassign ? ' loan-needs-reassign' : '') + '" style="border-color:' + ((isSoon || needsReassign) ? 'var(--amber-border)' : '#c4b5fd') + '">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'' + idPrefix + sgi + '\')">' +
       '<div>' +
-      '<div class="loan-card-customer" style="color:' + (isSoon ? 'var(--amber)' : '#4c1d95') + '">' + esc(g.loanTo) + '</div>' +
+      '<div class="loan-card-customer" style="color:' + ((isSoon || needsReassign) ? 'var(--amber)' : '#4c1d95') + '">' + esc(g.loanTo) + '</div>' +
       '<div class="loan-card-meta">' +
-        (getGroupAM(g) ? '<span style="color:' + (isSoon ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(getGroupAM(g)) + '</span> · ' : '') +
+        (getGroupAM(g) ? '<span style="color:' + ((isSoon || needsReassign) ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(getGroupAM(g)) + '</span> · ' : '') +
         esc(g.location) + ' · Starts: ' + formatDisplayDate(g.startDate) +
         ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
@@ -5419,7 +5423,7 @@ function renderLoans() {
       '</div>';
   }
   const scheduledCards = filteredScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'slc_')).join('');
-  const needsReassignScheduledCards = needsReassignScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'nrs_')).join('');
+  const needsReassignScheduledCards = needsReassignScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'nrs_', true)).join('');
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
   // Apply same search/sort to upcoming loans; skip those merged into active/scheduled cards
   let filteredUpcoming = upcomingLoansVisible.filter(u => {
@@ -5516,7 +5520,7 @@ function renderLoans() {
   // other section divider (Upcoming's purple, Current's gray, Long Term's
   // cyan, Overdue's red are all already spoken for), so it reads as its own
   // distinct "needs attention" colour rather than blending into one of those.
-  const needsReassignActiveCards = needsReassignActive.map((g, i) => buildActiveLoanCard(g, i, 'nrc_')).join('');
+  const needsReassignActiveCards = needsReassignActive.map((g, i) => buildActiveLoanCard(g, i, 'nrc_', true)).join('');
   const needsReassignSection = (needsReassignScheduled.length || needsReassignActive.length)
     ? '<div style="margin:0 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--amber-border)"></div><span style="font-size:11px;font-weight:600;color:var(--amber);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">&#9888; Needs Reassigning</span><div style="flex:1;height:1px;background:var(--amber-border)"></div></div>'
       + needsReassignScheduledCards + needsReassignActiveCards
@@ -5534,7 +5538,7 @@ function renderLoans() {
 // shared function (rather than inlined) since idPrefix still matters for a
 // loan that's mid-transition and briefly needs to not collide on expand/
 // collapse element ids with whatever the other render pass last used.
-function buildActiveLoanCard(g, gi, idPrefix) {
+function buildActiveLoanCard(g, gi, idPrefix, needsReassign) {
   const today = nzDate();
   const overdue = g.endDate && g.endDate < today;
   const longTerm = isGroupLongTerm(g);
@@ -5544,7 +5548,7 @@ function buildActiveLoanCard(g, gi, idPrefix) {
   const _rActive = getLoanReadiness(_rKeyActive);
   const _startDate = g.items[0]?.LoanStartDate || '';
   const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested && !_rActive.noTestRequired;
-  return `<div class="loan-card${longTerm ? ' loan-longterm' : ''}" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
+  return `<div class="loan-card${longTerm ? ' loan-longterm' : (needsReassign ? ' loan-needs-reassign' : '')}" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
       <div class="loan-card-header" onclick="toggleLoanCard('${bodyId}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
