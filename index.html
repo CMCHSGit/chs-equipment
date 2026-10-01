@@ -4652,7 +4652,7 @@ function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
         '<input type="checkbox" id="aicb_' + c.assetNo + '" style="margin-top:3px">' +
         '<div><span style="font-family:\'DM Mono\',monospace;font-weight:600">' + esc(c.assetNo) + '</span>' +
         ' <span style="color:var(--text2)">· ' + esc(c.model) + '</span>' +
-        '<div style="font-size:12px;color:var(--red);margin-top:2px">On loan to <strong>' + esc(c.currentLoanTo) + '</strong> · Due: ' + formatDisplayDate(c.currentEnd) + '</div></div></label>';
+        '<div style="font-size:12px;color:var(--red);margin-top:2px">On ' + (c.currentEnd ? 'loan to <strong>' + esc(c.currentLoanTo) + '</strong> · Due: ' + formatDisplayDate(c.currentEnd) : 'a <strong>LONG-TERM</strong> loan to <strong>' + esc(c.currentLoanTo) + '</strong> — no return date') + '</div></div></label>';
     });
     document.getElementById('conflict-title').innerHTML = '&#10006; Date Conflict &mdash; ' + conflicts.length + ' item' + (conflicts.length !== 1 ? 's' : '');
     document.getElementById('conflict-subtitle').textContent = 'Adding to: ' + newLoanTo + ' · Starts: ' + formatDisplayDate(newStart);
@@ -4848,7 +4848,7 @@ function _findExistingLoanMatch(loanTo, location, endDate) {
     u.loanTo.trim().toLowerCase() === lt && (u.location || '').trim().toLowerCase() === loc && u.endDate === endDate);
 }
 
-async function submitBatchLoan() {
+async function submitBatchLoan(opts) {
   // Disable immediately to prevent double-submission
   const _submitBtn = document.getElementById('btn-batch');
   if (_submitBtn && _submitBtn.disabled) return; // already running
@@ -5142,6 +5142,41 @@ async function submitBatchLoan() {
     clearBasket(); // clear basket now that loan is confirmed
     renderBatchDevices(); renderLoans();
   }; // end doLoan
+
+  // Warn before silently queuing a device that's on someone else's
+  // LONG-TERM loan right now. isDateConflict() above already treats that as
+  // a conflict (a blank existing end date is "assume indefinite"), landing
+  // these in alreadyOnLoan — but that split has no visible effect by itself
+  // (both groups get passed to doLoan() regardless, see below), and the
+  // only prior signal was a passive amber status line next to the device
+  // field (handleBatchDeviceKey()/updateBatchDevice()), easy to miss. Unlike
+  // an overlapping SHORT-term loan — which genuinely will come back and get
+  // picked up automatically once free — a long-term loan has no return date
+  // at all, so this needs an explicit, hard-to-miss confirmation before it
+  // goes through.
+  //
+  // This is specifically the backstop for desktop's "Type manually" device
+  // entry (addBatchDevice()) — the only way to reach here with NO prior
+  // warning at all. issueLoanFromSelection() (Database tab → Add to Basket,
+  // which proceedFromBasket() also funnels into batchDevices for a new loan)
+  // already warns at basket-add time, so a basket-originated device can
+  // legitimately get asked about twice — a known, accepted trade-off rather
+  // than tracking which devices were already confirmed across the tab
+  // switch. Mobile passes longTermConfirmed below because its ONLY
+  // device-picking path (the Equipment tab, mpEquipmentAddSelectedToLoan())
+  // already warns too, with no manual-entry path to leave uncovered.
+  const longTermBlockers = alreadyOnLoan
+    .map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()))
+    .filter(item => item && isLoanLongTerm(item.BatchID));
+  if (!opts?.longTermConfirmed && longTermBlockers.length) {
+    const list = longTermBlockers.map(i => i.CHSAssetNo + ' — currently with ' + i.OnLoanTo + ' (long-term, no return date)').join('\n');
+    const proceed = confirm(
+      longTermBlockers.length + ' device' + (longTermBlockers.length !== 1 ? 's are' : ' is') + ' on a LONG-TERM loan right now:\n\n' +
+      list +
+      '\n\nThey\'ll be queued on this booking as "awaiting return," but a long-term loan has no return date — they may never come back on their own unless someone converts that loan back to Active or returns them manually.\n\nContinue anyway?'
+    );
+    if (!proceed) { if (_submitBtn) { _submitBtn.disabled = false; _submitBtn.textContent = 'Confirm Loan'; } return; }
+  }
 
   // Always proceed with all devices — overlapping items are added to the loan regardless
   await doLoan([...cleanDevices, ...alreadyOnLoan]);
@@ -13584,6 +13619,11 @@ async function mpBookConfirm() {
   const b = _mp.book;
   if (b._submitting) return;
   if (!b.selected.length) { showToast('error', 'Select at least one device.'); return; }
+  // No long-term check needed here — on mobile, the Book wizard's device
+  // picker is the Equipment tab exclusively (no manual asset-number typing,
+  // unlike desktop's New Loan form), and mpEquipmentAddSelectedToLoan()
+  // already warns at the point of picking. Adding a second check here would
+  // just double-prompt for the exact same item.
   b._submitting = true;
   const btnEl = document.querySelector('#mp-screen-book .mp-btn-primary');
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Booking…'; }
@@ -13631,7 +13671,7 @@ async function mpBookConfirm() {
   document.documentElement.classList.add('mp-suppress-loan-doc');
   mpShowBlockingLoader('Confirming your booking…', "Please don't close the app or navigate away.");
   try {
-    await submitBatchLoan();
+    await submitBatchLoan({ longTermConfirmed: true });
     const feedback = document.getElementById('batch-feedback');
     if (feedback && feedback.style.display === 'block') {
       showToast('error', (feedback.textContent || '').trim() || 'Could not create the booking.');
