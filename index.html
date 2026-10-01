@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 177;
+const APP_VERSION = 178;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3240,8 +3240,19 @@ async function submitReturn(opts) {
     if (!confirm('This is a LONG-TERM loan to ' + currentItem.OnLoanTo + ' — the equipment is meant to stay with them indefinitely.\n\nReturn ' + currentItem.CHSAssetNo + ' anyway?')) return;
   }
   const idx = equipment.findIndex(e => e.id === currentItem.id);
-  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, endDate: equipment[idx].LoanEndDate || '' };
   const batchId = equipment[idx].BatchID || null;
+  // Legacy (pre-BatchID) loans have no BatchID to key their loanDoc/Simpro
+  // job by at all, so fall back to the same 'loandoc_name|||endDate' key
+  // convention convertLoanToLongTerm()'s migration already relies on —
+  // without this, returning one of these never closed its job or deleted
+  // its loanDoc (the whole block below was skipped outright since batchId
+  // was falsy), leaving both behind forever. Confirmed live: a stale
+  // leftover loanDoc like that is exactly what later made the orphan
+  // scanner think a perfectly-returned loan (Koutu Vets) had never
+  // actually gone through — nothing on loan matched it any more, but its
+  // old loanDoc was still sitting there as if it had.
+  const effectiveKey = batchId || (prev.loanTo ? 'loandoc_' + encodeURIComponent(prev.loanTo + '|||' + prev.endDate) : null);
   const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
   Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
@@ -3254,15 +3265,19 @@ async function submitReturn(opts) {
   // via this function (Scan/item-detail Return, and mobile's Return queue
   // both go through here — confirmBatchReturn(), the desktop batch-return
   // modal, already had this right).
-  if (batchId) {
-    const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
+  if (effectiveKey) {
+    const stillActive = batchId
+      ? equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes')
+      : equipment.some(e => e.OnLoanTo === prev.loanTo && e.Returned !== 'Yes');
     if (!stillActive) {
-      await _closeSimproJobWithNote(batchId, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
-      try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
-    } else {
+      await _closeSimproJobWithNote(effectiveKey, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
+      try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(effectiveKey) + '.json', { method: 'DELETE' }); } catch(e) {}
+    } else if (batchId) {
       // Batch isn't empty yet — the loanDoc survives, so prune just this
       // item out of it (see _pruneLoanDocItems()) instead of leaving it
-      // stale in the printable/emailed loan form.
+      // stale in the printable/emailed loan form. Not attempted for a
+      // legacy (no-BatchID) multi-item loan — rare enough for an
+      // already-rare legacy case that it's not covered here.
       await _pruneLoanDocItems(batchId, [assetNo]);
     }
   }
@@ -3286,8 +3301,14 @@ async function submitCount(opts) {
   // recording as-is, not something to interrupt and re-litigate per item.
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
-  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID };
+  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID, endDate: equipment[idx].LoanEndDate || '' };
   const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
+  // Legacy (pre-BatchID) loans have no BatchID to key their loanDoc/Simpro
+  // job by — same fallback as submitReturn() (see its comment for the full
+  // story: a stale leftover loanDoc like this is what makes the orphan
+  // scanner think an already-returned legacy loan never actually went
+  // through).
+  const effectiveKey = prev.batchId || (prev.loanTo ? 'loandoc_' + encodeURIComponent(prev.loanTo + '|||' + prev.endDate) : null);
   // Mark as counted + return if on loan
   Object.assign(equipment[idx], {
     Counted: countedValue,
@@ -3298,14 +3319,18 @@ async function submitCount(opts) {
   // Firebase fallback as submitReturn(), since window._simproJobCache can
   // be empty (e.g. right after a fresh page load) even when a real job
   // exists, which would otherwise silently skip closing it.
-  if (prev.batchId) {
-    const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
+  if (effectiveKey) {
+    const stillActive = prev.batchId
+      ? equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes')
+      : equipment.some(e => e.OnLoanTo === prev.loanTo && e.Returned !== 'Yes');
     if (!stillActive) {
-      await _closeSimproJobWithNote(prev.batchId, prev.loanTo, 'All items counted and returned to office on ' + formatDisplayDate(nzDate()) + '.');
-    } else {
+      await _closeSimproJobWithNote(effectiveKey, prev.loanTo, 'All items counted and returned to office on ' + formatDisplayDate(nzDate()) + '.');
+    } else if (prev.batchId) {
       // Batch isn't empty yet — prune just this item out of the loanDoc
       // instead of leaving it stale in the printable/emailed loan form
-      // (see _pruneLoanDocItems()).
+      // (see _pruneLoanDocItems()). Not attempted for a legacy (no-BatchID)
+      // multi-item loan — rare enough for an already-rare legacy case that
+      // it's not covered here.
       await _pruneLoanDocItems(prev.batchId, [assetNo]);
     }
   }
@@ -5609,6 +5634,12 @@ async function confirmBatchReturn(opts) {
     // clearing, so we can delete/prune loanDocs afterward
     const batchIdsInvolved = new Set();
     const returnedByBatch = {};
+    // Legacy (pre-BatchID) loans have no BatchID to key their loanDoc/Simpro
+    // job by — same fallback as submitReturn()/submitCount(). Grouped by
+    // loanTo instead of batchId, since that's the only thing tying these
+    // items together at all.
+    const legacyLoanTosInvolved = new Set();
+    const legacyEndDateByLoanTo = {};
     toReturn.forEach(id => {
       const idx = equipment.findIndex(e => e.id === id);
       if (idx < 0) return;
@@ -5616,6 +5647,9 @@ async function confirmBatchReturn(opts) {
       if (batchId) {
         batchIdsInvolved.add(batchId);
         (returnedByBatch[batchId] = returnedByBatch[batchId] || []).push(equipment[idx].CHSAssetNo);
+      } else if (equipment[idx].OnLoanTo) {
+        legacyLoanTosInvolved.add(equipment[idx].OnLoanTo);
+        if (!(equipment[idx].OnLoanTo in legacyEndDateByLoanTo)) legacyEndDateByLoanTo[equipment[idx].OnLoanTo] = equipment[idx].LoanEndDate || '';
       }
       const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
       Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
@@ -5641,6 +5675,18 @@ async function confirmBatchReturn(opts) {
       } else {
         await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
       }
+    }
+    for (const loanTo of legacyLoanTosInvolved) {
+      const stillActive = equipment.some(e => e.OnLoanTo === loanTo && e.Returned !== 'Yes');
+      if (!stillActive) {
+        const legacyKey = 'loandoc_' + encodeURIComponent(loanTo + '|||' + legacyEndDateByLoanTo[loanTo]);
+        await _closeSimproJobWithNote(legacyKey, loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
+        try {
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(legacyKey) + '.json', { method: 'DELETE' });
+        } catch(e) { /* non-critical */ }
+      }
+      // Not attempting a partial-prune for a legacy multi-item loan here —
+      // rare enough for an already-rare legacy case that it's not covered.
     }
     // See submitReturn() — these items may be exactly what an overdue
     // ("stuck") upcoming booking was waiting on; try activating any due
@@ -10930,7 +10976,14 @@ async function loadLoanDocNotes() {
         simproJobId:    doc.simproJobId    || '',
         accountManager: doc.accountManager || '',
         demoType:       doc.demoType       || '',
-        island:         doc.island         || ''
+        island:         doc.island         || '',
+        // Missing here meant every fresh page load wiped the Job # badge's
+        // closed/green state straight back to looking like a live job,
+        // no matter how many times you refreshed — this function always
+        // replaces the cache entry outright (not a merge), so a field left
+        // out here is a field that can never survive a reload.
+        longTerm:       !!doc.longTerm,
+        simproClosedAt: doc.simproClosedAt || ''
       };
       // Firebase returns keys decoded. Store under both decoded (as returned)
       // and encoded (as constructed by lookup code) so both paths hit the cache.
