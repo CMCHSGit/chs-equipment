@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 175;
+const APP_VERSION = 176;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -9579,6 +9579,18 @@ let _basketUpcomingId = null; // set when adding to an upcoming loan
 function issueLoanFromSelection() {
   if (_selectedIds.size === 0) return;
   const selectedItems = equipment.filter(e => _selectedIds.has(e.id));
+  // One grouped prompt for however many selected items are on a long-term
+  // loan — same wording as the equivalent long-term RETURN warning, just for
+  // the other direction: adding one to a new loan's basket silently sets up
+  // a conflict/transfer against equipment that's meant to stay put
+  // indefinitely, so this is the point to catch it, before anything's added.
+  const longTermNos = selectedItems.filter(e => isLoanLongTerm(e.BatchID)).map(e => e.CHSAssetNo);
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nAdd to the loan basket anyway?')) {
+    return;
+  }
   // Add to basket (skip duplicates)
   const newlyAdded = [];
   selectedItems.forEach(item => {
@@ -13001,6 +13013,20 @@ function mpRenderEquipmentSelectFooter() {
 function mpEquipmentAddSelectedToLoan() {
   const editingBook = _mp.eqSelectContext === 'book' && _mp.book;
   if (!_mp.eqSelected.length && !editingBook) return;
+  // Same grouped warning as desktop's issueLoanFromSelection() and this
+  // app's long-term RETURN confirms — picking one here silently sets up a
+  // conflict against equipment that's meant to stay with its current AM
+  // indefinitely, so catch it before handing off to the Book wizard.
+  const longTermNos = _mp.eqSelected.filter(a => {
+    const e = equipment.find(x => x.CHSAssetNo === a);
+    return e && isLoanLongTerm(e.BatchID);
+  });
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nAdd to this loan anyway?')) {
+    return;
+  }
   if (editingBook) {
     _mp.book.selected = _mp.eqSelected.slice();
   } else {
@@ -13922,6 +13948,19 @@ function mpConfirmAddItems() {
   if (!st || !st.selected.length) { showToast('error', 'Select at least one device to add.'); return; }
   const g = getLoanGroupByKey(st.key);
   if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  // Same grouped warning as desktop's issueLoanFromSelection() and mobile's
+  // mpEquipmentAddSelectedToLoan() — only checking newly-picked items
+  // (st.selected), not g.items already on this loan.
+  const longTermNos = st.selected.filter(a => {
+    const e = equipment.find(x => x.CHSAssetNo === a);
+    return e && isLoanLongTerm(e.BatchID);
+  });
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nAdd to this loan anyway?')) {
+    return;
+  }
   // Same basket shape openAddItemsToLoanByKey()/the desktop database-tick
   // flow already build: existing items locked, newly picked ones not.
   // _basketUpcomingId cleared defensively — proceedFromBasket() checks it
