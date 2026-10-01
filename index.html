@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 176;
+const APP_VERSION = 177;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7283,6 +7283,22 @@ async function convertLoanToLongTerm(g) {
     g.items.forEach(item => {
       const idx = equipment.findIndex(e => e.id === item.id);
       if (idx >= 0) equipment[idx].BatchID = batchId;
+    });
+    // Every other BatchID-minting path (doLoan(), confirmReassignAM()'s
+    // transfer branch, etc.) pairs it with a logHistory() entry — this one
+    // didn't, and writeAudit('loan_longterm_on') below doesn't substitute
+    // for it (different log, doesn't show on the device's own History tab).
+    // _findOrphanCandidates()'s Case B treats "a batch_ BatchID with zero
+    // history entries" as a sign the equipment save ran but never actually
+    // committed, and flags it as a possibly-failed save to recover/delete —
+    // which, for a freshly-minted batch with genuinely no history yet, this
+    // always was, wrongly. Confirmed live: every one of the loans adopted
+    // this way (Promed, Safersleep, Waitakere Hospital, Waitemata) showed up
+    // in "Recover Orphaned Loan" despite being completely fine.
+    g.items.forEach(item => {
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model,
+        action: 'Converted', loanTo, location: g.location || '',
+        notes: loanTo + '’s loan adopted into BatchID tracking (predates it) as part of converting to long-term.' });
     });
   }
 
