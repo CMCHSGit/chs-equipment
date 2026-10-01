@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 172;
+const APP_VERSION = 173;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5469,14 +5469,17 @@ function renderLoans() {
       + longTermGroups.map((g, i) => buildActiveLoanCard(g, i, 'ltc_')).join('')
     : '';
   document.getElementById('loans-list').innerHTML = upcomingSection
-    + groups.map((g, gi) => buildActiveLoanCard(g, gi, 'lc_')).join('')
+    + groups.filter(g => !isGroupLongTerm(g)).map((g, gi) => buildActiveLoanCard(g, gi, 'lc_')).join('')
     + longTermSection;
 }
 
 // Shared by the Current Loans list and the Long Term Loans section below it —
-// a long-term loan renders in BOTH (tinted, per the feature's design), so the
-// template is a function rather than inlined, and idPrefix keeps their two
-// expand/collapse bodies from colliding on the same element id.
+// a long-term loan used to render in BOTH (tinted, per the feature's
+// original design), which showed every long-term loan twice on the same
+// screen. Now shown only in its own section below; the template stays a
+// shared function (rather than inlined) since idPrefix still matters for a
+// loan that's mid-transition and briefly needs to not collide on expand/
+// collapse element ids with whatever the other render pass last used.
 function buildActiveLoanCard(g, gi, idPrefix) {
   const today = nzDate();
   const overdue = g.endDate && g.endDate < today;
@@ -12630,8 +12633,10 @@ function mpRenderLoans() {
   const groups = mpActiveGroups().filter(g => _mp.scope === 'all' || g.am === _mp.scope);
   // Long-term loans stay in "Active" too (they're genuinely still active,
   // just open-ended) — this segment is an additional view onto the same
-  // loans, not a separate pool, matching desktop's Current Loans + Long Term
-  // Loans sections both showing the same card.
+  // loans, not a separate pool. Unlike desktop (which used to also show a
+  // long-term loan a second time inline in Current Loans, until that was
+  // removed as confusing — see renderLoans()), this is just two different
+  // tabs reaching the same card, never both visible on screen at once.
   const active = groups.filter(g => !g.scheduled && !g.overdue);
   const overdue = groups.filter(g => !g.scheduled && g.overdue);
   const longTerm = groups.filter(g => g.longTerm && !g.scheduled);
