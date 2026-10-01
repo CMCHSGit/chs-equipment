@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 174;
+const APP_VERSION = 175;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -8038,11 +8038,14 @@ function checkMissingSimproJobs() {
   renderSimproHealthBadge();
   // Points at Settings → Simpro Job Health, a desktop-only screen — not
   // actionable on mobile, so skip the toast there (detection/badge still
-  // run either way, for whenever this is checked from desktop).
-  if (missing.length && !isMobilePWA()) {
+  // run either way, for whenever this is checked from desktop). Also
+  // skipped once job creation is wound down — this list is now a shrinking
+  // legacy backlog, not an active problem new loans keep adding to, so an
+  // unprompted toast on every load stopped making sense; Settings still
+  // shows the count for whoever wants to check it.
+  if (missing.length && !isMobilePWA() && SIMPRO_CFG.createJobs) {
     const plural = missing.length > 1;
-    const scope = SIMPRO_CFG.createJobs ? '' : ' from before the Simpro wind-down';
-    showToast('warn', missing.length + ' loan' + (plural ? 's' : '') + scope + ' still ' +
+    showToast('warn', missing.length + ' loan' + (plural ? 's' : '') + ' still ' +
       (plural ? 'have' : 'has') + ' no Simpro job — see Settings → Simpro Job Health.');
   }
 }
@@ -8051,8 +8054,15 @@ function renderSimproHealthBadge() {
   const el = document.getElementById('simpro-health-count');
   if (!el) return;
   const n = findLoansMissingSimproJob().length;
+  const windingDown = !SIMPRO_CFG.createJobs;
   el.textContent = n ? n + ' missing' : 'All good';
-  el.style.color = n ? 'var(--red)' : 'var(--green)';
+  // A shrinking legacy backlog during wind-down doesn't need the same
+  // "needs attention" red/primary-button treatment an actively-growing list
+  // would — it's no longer something new loans keep adding to, just a known
+  // handful winding down to zero on their own as those old loans close out.
+  el.style.color = n ? (windingDown ? 'var(--text2)' : 'var(--red)') : 'var(--green)';
+  const btn = document.getElementById('simpro-review-btn');
+  if (btn) btn.className = 'btn' + (windingDown ? '' : ' btn-primary');
   const sub = document.getElementById('simpro-health-sub');
   if (sub) {
     sub.textContent = SIMPRO_CFG.createJobs
@@ -11874,7 +11884,7 @@ function startAutoSync() {
         <div class="settings-section-title">🔧 Simpro Job Health</div>
         <div class="settings-section-sub" id="simpro-health-sub">A loan's Simpro job is only created once its confirmation form is closed — if that never happens (browser closed early, crash, dropped network), the job silently never gets created. Check here for any current loan missing one.</div>
         <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="openMissingSimproJobsModal()">Review Missing Jobs</button>
+          <button class="btn btn-primary" id="simpro-review-btn" onclick="openMissingSimproJobsModal()">Review Missing Jobs</button>
           <span id="simpro-health-count" style="font-size:13px;font-weight:500"></span>
         </div>
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
