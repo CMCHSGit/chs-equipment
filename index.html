@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 172;
+const APP_VERSION = 173;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -4623,7 +4623,7 @@ function showConflictModal(conflicts, newLoanTo, newStart, onProceed) {
         '<input type="checkbox" id="aicb_' + c.assetNo + '" style="margin-top:3px">' +
         '<div><span style="font-family:\'DM Mono\',monospace;font-weight:600">' + esc(c.assetNo) + '</span>' +
         ' <span style="color:var(--text2)">· ' + esc(c.model) + '</span>' +
-        '<div style="font-size:12px;color:var(--red);margin-top:2px">On loan to <strong>' + esc(c.currentLoanTo) + '</strong> · Due: ' + formatDisplayDate(c.currentEnd) + '</div></div></label>';
+        '<div style="font-size:12px;color:var(--red);margin-top:2px">On ' + (c.currentEnd ? 'loan to <strong>' + esc(c.currentLoanTo) + '</strong> · Due: ' + formatDisplayDate(c.currentEnd) : 'a <strong>LONG-TERM</strong> loan to <strong>' + esc(c.currentLoanTo) + '</strong> — no return date') + '</div></div></label>';
     });
     document.getElementById('conflict-title').innerHTML = '&#10006; Date Conflict &mdash; ' + conflicts.length + ' item' + (conflicts.length !== 1 ? 's' : '');
     document.getElementById('conflict-subtitle').textContent = 'Adding to: ' + newLoanTo + ' · Starts: ' + formatDisplayDate(newStart);
@@ -4819,7 +4819,7 @@ function _findExistingLoanMatch(loanTo, location, endDate) {
     u.loanTo.trim().toLowerCase() === lt && (u.location || '').trim().toLowerCase() === loc && u.endDate === endDate);
 }
 
-async function submitBatchLoan() {
+async function submitBatchLoan(opts) {
   // Disable immediately to prevent double-submission
   const _submitBtn = document.getElementById('btn-batch');
   if (_submitBtn && _submitBtn.disabled) return; // already running
@@ -5113,6 +5113,34 @@ async function submitBatchLoan() {
     clearBasket(); // clear basket now that loan is confirmed
     renderBatchDevices(); renderLoans();
   }; // end doLoan
+
+  // Warn before silently queuing a device that's on someone else's
+  // LONG-TERM loan right now. isDateConflict() above already treats that as
+  // a conflict (a blank existing end date is "assume indefinite"), landing
+  // these in alreadyOnLoan — but that split has no visible effect by itself
+  // (both groups get passed to doLoan() regardless, see below), and the
+  // only prior signal was a passive amber status line next to the device
+  // field (handleBatchDeviceKey()/updateBatchDevice()), easy to miss. Unlike
+  // an overlapping SHORT-term loan — which genuinely will come back and get
+  // picked up automatically once free — a long-term loan has no return date
+  // at all, so this needs an explicit, hard-to-miss confirmation before it
+  // goes through.
+  const longTermBlockers = alreadyOnLoan
+    .map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()))
+    .filter(item => item && isLoanLongTerm(item.BatchID));
+  // mpBookConfirm() asks its own native-feeling sheet for this BEFORE showing
+  // its blocking loader (a raw confirm() popping up over/under that overlay
+  // reads as broken, not as "processing") and passes longTermConfirmed so
+  // it isn't asked twice.
+  if (!opts?.longTermConfirmed && longTermBlockers.length) {
+    const list = longTermBlockers.map(i => i.CHSAssetNo + ' — currently with ' + i.OnLoanTo + ' (long-term, no return date)').join('\n');
+    const proceed = confirm(
+      longTermBlockers.length + ' device' + (longTermBlockers.length !== 1 ? 's are' : ' is') + ' on a LONG-TERM loan right now:\n\n' +
+      list +
+      '\n\nThey\'ll be queued on this booking as "awaiting return," but a long-term loan has no return date — they may never come back on their own unless someone converts that loan back to Active or returns them manually.\n\nContinue anyway?'
+    );
+    if (!proceed) { if (_submitBtn) { _submitBtn.disabled = false; _submitBtn.textContent = 'Confirm Loan'; } return; }
+  }
 
   // Always proceed with all devices — overlapping items are added to the loan regardless
   await doLoan([...cleanDevices, ...alreadyOnLoan]);
@@ -13444,6 +13472,28 @@ async function mpBookConfirm() {
   const b = _mp.book;
   if (b._submitting) return;
   if (!b.selected.length) { showToast('error', 'Select at least one device.'); return; }
+  // Long-term-loaned devices get the same confirmation desktop's
+  // submitBatchLoan() asks for — checked here too, and BEFORE the blocking
+  // loader shows below, since a raw confirm() popping up over/under that
+  // overlay reads as broken, not as "processing".
+  const longTermNos = b.selected
+    .map(no => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === no.toLowerCase()))
+    .filter(item => item && isLoanLongTerm(item.BatchID));
+  if (longTermNos.length) {
+    const list = longTermNos.map(i => `<div style="font:400 13px var(--mp-font-mono);color:var(--mp-text-muted);padding:2px 0">${esc(i.CHSAssetNo)} — with ${esc(i.OnLoanTo)}</div>`).join('');
+    mpOpenSheet(
+      '<div class="mp-sheet-title">Long-term loan</div>',
+      `<div style="font:400 13px/1.5 var(--mp-font-body);color:var(--mp-text-muted);padding:0 2px 10px">${longTermNos.length} device${longTermNos.length!==1?'s are':' is'} on a LONG-TERM loan right now — no expected return date, so this booking may never un-stick on its own unless that loan is converted back to Active or returned manually:</div>
+       ${list}
+       <button class="mp-sheet-item mp-danger" style="margin-top:10px" onclick="mpCloseSheet();mpDoBookConfirm()">Continue anyway</button>
+       <button class="mp-sheet-item" onclick="mpCloseSheet()">Cancel</button>`
+    );
+    return;
+  }
+  await mpDoBookConfirm();
+}
+async function mpDoBookConfirm() {
+  const b = _mp.book;
   b._submitting = true;
   const btnEl = document.querySelector('#mp-screen-book .mp-btn-primary');
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Booking…'; }
@@ -13491,7 +13541,7 @@ async function mpBookConfirm() {
   document.documentElement.classList.add('mp-suppress-loan-doc');
   mpShowBlockingLoader('Confirming your booking…', "Please don't close the app or navigate away.");
   try {
-    await submitBatchLoan();
+    await submitBatchLoan({ longTermConfirmed: true });
     const feedback = document.getElementById('batch-feedback');
     if (feedback && feedback.style.display === 'block') {
       showToast('error', (feedback.textContent || '').trim() || 'Could not create the booking.');
