@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 173;
+const APP_VERSION = 180;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3240,8 +3240,19 @@ async function submitReturn(opts) {
     if (!confirm('This is a LONG-TERM loan to ' + currentItem.OnLoanTo + ' — the equipment is meant to stay with them indefinitely.\n\nReturn ' + currentItem.CHSAssetNo + ' anyway?')) return;
   }
   const idx = equipment.findIndex(e => e.id === currentItem.id);
-  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
+  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, endDate: equipment[idx].LoanEndDate || '' };
   const batchId = equipment[idx].BatchID || null;
+  // Legacy (pre-BatchID) loans have no BatchID to key their loanDoc/Simpro
+  // job by at all, so fall back to the same 'loandoc_name|||endDate' key
+  // convention convertLoanToLongTerm()'s migration already relies on —
+  // without this, returning one of these never closed its job or deleted
+  // its loanDoc (the whole block below was skipped outright since batchId
+  // was falsy), leaving both behind forever. Confirmed live: a stale
+  // leftover loanDoc like that is exactly what later made the orphan
+  // scanner think a perfectly-returned loan (Koutu Vets) had never
+  // actually gone through — nothing on loan matched it any more, but its
+  // old loanDoc was still sitting there as if it had.
+  const effectiveKey = batchId || (prev.loanTo ? 'loandoc_' + encodeURIComponent(prev.loanTo + '|||' + prev.endDate) : null);
   const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
   Object.assign(equipment[idx], { OnLoanTo: '', Location: '', LoanStartDate: '', LoanEndDate: '', Returned: 'Yes', BatchID: '', _transferNote: null });
   logHistory({ id: uid(), ts: nzNow(), chsAssetNo: currentItem.CHSAssetNo, model: currentItem.Model, action: 'Return', loanTo: prev.loanTo, location: prev.loc, notes: 'Returned ' + formatDisplayDate(nzDate()) });
@@ -3254,15 +3265,19 @@ async function submitReturn(opts) {
   // via this function (Scan/item-detail Return, and mobile's Return queue
   // both go through here — confirmBatchReturn(), the desktop batch-return
   // modal, already had this right).
-  if (batchId) {
-    const stillActive = equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes');
+  if (effectiveKey) {
+    const stillActive = batchId
+      ? equipment.some(e => e.BatchID === batchId && e.OnLoanTo && e.Returned !== 'Yes')
+      : equipment.some(e => e.OnLoanTo === prev.loanTo && e.Returned !== 'Yes');
     if (!stillActive) {
-      await _closeSimproJobWithNote(batchId, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
-      try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
-    } else {
+      await _closeSimproJobWithNote(effectiveKey, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
+      try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(effectiveKey) + '.json', { method: 'DELETE' }); } catch(e) {}
+    } else if (batchId) {
       // Batch isn't empty yet — the loanDoc survives, so prune just this
       // item out of it (see _pruneLoanDocItems()) instead of leaving it
-      // stale in the printable/emailed loan form.
+      // stale in the printable/emailed loan form. Not attempted for a
+      // legacy (no-BatchID) multi-item loan — rare enough for an
+      // already-rare legacy case that it's not covered here.
       await _pruneLoanDocItems(batchId, [assetNo]);
     }
   }
@@ -3286,8 +3301,14 @@ async function submitCount(opts) {
   // recording as-is, not something to interrupt and re-litigate per item.
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
-  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID };
+  const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID, endDate: equipment[idx].LoanEndDate || '' };
   const assetNo = currentItem.CHSAssetNo; // clearScan() below nulls currentItem — grab this first
+  // Legacy (pre-BatchID) loans have no BatchID to key their loanDoc/Simpro
+  // job by — same fallback as submitReturn() (see its comment for the full
+  // story: a stale leftover loanDoc like this is what makes the orphan
+  // scanner think an already-returned legacy loan never actually went
+  // through).
+  const effectiveKey = prev.batchId || (prev.loanTo ? 'loandoc_' + encodeURIComponent(prev.loanTo + '|||' + prev.endDate) : null);
   // Mark as counted + return if on loan
   Object.assign(equipment[idx], {
     Counted: countedValue,
@@ -3298,14 +3319,18 @@ async function submitCount(opts) {
   // Firebase fallback as submitReturn(), since window._simproJobCache can
   // be empty (e.g. right after a fresh page load) even when a real job
   // exists, which would otherwise silently skip closing it.
-  if (prev.batchId) {
-    const stillActive = equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes');
+  if (effectiveKey) {
+    const stillActive = prev.batchId
+      ? equipment.some(e => e.BatchID === prev.batchId && e.Returned !== 'Yes')
+      : equipment.some(e => e.OnLoanTo === prev.loanTo && e.Returned !== 'Yes');
     if (!stillActive) {
-      await _closeSimproJobWithNote(prev.batchId, prev.loanTo, 'All items counted and returned to office on ' + formatDisplayDate(nzDate()) + '.');
-    } else {
+      await _closeSimproJobWithNote(effectiveKey, prev.loanTo, 'All items counted and returned to office on ' + formatDisplayDate(nzDate()) + '.');
+    } else if (prev.batchId) {
       // Batch isn't empty yet — prune just this item out of the loanDoc
       // instead of leaving it stale in the printable/emailed loan form
-      // (see _pruneLoanDocItems()).
+      // (see _pruneLoanDocItems()). Not attempted for a legacy (no-BatchID)
+      // multi-item loan — rare enough for an already-rare legacy case that
+      // it's not covered here.
       await _pruneLoanDocItems(prev.batchId, [assetNo]);
     }
   }
@@ -5125,13 +5150,20 @@ async function submitBatchLoan(opts) {
   // picked up automatically once free — a long-term loan has no return date
   // at all, so this needs an explicit, hard-to-miss confirmation before it
   // goes through.
+  //
+  // This is specifically the backstop for desktop's "Type manually" device
+  // entry (addBatchDevice()) — the only way to reach here with NO prior
+  // warning at all. issueLoanFromSelection() (Database tab → Add to Basket,
+  // which proceedFromBasket() also funnels into batchDevices for a new loan)
+  // already warns at basket-add time, so a basket-originated device can
+  // legitimately get asked about twice — a known, accepted trade-off rather
+  // than tracking which devices were already confirmed across the tab
+  // switch. Mobile passes longTermConfirmed below because its ONLY
+  // device-picking path (the Equipment tab, mpEquipmentAddSelectedToLoan())
+  // already warns too, with no manual-entry path to leave uncovered.
   const longTermBlockers = alreadyOnLoan
     .map(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()))
     .filter(item => item && isLoanLongTerm(item.BatchID));
-  // mpBookConfirm() asks its own native-feeling sheet for this BEFORE showing
-  // its blocking loader (a raw confirm() popping up over/under that overlay
-  // reads as broken, not as "processing") and passes longTermConfirmed so
-  // it isn't asked twice.
   if (!opts?.longTermConfirmed && longTermBlockers.length) {
     const list = longTermBlockers.map(i => i.CHSAssetNo + ' — currently with ' + i.OnLoanTo + ' (long-term, no return date)').join('\n');
     const proceed = confirm(
@@ -5306,6 +5338,11 @@ function renderLoans() {
     const matchingU = upcomingLoans.find(u => u.id === batchId);
     if (matchingU) { g._pendingItems = matchingU.items; _mergedUpcomingIds.add(matchingU.id); }
   });
+  // See the matching comment by needsReassignScheduled below — same idea,
+  // for Active loans. Long-term loans are excluded here even if they
+  // somehow also have pending items — the Long Term Loans section already
+  // claims those exclusively.
+  const needsReassignActive = groups.filter(g => g._pendingItems?.length && !isGroupLongTerm(g));
 
   // Store groups by key for reliable lookup
   window._loanGroupMap = {};
@@ -5344,7 +5381,17 @@ function renderLoans() {
   // Exposed so a Transfer's target-loan dropdown (desktop + mobile) can offer
   // a Scheduled loan as a destination, not just Active loans/bookings.
   window._scheduledLoanGroups = filteredScheduled;
-  const scheduledCards = filteredScheduled.map((g, sgi) => {
+  // Needs Reassigning pulls out any Scheduled/Active loan that's only
+  // partially resolved — some of its items are still blocked on another
+  // loan (the same "+N pending pickup" signal already shown inline) — into
+  // its own section, instead of leaving it where it'd otherwise sit mixed
+  // in with loans that need no action at all. Exclusive with its normal
+  // section (same no-double-render principle as the Long Term Loans fix):
+  // a loan appears here INSTEAD of under Upcoming/Current, not as well as.
+  const needsReassignScheduled = filteredScheduled.filter(g => g._pendingItems?.length);
+  filteredScheduled = filteredScheduled.filter(g => !g._pendingItems?.length);
+  function _buildScheduledLoanCard(g, sgi, idPrefix) {
+    const today = nzDate();
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
     const _gBId = g.items[0]?.BatchID;
@@ -5354,12 +5401,12 @@ function renderLoans() {
     const key = _loanKey(g);
     window._loanGroupMap = window._loanGroupMap || {};
     window._loanGroupMap[key] = g;
-    const _slcId = 'slc_' + sgi;
+    const _slcId = idPrefix + sgi;
     const totalDevices = g.items.length;
     // Bug 3 fix: don't auto-open the card just because items have transfer notes
     const _bodyOpen = 'display:none';
     return '<div class="loan-card" style="border-color:' + (isSoon ? 'var(--amber-border)' : '#c4b5fd') + '">' +
-      '<div class="loan-card-header" onclick="toggleLoanCard(\'slc_' + sgi + '\')">' +
+      '<div class="loan-card-header" onclick="toggleLoanCard(\'' + idPrefix + sgi + '\')">' +
       '<div>' +
       '<div class="loan-card-customer" style="color:' + (isSoon ? 'var(--amber)' : '#4c1d95') + '">' + esc(g.loanTo) + '</div>' +
       '<div class="loan-card-meta">' +
@@ -5405,7 +5452,9 @@ function renderLoans() {
         buildPendingItemsHtml(g._pendingItems, g.items[0]?.BatchID || '') +
       '</div>' +
       '</div>';
-  }).join('');
+  }
+  const scheduledCards = filteredScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'slc_')).join('');
+  const needsReassignScheduledCards = needsReassignScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'nrs_')).join('');
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
   // Apply same search/sort to upcoming loans; skip those merged into active/scheduled cards
   let filteredUpcoming = upcomingLoansVisible.filter(u => {
@@ -5496,15 +5545,30 @@ function renderLoans() {
     ? '<div style="margin:20px 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--lt-border)"></div><span style="font-size:11px;font-weight:600;color:var(--lt);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">∞ Long Term Loans</span><div style="flex:1;height:1px;background:var(--lt-border)"></div></div>'
       + longTermGroups.map((g, i) => buildActiveLoanCard(g, i, 'ltc_')).join('')
     : '';
-  document.getElementById('loans-list').innerHTML = upcomingSection
-    + groups.map((g, gi) => buildActiveLoanCard(g, gi, 'lc_')).join('')
+  // Pulled out ahead of everything else — a loan sitting here needs someone
+  // to actually do a Transfer, unlike Upcoming (just waiting on its start
+  // date) or Current (nothing blocking it). Amber/orange isn't used by any
+  // other section divider (Upcoming's purple, Current's gray, Long Term's
+  // cyan, Overdue's red are all already spoken for), so it reads as its own
+  // distinct "needs attention" colour rather than blending into one of those.
+  const needsReassignActiveCards = needsReassignActive.map((g, i) => buildActiveLoanCard(g, i, 'nrc_')).join('');
+  const needsReassignSection = (needsReassignScheduled.length || needsReassignActive.length)
+    ? '<div style="margin:0 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--amber-border)"></div><span style="font-size:11px;font-weight:600;color:var(--amber);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">&#9888; Needs Reassigning</span><div style="flex:1;height:1px;background:var(--amber-border)"></div></div>'
+      + needsReassignScheduledCards + needsReassignActiveCards
+    : '';
+  document.getElementById('loans-list').innerHTML = needsReassignSection
+    + upcomingSection
+    + groups.filter(g => !isGroupLongTerm(g) && !(g._pendingItems?.length)).map((g, gi) => buildActiveLoanCard(g, gi, 'lc_')).join('')
     + longTermSection;
 }
 
 // Shared by the Current Loans list and the Long Term Loans section below it —
-// a long-term loan renders in BOTH (tinted, per the feature's design), so the
-// template is a function rather than inlined, and idPrefix keeps their two
-// expand/collapse bodies from colliding on the same element id.
+// a long-term loan used to render in BOTH (tinted, per the feature's
+// original design), which showed every long-term loan twice on the same
+// screen. Now shown only in its own section below; the template stays a
+// shared function (rather than inlined) since idPrefix still matters for a
+// loan that's mid-transition and briefly needs to not collide on expand/
+// collapse element ids with whatever the other render pass last used.
 function buildActiveLoanCard(g, gi, idPrefix) {
   const today = nzDate();
   const overdue = g.endDate && g.endDate < today;
@@ -5519,7 +5583,7 @@ function buildActiveLoanCard(g, gi, idPrefix) {
       <div class="loan-card-header" onclick="toggleLoanCard('${bodyId}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${longTerm ? ` · <span style="color:var(--lt);font-weight:500">No end date</span>` : (g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : '')} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const pdfKey = bId || fallbackKey; const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; const closed = (bId && window._loanDocCache?.[bId]?.simproClosedAt) || window._loanDocCache?.[fallbackKey]?.simproClosedAt; return sj ? ` · <span style="${closed ? 'color:var(--text3);text-decoration:line-through' : 'color:var(--accent);font-weight:500;cursor:pointer;text-decoration:underline dotted'}" title="${closed ? 'This job was closed when the loan became long-term' : 'Click to correct this job number'}" ${closed ? '' : `onclick="event.stopPropagation();promptEditSimproJob('${esc(pdfKey)}','${esc(sj)}','${esc(g.loanTo).replace(/'/g,"\\'")}')"`}>Job #${esc(sj)}</span>` : ''; })()}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
+          <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${longTerm ? ` · <span style="color:var(--lt);font-weight:500">No end date</span>` : (g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : '')} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const pdfKey = bId || fallbackKey; const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; const closed = (bId && window._loanDocCache?.[bId]?.simproClosedAt) || window._loanDocCache?.[fallbackKey]?.simproClosedAt; return sj ? ` · <span style="${closed ? 'color:var(--green);font-weight:500' : 'color:var(--accent);font-weight:500;cursor:pointer;text-decoration:underline dotted'}" title="${closed ? 'This job was closed when the loan became long-term — no action needed' : 'Click to correct this job number'}" ${closed ? '' : `onclick="event.stopPropagation();promptEditSimproJob('${esc(pdfKey)}','${esc(sj)}','${esc(g.loanTo).replace(/'/g,"\\'")}')"`}>${closed ? '✓ ' : ''}Job #${esc(sj)}${closed ? ' (Closed)' : ''}</span>` : ''; })()}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           <div class="loan-card-badge-row">
@@ -5634,6 +5698,12 @@ async function confirmBatchReturn(opts) {
     // clearing, so we can delete/prune loanDocs afterward
     const batchIdsInvolved = new Set();
     const returnedByBatch = {};
+    // Legacy (pre-BatchID) loans have no BatchID to key their loanDoc/Simpro
+    // job by — same fallback as submitReturn()/submitCount(). Grouped by
+    // loanTo instead of batchId, since that's the only thing tying these
+    // items together at all.
+    const legacyLoanTosInvolved = new Set();
+    const legacyEndDateByLoanTo = {};
     toReturn.forEach(id => {
       const idx = equipment.findIndex(e => e.id === id);
       if (idx < 0) return;
@@ -5641,6 +5711,9 @@ async function confirmBatchReturn(opts) {
       if (batchId) {
         batchIdsInvolved.add(batchId);
         (returnedByBatch[batchId] = returnedByBatch[batchId] || []).push(equipment[idx].CHSAssetNo);
+      } else if (equipment[idx].OnLoanTo) {
+        legacyLoanTosInvolved.add(equipment[idx].OnLoanTo);
+        if (!(equipment[idx].OnLoanTo in legacyEndDateByLoanTo)) legacyEndDateByLoanTo[equipment[idx].OnLoanTo] = equipment[idx].LoanEndDate || '';
       }
       const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
       Object.assign(equipment[idx], { OnLoanTo:'', Location:'', LoanStartDate:'', LoanEndDate:'', Returned:'Yes', BatchID:'', _transferNote: null });
@@ -5666,6 +5739,18 @@ async function confirmBatchReturn(opts) {
       } else {
         await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
       }
+    }
+    for (const loanTo of legacyLoanTosInvolved) {
+      const stillActive = equipment.some(e => e.OnLoanTo === loanTo && e.Returned !== 'Yes');
+      if (!stillActive) {
+        const legacyKey = 'loandoc_' + encodeURIComponent(loanTo + '|||' + legacyEndDateByLoanTo[loanTo]);
+        await _closeSimproJobWithNote(legacyKey, loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
+        try {
+          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(legacyKey) + '.json', { method: 'DELETE' });
+        } catch(e) { /* non-critical */ }
+      }
+      // Not attempting a partial-prune for a legacy multi-item loan here —
+      // rare enough for an already-rare legacy case that it's not covered.
     }
     // See submitReturn() — these items may be exactly what an overdue
     // ("stuck") upcoming booking was waiting on; try activating any due
@@ -7309,6 +7394,22 @@ async function convertLoanToLongTerm(g) {
       const idx = equipment.findIndex(e => e.id === item.id);
       if (idx >= 0) equipment[idx].BatchID = batchId;
     });
+    // Every other BatchID-minting path (doLoan(), confirmReassignAM()'s
+    // transfer branch, etc.) pairs it with a logHistory() entry — this one
+    // didn't, and writeAudit('loan_longterm_on') below doesn't substitute
+    // for it (different log, doesn't show on the device's own History tab).
+    // _findOrphanCandidates()'s Case B treats "a batch_ BatchID with zero
+    // history entries" as a sign the equipment save ran but never actually
+    // committed, and flags it as a possibly-failed save to recover/delete —
+    // which, for a freshly-minted batch with genuinely no history yet, this
+    // always was, wrongly. Confirmed live: every one of the loans adopted
+    // this way (Promed, Safersleep, Waitakere Hospital, Waitemata) showed up
+    // in "Recover Orphaned Loan" despite being completely fine.
+    g.items.forEach(item => {
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model,
+        action: 'Converted', loanTo, location: g.location || '',
+        notes: loanTo + '’s loan adopted into BatchID tracking (predates it) as part of converting to long-term.' });
+    });
   }
 
   if (_oldPdfKey) {
@@ -8063,11 +8164,14 @@ function checkMissingSimproJobs() {
   renderSimproHealthBadge();
   // Points at Settings → Simpro Job Health, a desktop-only screen — not
   // actionable on mobile, so skip the toast there (detection/badge still
-  // run either way, for whenever this is checked from desktop).
-  if (missing.length && !isMobilePWA()) {
+  // run either way, for whenever this is checked from desktop). Also
+  // skipped once job creation is wound down — this list is now a shrinking
+  // legacy backlog, not an active problem new loans keep adding to, so an
+  // unprompted toast on every load stopped making sense; Settings still
+  // shows the count for whoever wants to check it.
+  if (missing.length && !isMobilePWA() && SIMPRO_CFG.createJobs) {
     const plural = missing.length > 1;
-    const scope = SIMPRO_CFG.createJobs ? '' : ' from before the Simpro wind-down';
-    showToast('warn', missing.length + ' loan' + (plural ? 's' : '') + scope + ' still ' +
+    showToast('warn', missing.length + ' loan' + (plural ? 's' : '') + ' still ' +
       (plural ? 'have' : 'has') + ' no Simpro job — see Settings → Simpro Job Health.');
   }
 }
@@ -8076,8 +8180,15 @@ function renderSimproHealthBadge() {
   const el = document.getElementById('simpro-health-count');
   if (!el) return;
   const n = findLoansMissingSimproJob().length;
+  const windingDown = !SIMPRO_CFG.createJobs;
   el.textContent = n ? n + ' missing' : 'All good';
-  el.style.color = n ? 'var(--red)' : 'var(--green)';
+  // A shrinking legacy backlog during wind-down doesn't need the same
+  // "needs attention" red/primary-button treatment an actively-growing list
+  // would — it's no longer something new loans keep adding to, just a known
+  // handful winding down to zero on their own as those old loans close out.
+  el.style.color = n ? (windingDown ? 'var(--text2)' : 'var(--red)') : 'var(--green)';
+  const btn = document.getElementById('simpro-review-btn');
+  if (btn) btn.className = 'btn' + (windingDown ? '' : ' btn-primary');
   const sub = document.getElementById('simpro-health-sub');
   if (sub) {
     sub.textContent = SIMPRO_CFG.createJobs
@@ -9594,6 +9705,18 @@ let _basketUpcomingId = null; // set when adding to an upcoming loan
 function issueLoanFromSelection() {
   if (_selectedIds.size === 0) return;
   const selectedItems = equipment.filter(e => _selectedIds.has(e.id));
+  // One grouped prompt for however many selected items are on a long-term
+  // loan — same wording as the equivalent long-term RETURN warning, just for
+  // the other direction: adding one to a new loan's basket silently sets up
+  // a conflict/transfer against equipment that's meant to stay put
+  // indefinitely, so this is the point to catch it, before anything's added.
+  const longTermNos = selectedItems.filter(e => isLoanLongTerm(e.BatchID)).map(e => e.CHSAssetNo);
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nAdd to the loan basket anyway?')) {
+    return;
+  }
   // Add to basket (skip duplicates)
   const newlyAdded = [];
   selectedItems.forEach(item => {
@@ -10917,7 +11040,14 @@ async function loadLoanDocNotes() {
         simproJobId:    doc.simproJobId    || '',
         accountManager: doc.accountManager || '',
         demoType:       doc.demoType       || '',
-        island:         doc.island         || ''
+        island:         doc.island         || '',
+        // Missing here meant every fresh page load wiped the Job # badge's
+        // closed/green state straight back to looking like a live job,
+        // no matter how many times you refreshed — this function always
+        // replaces the cache entry outright (not a merge), so a field left
+        // out here is a field that can never survive a reload.
+        longTerm:       !!doc.longTerm,
+        simproClosedAt: doc.simproClosedAt || ''
       };
       // Firebase returns keys decoded. Store under both decoded (as returned)
       // and encoded (as constructed by lookup code) so both paths hit the cache.
@@ -11899,7 +12029,7 @@ function startAutoSync() {
         <div class="settings-section-title">🔧 Simpro Job Health</div>
         <div class="settings-section-sub" id="simpro-health-sub">A loan's Simpro job is only created once its confirmation form is closed — if that never happens (browser closed early, crash, dropped network), the job silently never gets created. Check here for any current loan missing one.</div>
         <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
-          <button class="btn btn-primary" onclick="openMissingSimproJobsModal()">Review Missing Jobs</button>
+          <button class="btn btn-primary" id="simpro-review-btn" onclick="openMissingSimproJobsModal()">Review Missing Jobs</button>
           <span id="simpro-health-count" style="font-size:13px;font-weight:500"></span>
         </div>
         <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
@@ -12658,8 +12788,10 @@ function mpRenderLoans() {
   const groups = mpActiveGroups().filter(g => _mp.scope === 'all' || g.am === _mp.scope);
   // Long-term loans stay in "Active" too (they're genuinely still active,
   // just open-ended) — this segment is an additional view onto the same
-  // loans, not a separate pool, matching desktop's Current Loans + Long Term
-  // Loans sections both showing the same card.
+  // loans, not a separate pool. Unlike desktop (which used to also show a
+  // long-term loan a second time inline in Current Loans, until that was
+  // removed as confusing — see renderLoans()), this is just two different
+  // tabs reaching the same card, never both visible on screen at once.
   const active = groups.filter(g => !g.scheduled && !g.overdue);
   const overdue = groups.filter(g => !g.scheduled && g.overdue);
   const longTerm = groups.filter(g => g.longTerm && !g.scheduled);
@@ -13014,6 +13146,20 @@ function mpRenderEquipmentSelectFooter() {
 function mpEquipmentAddSelectedToLoan() {
   const editingBook = _mp.eqSelectContext === 'book' && _mp.book;
   if (!_mp.eqSelected.length && !editingBook) return;
+  // Same grouped warning as desktop's issueLoanFromSelection() and this
+  // app's long-term RETURN confirms — picking one here silently sets up a
+  // conflict against equipment that's meant to stay with its current AM
+  // indefinitely, so catch it before handing off to the Book wizard.
+  const longTermNos = _mp.eqSelected.filter(a => {
+    const e = equipment.find(x => x.CHSAssetNo === a);
+    return e && isLoanLongTerm(e.BatchID);
+  });
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nAdd to this loan anyway?')) {
+    return;
+  }
   if (editingBook) {
     _mp.book.selected = _mp.eqSelected.slice();
   } else {
@@ -13472,28 +13618,11 @@ async function mpBookConfirm() {
   const b = _mp.book;
   if (b._submitting) return;
   if (!b.selected.length) { showToast('error', 'Select at least one device.'); return; }
-  // Long-term-loaned devices get the same confirmation desktop's
-  // submitBatchLoan() asks for — checked here too, and BEFORE the blocking
-  // loader shows below, since a raw confirm() popping up over/under that
-  // overlay reads as broken, not as "processing".
-  const longTermNos = b.selected
-    .map(no => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === no.toLowerCase()))
-    .filter(item => item && isLoanLongTerm(item.BatchID));
-  if (longTermNos.length) {
-    const list = longTermNos.map(i => `<div style="font:400 13px var(--mp-font-mono);color:var(--mp-text-muted);padding:2px 0">${esc(i.CHSAssetNo)} — with ${esc(i.OnLoanTo)}</div>`).join('');
-    mpOpenSheet(
-      '<div class="mp-sheet-title">Long-term loan</div>',
-      `<div style="font:400 13px/1.5 var(--mp-font-body);color:var(--mp-text-muted);padding:0 2px 10px">${longTermNos.length} device${longTermNos.length!==1?'s are':' is'} on a LONG-TERM loan right now — no expected return date, so this booking may never un-stick on its own unless that loan is converted back to Active or returned manually:</div>
-       ${list}
-       <button class="mp-sheet-item mp-danger" style="margin-top:10px" onclick="mpCloseSheet();mpDoBookConfirm()">Continue anyway</button>
-       <button class="mp-sheet-item" onclick="mpCloseSheet()">Cancel</button>`
-    );
-    return;
-  }
-  await mpDoBookConfirm();
-}
-async function mpDoBookConfirm() {
-  const b = _mp.book;
+  // No long-term check needed here — on mobile, the Book wizard's device
+  // picker is the Equipment tab exclusively (no manual asset-number typing,
+  // unlike desktop's New Loan form), and mpEquipmentAddSelectedToLoan()
+  // already warns at the point of picking. Adding a second check here would
+  // just double-prompt for the exact same item.
   b._submitting = true;
   const btnEl = document.querySelector('#mp-screen-book .mp-btn-primary');
   if (btnEl) { btnEl.disabled = true; btnEl.textContent = 'Booking…'; }
@@ -13957,6 +14086,19 @@ function mpConfirmAddItems() {
   if (!st || !st.selected.length) { showToast('error', 'Select at least one device to add.'); return; }
   const g = getLoanGroupByKey(st.key);
   if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  // Same grouped warning as desktop's issueLoanFromSelection() and mobile's
+  // mpEquipmentAddSelectedToLoan() — only checking newly-picked items
+  // (st.selected), not g.items already on this loan.
+  const longTermNos = st.selected.filter(a => {
+    const e = equipment.find(x => x.CHSAssetNo === a);
+    return e && isLoanLongTerm(e.BatchID);
+  });
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nAdd to this loan anyway?')) {
+    return;
+  }
   // Same basket shape openAddItemsToLoanByKey()/the desktop database-tick
   // flow already build: existing items locked, newly picked ones not.
   // _basketUpcomingId cleared defensively — proceedFromBasket() checks it
