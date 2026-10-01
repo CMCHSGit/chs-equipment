@@ -1998,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 180;
+const APP_VERSION = 181;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5307,10 +5307,12 @@ function renderLoans() {
     const matchingU = upcomingLoans.find(u => u.id === batchId);
     if (matchingU) { g._pendingItems = matchingU.items; _mergedUpcomingIds.add(matchingU.id); }
   });
-  // See the matching comment by needsReassignScheduled below — same idea,
-  // for Active loans. Long-term loans are excluded here even if they
-  // somehow also have pending items — the Long Term Loans section already
-  // claims those exclusively.
+  // An Active loan with pending items is a genuinely stuck loan — it's
+  // already started, but part of what the customer needs is still tied up
+  // on another loan. Long-term loans are excluded even if they somehow also
+  // have pending items — the Long Term Loans section already claims those
+  // exclusively. (A Scheduled loan with pending items is not stuck — see
+  // _buildScheduledLoanCard below, it just stays under Upcoming Loans.)
   const needsReassignActive = groups.filter(g => g._pendingItems?.length && !isGroupLongTerm(g));
 
   // Store groups by key for reliable lookup
@@ -5350,16 +5352,12 @@ function renderLoans() {
   // Exposed so a Transfer's target-loan dropdown (desktop + mobile) can offer
   // a Scheduled loan as a destination, not just Active loans/bookings.
   window._scheduledLoanGroups = filteredScheduled;
-  // Needs Reassigning pulls out any Scheduled/Active loan that's only
-  // partially resolved — some of its items are still blocked on another
-  // loan (the same "+N pending pickup" signal already shown inline) — into
-  // its own section, instead of leaving it where it'd otherwise sit mixed
-  // in with loans that need no action at all. Exclusive with its normal
-  // section (same no-double-render principle as the Long Term Loans fix):
-  // a loan appears here INSTEAD of under Upcoming/Current, not as well as.
-  const needsReassignScheduled = filteredScheduled.filter(g => g._pendingItems?.length);
-  filteredScheduled = filteredScheduled.filter(g => !g._pendingItems?.length);
-  function _buildScheduledLoanCard(g, sgi, idPrefix, needsReassign) {
+  // A Scheduled loan with pending items isn't "stuck" — it hasn't started
+  // yet, so there's still time for whatever's blocking those items to free
+  // up before its start date. It stays under Upcoming Loans like any other
+  // scheduled booking; only an Active loan with pending items (see
+  // needsReassignActive above) is an actual stuck loan.
+  function _buildScheduledLoanCard(g, sgi, idPrefix) {
     const today = nzDate();
     const daysUntilStart = daysBetween(today, g.startDate);
     const daysLabel = daysUntilStart > 0 ? 'in ' + daysUntilStart + ' day' + (daysUntilStart !== 1 ? 's' : '') : 'today';
@@ -5374,12 +5372,12 @@ function renderLoans() {
     const totalDevices = g.items.length;
     // Bug 3 fix: don't auto-open the card just because items have transfer notes
     const _bodyOpen = 'display:none';
-    return '<div class="loan-card' + (needsReassign ? ' loan-needs-reassign' : '') + '" style="border-color:' + ((isSoon || needsReassign) ? 'var(--amber-border)' : '#c4b5fd') + '">' +
+    return '<div class="loan-card" style="border-color:' + (isSoon ? 'var(--amber-border)' : '#c4b5fd') + '">' +
       '<div class="loan-card-header" onclick="toggleLoanCard(\'' + idPrefix + sgi + '\')">' +
       '<div>' +
-      '<div class="loan-card-customer" style="color:' + ((isSoon || needsReassign) ? 'var(--amber)' : '#4c1d95') + '">' + esc(g.loanTo) + '</div>' +
+      '<div class="loan-card-customer" style="color:' + (isSoon ? 'var(--amber)' : '#4c1d95') + '">' + esc(g.loanTo) + '</div>' +
       '<div class="loan-card-meta">' +
-        (getGroupAM(g) ? '<span style="color:' + ((isSoon || needsReassign) ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(getGroupAM(g)) + '</span> · ' : '') +
+        (getGroupAM(g) ? '<span style="color:' + (isSoon ? 'var(--amber)' : '#6d28d9') + ';font-weight:500">' + esc(getGroupAM(g)) + '</span> · ' : '') +
         esc(g.location) + ' · Starts: ' + formatDisplayDate(g.startDate) +
         ' <span style="color:' + (isSoon ? 'var(--amber)' : 'var(--text3)') + ';font-weight:' + (isSoon ? '600' : 'normal') + '">(' + daysLabel + ')</span>' +
         (g.endDate ? ' · Due: ' + formatDisplayDate(g.endDate) : '') +
@@ -5423,7 +5421,6 @@ function renderLoans() {
       '</div>';
   }
   const scheduledCards = filteredScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'slc_')).join('');
-  const needsReassignScheduledCards = needsReassignScheduled.map((g, sgi) => _buildScheduledLoanCard(g, sgi, 'nrs_', true)).join('');
   // Build upcoming loan cards HTML (no nested backticks — uses string concat)
   // Apply same search/sort to upcoming loans; skip those merged into active/scheduled cards
   let filteredUpcoming = upcomingLoansVisible.filter(u => {
@@ -5521,9 +5518,9 @@ function renderLoans() {
   // cyan, Overdue's red are all already spoken for), so it reads as its own
   // distinct "needs attention" colour rather than blending into one of those.
   const needsReassignActiveCards = needsReassignActive.map((g, i) => buildActiveLoanCard(g, i, 'nrc_', true)).join('');
-  const needsReassignSection = (needsReassignScheduled.length || needsReassignActive.length)
+  const needsReassignSection = needsReassignActive.length
     ? '<div style="margin:0 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--amber-border)"></div><span style="font-size:11px;font-weight:600;color:var(--amber);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">&#9888; Needs Reassigning</span><div style="flex:1;height:1px;background:var(--amber-border)"></div></div>'
-      + needsReassignScheduledCards + needsReassignActiveCards
+      + needsReassignActiveCards
     : '';
   document.getElementById('loans-list').innerHTML = needsReassignSection
     + upcomingSection
