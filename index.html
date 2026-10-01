@@ -1994,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 171;
+const APP_VERSION = 172;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7260,9 +7260,51 @@ async function confirmLongTermModal() {
 // accountManager already is (loanMeta for synchronous rendering, loanDoc for
 // the server's reminder gate).
 async function convertLoanToLongTerm(g) {
-  const batchId = g.items?.[0]?.BatchID || null;
+  let batchId = g.items?.[0]?.BatchID || null;
   const loanTo = g.loanTo;
-  if (!batchId) { showToast('error', 'This loan has no BatchID — too old to convert. Use Extend/Edit instead.'); return; }
+  const oldEndDate = g.endDate || '';
+
+  // Pre-BatchID loans are a real, current class of loan (anything booked
+  // before BatchID tracking was introduced), not rare archival cruft — this
+  // showed up live on a current overdue loan with its own Simpro job number.
+  // Rather than refuse, adopt it into the modern BatchID system now: mint a
+  // real BatchID and migrate its existing loanDoc (simproJobId, notes, etc.)
+  // across from the legacy 'loandoc_' fallback key. This is also load-
+  // bearing for _loanKey()'s long-term collision fix — two no-BatchID
+  // long-term loans to the same customer would share the same blank-end-date
+  // fallback key with no way to tell them apart otherwise.
+  let _oldPdfKey = null;
+  if (!batchId) {
+    _oldPdfKey = 'loandoc_' + encodeURIComponent(loanTo + '|||' + oldEndDate);
+    batchId = newBatchId();
+    g.items.forEach(item => {
+      const idx = equipment.findIndex(e => e.id === item.id);
+      if (idx >= 0) equipment[idx].BatchID = batchId;
+    });
+  }
+
+  if (_oldPdfKey) {
+    try {
+      const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_oldPdfKey) + '.json');
+      const _existingDoc = _r.ok ? await _r.json() : null;
+      if (_existingDoc) {
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(_existingDoc)
+        });
+        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_oldPdfKey) + '.json', { method: 'DELETE' });
+        if (window._simproJobCache && window._simproJobCache[_oldPdfKey]) {
+          window._simproJobCache[batchId] = window._simproJobCache[_oldPdfKey];
+          delete window._simproJobCache[_oldPdfKey];
+          localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
+        }
+        if (window._loanDocCache && window._loanDocCache[_oldPdfKey]) {
+          window._loanDocCache[batchId] = { ...(window._loanDocCache[batchId] || {}), ...window._loanDocCache[_oldPdfKey] };
+          delete window._loanDocCache[_oldPdfKey];
+        }
+      }
+    } catch(e) { console.warn('Could not migrate loanDoc to new BatchID:', e); }
+  }
 
   let _closedJobId = null;
   try {
@@ -7275,7 +7317,6 @@ async function convertLoanToLongTerm(g) {
     }
   } catch(e) { console.warn('Could not close Simpro job on long-term conversion:', e); }
 
-  const oldEndDate = g.endDate || '';
   g.items.forEach(item => {
     const idx = equipment.findIndex(e => e.id === item.id);
     if (idx >= 0) equipment[idx].LoanEndDate = '';
@@ -7292,7 +7333,9 @@ async function convertLoanToLongTerm(g) {
   try {
     await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ longTerm: true, endDate: '', ...(_closedJobId ? { simproClosedAt: nzNow() } : {}) })
+      // loanTo/location included so a just-migrated legacy doc (which may
+      // have been keyed under stale values) ends up with the current ones.
+      body: JSON.stringify({ loanTo, location: g.location || '', longTerm: true, endDate: '', ...(_closedJobId ? { simproClosedAt: nzNow() } : {}) })
     });
     window._loanDocCache = window._loanDocCache || {};
     window._loanDocCache[batchId] = { ...(window._loanDocCache[batchId] || {}), longTerm: true, ...(_closedJobId ? { simproClosedAt: nzNow() } : {}) };
