@@ -81,7 +81,7 @@ if ('serviceWorker' in navigator) {
 <!-- Mobile app design system fonts — only loaded for #mobile-app, see mp-tokens style block -->
 <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f4f3f0;--surface:#fff;--surface2:#f9f8f6;--border:#e5e3de;--border2:#d4d1ca;--text:#1a1917;--text2:#6b6860;--text3:#9c9a94;--accent:#1d4ed8;--accent-light:#eff4ff;--green:#15803d;--green-light:#f0fdf4;--green-border:#bbf7d0;--red:#dc2626;--red-light:#fef2f2;--red-border:#fecaca;--amber:#d97706;--amber-light:#fffbeb;--amber-border:#fde68a;--radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.06)}
+:root{--bg:#f4f3f0;--surface:#fff;--surface2:#f9f8f6;--border:#e5e3de;--border2:#d4d1ca;--text:#1a1917;--text2:#6b6860;--text3:#9c9a94;--accent:#1d4ed8;--accent-light:#eff4ff;--green:#15803d;--green-light:#f0fdf4;--green-border:#bbf7d0;--red:#dc2626;--red-light:#fef2f2;--red-border:#fecaca;--amber:#d97706;--amber-light:#fffbeb;--amber-border:#fde68a;--lt:#0e7490;--lt-light:#ecfeff;--lt-mid:#cffafe;--lt-border:#67e8f9;--radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.06)}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
 
@@ -179,6 +179,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .badge-upcoming{background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd}
 .badge-upcoming-sm{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:20px;font-size:11px;font-weight:500;background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd;white-space:nowrap}
 .badge-not-tested{background:var(--red-light);color:var(--red);border:1px solid var(--red-border)}
+.badge-longterm{background:var(--lt-mid);color:var(--lt);border:1px solid var(--lt-border)}
 /* SETTINGS PANEL */
 .settings-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px}
 .settings-section-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
@@ -420,6 +421,10 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 
 /* LOAN CARDS */
 .loan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.loan-card.loan-longterm{background:var(--lt-light);border-color:var(--lt-border)}
+.loan-card.loan-longterm .loan-card-header:hover{background:#dbf8fd}
+.loan-card.loan-longterm .loan-card-body{border-top-color:var(--lt-border)}
+.loan-card.loan-longterm .loan-device{border-bottom-color:var(--lt-border)}
 .loan-card-header{padding:14px 16px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;justify-content:space-between;cursor:pointer;transition:background .1s}
 .loan-card-header:hover{background:var(--surface2)}
 .loan-card-customer{font-size:15px;font-weight:600}
@@ -530,6 +535,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
   --mp-black:#1d1d1d;--mp-black-80:#575756;--mp-black-60:#747577;--mp-black-40:#a7a9ac;
   --mp-black-20:#d1d3d4;--mp-black-10:#e8e9ea;--mp-black-05:#f4f4f5;--mp-white:#ffffff;
   --mp-critical:#c8102e;--mp-critical-tint:#fbe3e7;
+  --mp-teal:#00809b;--mp-teal-60:#66b3c3;--mp-teal-30:#b3d9e1;--mp-teal-20:#cce6eb;--mp-teal-10:#e5f2f5;--mp-teal-ink:#006277;
   --mp-text-strong:var(--mp-black);--mp-text-body:var(--mp-black-80);--mp-text-muted:var(--mp-black-60);
   --mp-border-hairline:var(--mp-black-20);--mp-border-subtle:var(--mp-black-10);
   /* Type */
@@ -667,6 +673,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 
 /* ── LOAN CARDS (mobile) ─────────────────────────────────────────── */
 .mp-loan-card{background:var(--mp-white);border-radius:var(--mp-radius-card);box-shadow:var(--mp-shadow-card);margin-bottom:var(--mp-space-3);overflow:hidden}
+.mp-loan-card.mp-longterm{background:var(--mp-teal-10)}
 .mp-loan-cap{height:4px;display:flex}
 .mp-loan-cap span{flex:1}
 .mp-loan-body{padding:12px 14px}
@@ -679,6 +686,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 .mp-pill-status-active{background:var(--mp-green-20);color:#5c8a01}
 .mp-pill-status-overdue{background:var(--mp-critical-tint);color:var(--mp-critical)}
 .mp-pill-status-scheduled{background:var(--mp-purple-20);color:var(--mp-purple)}
+.mp-pill-status-longterm{background:var(--mp-teal-20);color:var(--mp-teal-ink)}
 .mp-pill-status-due{background:var(--mp-orange-20);color:#a85800}
 .mp-pill-test-awaiting{background:var(--mp-orange-20);color:#a85800}
 .mp-pill-test-done{background:var(--mp-green-20);color:#5c8a01}
@@ -907,9 +915,16 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
             <div class="form-grid" style="margin-bottom:12px">
               <div class="form-group"><label>Event and/or Customer Name <span style="color:var(--red)">*</span></label><input type="text" id="b-loan-to" placeholder="Customer or company name" list="b-contacts-list"><datalist id="b-contacts-list"></datalist></div>
               <div class="form-group"><label>Location <span style="color:var(--red)">*</span></label><input type="text" id="b-location" placeholder="City, site or address" list="b-locations-list"><datalist id="b-locations-list"></datalist></div>
-              <div class="form-group"><label>Shipping Island <span style="color:var(--red)">*</span></label><select id="b-island" required><option value="">Select island…</option><option value="North">North Island</option><option value="South">South Island</option></select></div>
+              <div class="form-group"><label>Shipping Island <span id="b-island-req" style="color:var(--red)">*</span></label><select id="b-island" required><option value="">Select island…</option><option value="North">North Island</option><option value="South">South Island</option></select></div>
               <div class="form-group"><label>Loan Start Date <span style="color:var(--red)">*</span></label><input type="date" id="b-start-date" required></div>
-              <div class="form-group"><label>Loan End Date <span style="color:var(--red)">*</span></label><input type="date" id="b-end-date" required></div>
+              <div class="form-group">
+                <label>Loan End Date <span id="b-end-date-req" style="color:var(--red)">*</span></label>
+                <input type="date" id="b-end-date" required>
+                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-top:4px;cursor:pointer;font-weight:400">
+                  <input type="checkbox" id="b-long-term" onchange="onLongTermToggle(this.checked)" style="cursor:pointer;accent-color:var(--lt)">
+                  Long-term loan (no end date)
+                </label>
+              </div>
               <div class="form-group"><label>Account Manager <span style="color:var(--red)">*</span></label><select id="b-account-manager" required><option value=""></option></select></div>
               <div class="form-group"><label>Account Manager Email <span style="color:var(--red)">*</span></label><input type="email" id="b-email" placeholder="borrower@email.com" required></div>
               <div class="form-group"><label>Contact Number</label><input type="text" id="b-contact-number" placeholder="Phone or contact number"></div>
@@ -1440,7 +1455,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     </div>
     <div id="loan-doc-confirm-reminder" style="display:none;align-items:center;gap:8px;background:var(--amber-light);border-bottom:1px solid var(--amber-border);color:var(--amber);font-size:13px;font-weight:500;padding:10px 20px">
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Click the ✕ above to finish this loan — that's what creates the Simpro job, sends the confirmation email, and saves your notes. Clicking outside this window won't do it.
+      <span id="loan-doc-confirm-reminder-text">Click the ✕ above to finish this loan — that's what creates the Simpro job, sends the confirmation email, and saves your notes. Clicking outside this window won't do it.</span>
     </div>
 
     <div id="loan-doc-content" style="padding:24px;overflow-y:auto;flex:1;min-height:0"></div>
@@ -1645,6 +1660,25 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <div class="modal-footer">
       <button class="btn" onclick="closeExtendModal()">Cancel</button>
       <button class="btn btn-primary" onclick="confirmExtendLoan()">Extend Loan</button>
+    </div>
+  </div>
+</div>
+
+<!-- LONG TERM LOAN MODAL — toLongTerm (confirm, no inputs) / toActive (set an end date) -->
+<div class="modal-overlay" id="longterm-modal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title" id="longterm-title">Long-term Loan</div>
+      <button class="modal-close" onclick="closeLongTermModal()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;white-space:pre-line" id="longterm-subtitle"></div>
+    <div class="form-group" style="margin-bottom:16px;display:none" id="longterm-date-group">
+      <label>New End Date</label>
+      <input type="date" id="longterm-date" style="width:100%;padding:10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none">
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeLongTermModal()">Cancel</button>
+      <button class="btn btn-primary" id="longterm-confirm-btn" onclick="confirmLongTermModal()">Confirm</button>
     </div>
   </div>
 </div>
@@ -1960,7 +1994,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 170;
+const APP_VERSION = 171;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -2043,6 +2077,85 @@ const EJS_LOAN_TEMPLATE     = 'template_24se0ve';       // loan confirmation tem
 const EJS_KEY               = 'vMgCBjvQgk-oWs34f';
 const APP_URL      = 'https://demo.chsnz.co.nz';
 const SIMPRO_PROXY_URL      = 'https://script.google.com/macros/s/AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw/exec'; // paste Google Apps Script web app URL here
+
+// ── SIMPRO JOB CREATION WIND-DOWN ──────────────────────────────────────
+// The Simpro integration is being retired. New loans no longer create a job,
+// but existing jobs must still UPDATE and CLOSE until every outstanding one
+// has been closed out — so nothing here was deleted, only gated.
+//
+// This lives in Firebase rather than as a const so it can be flipped during
+// the transition without a redeploy, and so it applies to everyone at once
+// (and to already-open tabs, which the proxy checks server-side — see
+// handlePayload() in .gas-proxy/Code.js). Toggled from Settings → Simpro Job
+// Health; turning it back ON is admin-password gated, same as Test Mode.
+//
+//   createJobs   — the toggle itself
+//   windDownFrom — YYYY-MM-DD, stamped ONCE on the first flip to off and
+//                  never moved again. It's the cutoff for the Missing Simpro
+//                  Jobs list: only loans created before it are chased, so
+//                  that list winds down to zero instead of flagging every
+//                  new loan forever. It deliberately doesn't follow the
+//                  toggle — if it did, switching creation back on for a week
+//                  and off again would drag that week's loans (which DO have
+//                  jobs) back into the list.
+//
+// Defaults to creation OFF: the wound-down state is the intended steady one,
+// so a failed read should fail toward "don't create" rather than silently
+// resuming an integration we're retiring.
+let SIMPRO_CFG = { createJobs: false, windDownFrom: null, changedBy: null, changedAt: null };
+
+async function loadSimproConfig() {
+  try {
+    const r = await fetch(FB_URL + '/simproConfig.json');
+    const d = await r.json();
+    if (d && typeof d === 'object') {
+      SIMPRO_CFG = {
+        createJobs:   d.createJobs === true,
+        windDownFrom: d.windDownFrom || null,
+        changedBy:    d.changedBy || null,
+        changedAt:    d.changedAt || null
+      };
+    }
+    // A missing node means "never configured" — leave the safe default in
+    // place rather than inventing a windDownFrom, so an un-set-up database
+    // behaves as wound down and the first toggle stamps the real date.
+  } catch(e) {
+    console.warn('loadSimproConfig failed — defaulting to job creation OFF:', e);
+  }
+}
+
+async function saveSimproConfig() {
+  try {
+    await fetch(FB_URL + '/simproConfig.json', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(SIMPRO_CFG)
+    });
+    // Same reason saveLoanMeta() does this — this path never touches
+    // /data.json, so without bumping _v no other open session would notice.
+    await bumpRemoteVersion();
+  } catch(e) {
+    console.warn('saveSimproConfig failed:', e);
+  }
+}
+
+// True when a loan predates the wind-down — i.e. one that should have had a
+// Simpro job and is still worth chasing in the Missing Jobs list.
+// BatchID is 'batch_' + Date.now() (newBatchId()), so the pdfKey itself
+// encodes creation time and no extra stored state is needed. Legacy
+// 'loandoc_…' keys predate BatchID entirely, so fall back to the loan's own
+// start date; when neither is available, treat it as pre-existing so nothing
+// silently disappears off the list.
+function _isPreWindDownLoan(pdfKey, startDate) {
+  if (SIMPRO_CFG.createJobs) return true;   // creation is live again — chase everything
+  if (!SIMPRO_CFG.windDownFrom) return true;
+  const m = /^(?:test)?batch_(\d{10,})$/.exec(pdfKey || '');
+  if (m) {
+    const created = new Date(Number(m[1])).toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+    return created < SIMPRO_CFG.windDownFrom;
+  }
+  return !startDate || startDate < SIMPRO_CFG.windDownFrom;
+}
 
 // NZ timezone date helper
 function nzDate() {
@@ -2445,11 +2558,41 @@ function onDemoTypeSelectChange(selectEl) {
 // Demo Type only means anything for a Demo job — for any other Job Type
 // (PMV, Repair, etc.) it isn't asked at all, since it doesn't apply.
 function onJobTypeChange(selectEl) {
-  const isDemo = selectEl.value === 'Demo';
+  // Long-term loans never need a Demo type regardless of Job Type — see
+  // onLongTermToggle(), which re-runs this after flipping the checkbox so
+  // switching Job Type back to 'Demo' while long-term is checked doesn't
+  // re-show it.
+  const isLongTerm = document.getElementById('b-long-term')?.checked;
+  const isDemo = selectEl.value === 'Demo' && !isLongTerm;
   const grp = document.getElementById('b-demo-type-group');
   if (grp) grp.style.display = isDemo ? '' : 'none';
   const dtEl = document.getElementById('b-demo-type');
   if (dtEl) dtEl.required = isDemo;
+}
+
+// A long-term loan is handed to an account manager indefinitely — there's
+// no due date to chase, and Demo Type / Island exist only to drive reminder
+// timing (jobType==='Demo' gates the demo-start reminder, island sets its
+// lead time), which a long-term loan never gets. All three become optional
+// and are cleared rather than just hidden, so a stale leftover value can't
+// resurrect a reminder this loan is meant to be exempt from.
+function onLongTermToggle(checked) {
+  const endDateEl = document.getElementById('b-end-date');
+  const endReqEl  = document.getElementById('b-end-date-req');
+  if (endDateEl) { endDateEl.disabled = checked; endDateEl.required = !checked; if (checked) endDateEl.value = ''; }
+  if (endReqEl) endReqEl.style.display = checked ? 'none' : '';
+
+  const islandEl = document.getElementById('b-island');
+  const islandReqEl = document.getElementById('b-island-req');
+  if (islandEl) { islandEl.disabled = checked; islandEl.required = !checked; if (checked) islandEl.value = ''; }
+  if (islandReqEl) islandReqEl.style.display = checked ? 'none' : '';
+
+  if (checked) {
+    const dtEl = document.getElementById('b-demo-type');
+    if (dtEl) dtEl.value = '';
+  }
+  const jobTypeEl = document.getElementById('b-job-type');
+  if (jobTypeEl) onJobTypeChange(jobTypeEl); // re-evaluate Demo Type visibility against the new long-term state
 }
 
 // ── DIRTY FLAGS — only re-render a tab if data has changed since last render ──
@@ -2494,7 +2637,8 @@ async function loadData() {
       loadLoanDocNotes(),
       loadTestReportsIndex(),
       loadKitGroups(),
-      loadCustomDemoTypes()
+      loadCustomDemoTypes(),
+      loadSimproConfig()
     ]);
     // Now that customDemoTypes is loaded, populate the New Loan form's
     // Demo type select with the full current list — it's always present
@@ -2588,6 +2732,8 @@ function _auditBadge(type) {
     loan_deleted:     'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     scheduled_deleted:'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     loan_extended:    'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    loan_longterm_on: 'background:var(--lt-mid);color:var(--lt);border:1px solid var(--lt-border)',
+    loan_longterm_off:'background:var(--lt-mid);color:var(--lt);border:1px solid var(--lt-border)',
     items_returned:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
     item_removed:     'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
     items_added:      'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
@@ -2614,6 +2760,7 @@ function _auditBadge(type) {
   const labels = {
     loan_created: 'Loan Created', loan_deleted: 'Loan Deleted',
     scheduled_deleted: 'Scheduled Deleted', loan_extended: 'Extended',
+    loan_longterm_on: 'Made Long-term', loan_longterm_off: 'Returned to Active',
     items_returned: 'Returned', item_removed: 'Item Removed',
     items_added: 'Items Added', orphan_recovered: 'Orphan Recovered',
     orphan_deleted: 'Orphan Deleted', items_transferred: 'Transferred',
@@ -2639,7 +2786,7 @@ function _auditFormatTs(ts) {
 }
 
 const _AUDIT_CAT = {
-  loans:    ['loan_created','loan_deleted','loan_extended','items_returned','item_removed','items_added','items_transferred','scheduled_deleted','orphan_recovered','orphan_deleted'],
+  loans:    ['loan_created','loan_deleted','loan_extended','loan_longterm_on','loan_longterm_off','items_returned','item_removed','items_added','items_transferred','scheduled_deleted','orphan_recovered','orphan_deleted'],
   database: ['asset_added','asset_edited','asset_deleted','asset_retired'],
   simpro:   ['simpro_created','simpro_updated','simpro_closed'],
 };
@@ -2707,7 +2854,7 @@ function closeAuditLog() {
   document.getElementById('audit-log-modal').classList.remove('open');
 }
 
-const _LOAN_UPDATE_TYPES = ['items_added', 'item_removed', 'items_returned', 'loan_extended', 'items_transferred', 'simpro_created', 'simpro_updated', 'simpro_closed'];
+const _LOAN_UPDATE_TYPES = ['items_added', 'item_removed', 'items_returned', 'loan_extended', 'loan_longterm_on', 'loan_longterm_off', 'items_transferred', 'simpro_created', 'simpro_updated', 'simpro_closed'];
 
 function _relativeTime(ts) {
   if (!ts) return '';
@@ -3084,6 +3231,14 @@ function showAssetPreview(item) {
 
 async function submitReturn(opts) {
   if (!currentItem) return;
+  // Long-term loans are meant to be indefinite — confirm before undoing
+  // that. Skipped when the caller already confirmed (mobile's scan queue
+  // asks once, up front, for the whole batch rather than once per item —
+  // see mpConfirmScanReturn()) or passes silent (submitCount()'s internal
+  // reuse and similar non-interactive paths).
+  if (!opts?.longTermConfirmed && !opts?.silent && isLoanLongTerm(currentItem.BatchID)) {
+    if (!confirm('This is a LONG-TERM loan to ' + currentItem.OnLoanTo + ' — the equipment is meant to stay with them indefinitely.\n\nReturn ' + currentItem.CHSAssetNo + ' anyway?')) return;
+  }
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location };
   const batchId = equipment[idx].BatchID || null;
@@ -3122,6 +3277,13 @@ async function submitReturn(opts) {
 
 async function submitCount(opts) {
   if (!currentItem) return;
+  // Deliberately no long-term confirmation here, unlike submitReturn() —
+  // Count/Stocktake mode scans items back-to-back in rapid succession with
+  // the camera left running between scans (see mpRenderScan()'s hint text),
+  // and a confirm() per scanned item would turn that into tapping through a
+  // dialog after every single item. A stocktake finding long-term gear
+  // physically back in the office is itself useful information worth
+  // recording as-is, not something to interrupt and re-litigate per item.
   const idx = equipment.findIndex(e => e.id === currentItem.id);
   const countedValue = 'Counted ' + formatDisplayDate(nzDate());
   const prev = { loanTo: equipment[idx].OnLoanTo, loc: equipment[idx].Location, batchId: equipment[idx].BatchID };
@@ -3279,6 +3441,7 @@ function buildStatusCell(e, on, od) {
   // Items in any upcoming/scheduled loan show as "Booked" regardless of their current on-loan state
   if (isScheduled) return '<span class="status-badge badge-booked">⏳ Booked</span><span class="badge-upcoming-sm" style="margin-left:4px">' + esc(scheduledLoanTo) + '</span>';
   if (upcoming) return '<span class="status-badge badge-booked">⏳ Booked</span><span class="badge-upcoming-sm" style="margin-left:4px">' + esc(upcoming.loanTo) + '</span>';
+  if (on && isLoanLongTerm(e.BatchID)) return '<span class="status-badge badge-longterm">∞ Long term</span>';
   if (on) return '<span class="status-badge badge-loan">' + (od ? '⚠ Overdue' : 'On loan') + '</span>';
   return '<span class="status-badge badge-avail">Available</span>';
 }
@@ -4076,7 +4239,7 @@ function handleBatchDeviceKey(e, id, idx) {
         } else if (clearsBeforeStart) {
           window._batchStatus[id] = '<span style="color:var(--green)">&#x2713; ' + (item.Model||item.CHSAssetNo) + ' &mdash; returns ' + formatDisplayDate(item.LoanEndDate) + ', before your loan</span>';
         } else {
-          window._batchStatus[id] = '<span style="color:var(--amber)">&#x26A0; ' + (item.Model||item.CHSAssetNo) + ' &mdash; on loan to ' + esc(item.OnLoanTo) + ' until ' + formatDisplayDate(item.LoanEndDate||'?') + '</span>';
+          window._batchStatus[id] = '<span style="color:var(--amber)">&#x26A0; ' + (item.Model||item.CHSAssetNo) + ' &mdash; on ' + (isLoanLongTerm(item.BatchID) ? 'a long-term loan' : 'loan') + ' to ' + esc(item.OnLoanTo) + (item.LoanEndDate ? ' until ' + formatDisplayDate(item.LoanEndDate) : '') + '</span>';
         }
         if (d) d.value = item.CHSAssetNo;
       } else {
@@ -4112,7 +4275,7 @@ function updateBatchDevice(id, val) {
     } else if (clearsBeforeStart) {
       statusHtml = '<span style="color:var(--green)">&#x2713; ' + (item.Model || item.CHSAssetNo) + ' &mdash; returns ' + formatDisplayDate(item.LoanEndDate) + ', before your loan</span>';
     } else {
-      statusHtml = '<span style="color:var(--amber)">&#x26A0; ' + (item.Model || item.CHSAssetNo) + ' &mdash; on loan to ' + esc(item.OnLoanTo) + ' until ' + formatDisplayDate(item.LoanEndDate || '?') + '</span>';
+      statusHtml = '<span style="color:var(--amber)">&#x26A0; ' + (item.Model || item.CHSAssetNo) + ' &mdash; on ' + (isLoanLongTerm(item.BatchID) ? 'a long-term loan' : 'loan') + ' to ' + esc(item.OnLoanTo) + (item.LoanEndDate ? ' until ' + formatDisplayDate(item.LoanEndDate) : '') + '</span>';
     }
     if (upcomingForItem) statusHtml += ' <span style="color:#6d28d9;font-size:11px">&#x23F3; Upcoming: ' + esc(upcomingForItem.loanTo) + ' from ' + formatDisplayDate(upcomingForItem.startDate) + '</span>';
     window._batchStatus[id] = statusHtml;
@@ -4666,6 +4829,7 @@ async function submitBatchLoan() {
   const location = document.getElementById('b-location').value.trim();
   const startDate = document.getElementById('b-start-date').value;
   const endDate   = document.getElementById('b-end-date').value;
+  const isLongTerm = !!document.getElementById('b-long-term')?.checked;
   const batchEmailCheck = document.getElementById('b-email').value.trim();
   const batchAMCheck    = document.getElementById('b-account-manager')?.value || '';
   const batchJobTypeCheck = document.getElementById('b-job-type')?.value || 'Demo';
@@ -4681,12 +4845,20 @@ async function submitBatchLoan() {
 
   if (!loanTo || !location) { showErr('Please fill in "On Loan To" and "Location".'); return; }
   if (!startDate) { showErr('Please select a Loan Start Date.'); return; }
-  if (!endDate)   { showErr('Please select a Loan End Date.'); return; }
-  if (endDate < startDate) { showErr('Loan End Date must be on or after the Start Date.'); return; }
+  // Long-term loans are handed to an account manager indefinitely — no end
+  // date, and (see onLongTermToggle()) no Demo Type or Island either, since
+  // both exist only to drive reminder timing that a long-term loan is exempt
+  // from.
+  if (!isLongTerm) {
+    if (!endDate)   { showErr('Please select a Loan End Date.'); return; }
+    if (endDate < startDate) { showErr('Loan End Date must be on or after the Start Date.'); return; }
+  }
   if (!batchAMCheck) { showErr('Please select an Account Manager.'); return; }
   if (!batchEmailCheck || !batchEmailCheck.includes('@')) { showErr('Please enter a valid Account Manager Email address.'); return; }
-  if (batchJobTypeCheck === 'Demo' && !batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
-  if (!batchIslandCheck) { showErr('Please select the shipping Island (North or South) — this determines how much notice we get for shipping.'); return; }
+  if (!isLongTerm) {
+    if (batchJobTypeCheck === 'Demo' && !batchDemoTypeCheck) { showErr('Please select a Demo Type.'); return; }
+    if (!batchIslandCheck) { showErr('Please select the shipping Island (North or South) — this determines how much notice we get for shipping.'); return; }
+  }
 
   // Warn (don't block) when a loan for the exact same customer/location/end
   // date already exists — this is exactly what happens when someone books a
@@ -4695,7 +4867,12 @@ async function submitBatchLoan() {
   // don't share a BatchID, so they never merge into one card. Checked
   // directly against the live equipment/upcomingLoans arrays rather than
   // window._loanGroups, which is only ever as fresh as the last renderLoans().
-  if (_findExistingLoanMatch(loanTo, location, endDate)) {
+  // Skipped for long-term loans — the match is keyed partly on end date, and
+  // every long-term loan has a blank one, so this would otherwise fire
+  // against any other long-term loan for the same customer/location (e.g.
+  // topping up an account manager's existing long-term gear, which is a
+  // normal, expected thing to do here, not a mistake to warn about).
+  if (!isLongTerm && _findExistingLoanMatch(loanTo, location, endDate)) {
     const proceed = confirm('A loan for "' + loanTo + '" at this location, ending ' + formatDisplayDate(endDate) + ', already exists.\n\nIf these devices belong on that loan, cancel this and use "Add items" on the existing loan instead — creating a second loan with the same details won\'t merge with it.\n\nClick OK to create this as a separate new loan anyway.');
     if (!proceed) { if (_submitBtn) { _submitBtn.disabled = false; _submitBtn.textContent = 'Confirm Loan'; } return; }
   }
@@ -4826,29 +5003,29 @@ async function submitBatchLoan() {
     // All devices for PDF purposes
     const devicesToLoanAll = [...directDevices, ...upcomingDevices];
 
-    loanMeta[batchId] = { accountManager: batchAM };
+    loanMeta[batchId] = { accountManager: batchAM, longTerm: isLongTerm };
     saveLoanMeta().catch(e => console.warn('Could not save loanMeta', e));
     scheduleSave();
     renderTable(); updateStats();
     clearTimeout(savingTimeout);
 
     const batchLoanItems = devicesToLoanAll;
-    window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM, jobType: batchJobType } };
+    window._lastLoanDoc = { items: batchLoanItems, info: { loanTo, location, startDate, endDate, accountManager: batchAM, jobType: batchJobType, longTerm: isLongTerm } };
     window._pendingLoanDocPdfKey = batchId;
-    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType }, null, { notesCell: '', authCell: shippingDetails, batchNotes: notes });
+    generateLoanDoc(batchLoanItems, { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, longTerm: isLongTerm }, null, { notesCell: '', authCell: shippingDetails, batchNotes: notes });
 
     setTimeout(async () => {
       const docEl = document.getElementById('printable-loan-doc');
       if (docEl) { window._loanPDFs = window._loanPDFs || {}; window._loanPDFs[batchId] = docEl.innerHTML; }
       try {
-        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, demoType: batchDemoType, island: batchIsland, notes: notes, notesCell: notes, authCell: shippingDetails,
+        const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, demoType: batchDemoType, island: batchIsland, longTerm: isLongTerm, notes: notes, notesCell: notes, authCell: shippingDetails,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
         await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loanDocPayload)
         });
         window._loanDocCache = window._loanDocCache || {};
-        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails, demoType: batchDemoType, island: batchIsland };
+        window._loanDocCache[batchId] = { notes: notes, notesCell: notes, authCell: shippingDetails, demoType: batchDemoType, island: batchIsland, longTerm: isLongTerm };
         if (_dirty.loans === false) renderLoans();
       } catch(e) { console.warn('Could not save loan doc to Firebase', e); }
     }, 300);
@@ -4856,18 +5033,23 @@ async function submitBatchLoan() {
     // Store email details so user can send after editing the loan form
     const amEmailForConfirm = batchEmail || getAMEmail(batchAM);
     window._pendingLoanEmail = amEmailForConfirm
-      ? { items: batchLoanItems, info: { loanTo, location, startDate, endDate }, email: amEmailForConfirm, amName: batchAM }
+      ? { items: batchLoanItems, info: { loanTo, location, startDate, endDate, longTerm: isLongTerm }, email: amEmailForConfirm, amName: batchAM }
       : null;
     // Only auto-send on close when this is a brand new loan just confirmed
     window._autoSendOnClose = !!amEmailForConfirm;
-    window._autoCreateSimproOnClose = true;
+    // A long-term loan is an indefinite equipment hold, not a scheduled demo
+    // — it never gets a Simpro job regardless of whether creation is
+    // currently toggled on (a job with no real due date doesn't make sense;
+    // see createJob()'s DueDate fallback in .gas-proxy/Code.js).
+    window._autoCreateSimproOnClose = !isLongTerm;
 
     // Fire the due-back calendar invite immediately — unlike the confirmation
     // email above (deferred until the loan-doc modal closes), this doesn't
     // depend on anyone opening/sending the PDF, so every new loan reliably
     // gets one. Needs an AM email to invite; skip silently if none is on file
     // (mirrors sendReturnDueSoonReminder_() on the server, which does the same).
-    if (amEmailForConfirm) {
+    // Long-term loans have no due-back date to invite anyone to.
+    if (amEmailForConfirm && !isLongTerm) {
       sendReturnCalendarInvite({
         pdfKey: batchId, loanTo, location, endDate, island: batchIsland,
         accountManager: batchAM, amEmail: amEmailForConfirm,
@@ -4875,7 +5057,18 @@ async function submitBatchLoan() {
       });
     }
     const _rem = document.getElementById('loan-doc-confirm-reminder');
-    if (_rem) _rem.style.display = 'flex';
+    if (_rem) {
+      // Text reflects current state rather than assuming it — job creation
+      // can be switched back on at any time via Settings → Simpro Job Health,
+      // and a long-term loan never gets one regardless.
+      const _remText = document.getElementById('loan-doc-confirm-reminder-text');
+      if (_remText) {
+        _remText.textContent = (SIMPRO_CFG.createJobs && !isLongTerm)
+          ? 'Click the ✕ above to finish this loan — that\'s what creates the Simpro job, sends the confirmation email, and saves your notes. Clicking outside this window won\'t do it.'
+          : 'Click the ✕ above to finish this loan — that\'s what sends the confirmation email and saves your notes. Clicking outside this window won\'t do it.';
+      }
+      _rem.style.display = 'flex';
+    }
 
     const badge = document.getElementById('loan-confirmed-badge');
     if (badge) { badge.style.display = 'inline-flex'; setTimeout(() => badge.style.display = 'none', 120000); }
@@ -4886,6 +5079,7 @@ async function submitBatchLoan() {
     window._batchStatus = {};
     ['b-loan-to','b-location','b-end-date','b-notes','b-shipping-details','b-email','b-contact-number'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
     const amEl = document.getElementById('b-account-manager'); if(amEl) amEl.value = '';
+    const ltEl = document.getElementById('b-long-term'); if (ltEl) { ltEl.checked = false; onLongTermToggle(false); }
     const jtEl = document.getElementById('b-job-type'); if(jtEl) { jtEl.value = 'Demo'; onJobTypeChange(jtEl); }
     const dtEl = document.getElementById('b-demo-type'); if(dtEl) dtEl.innerHTML = demoTypeOptionsHtml('');
     const isEl = document.getElementById('b-island'); if(isEl) isEl.value = '';
@@ -5009,7 +5203,7 @@ function renderLoans() {
     // Group by BatchID when present (immutable, Simpro-linked).
     // Fall back to OnLoanTo+Location+EndDate only for legacy items without a BatchID.
     const key = e.BatchID || (e.OnLoanTo + '|||' + (e.Location||'') + '|||' + (e.LoanEndDate||''));
-    if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled, batchKey: e.BatchID || null };
+    if (!target[key]) target[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], scheduled: isScheduled, batchKey: e.BatchID || null, longTerm: isLoanLongTerm(e.BatchID) };
     target[key].items.push(e);
   });
   const overdueOnly = document.getElementById('loans-overdue-only')?.checked;
@@ -5047,7 +5241,8 @@ function renderLoans() {
   const upcomingDeviceCount = upcomingLoansVisible.reduce((sum, u) => sum + u.items.length, 0);
   const scheduledGroups = Object.values(scheduledGrouped);
   const totalUpcoming = upcomingLoansVisible.length + scheduledGroups.length;
-  document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.filter(e => !(e.LoanStartDate && e.LoanStartDate > today)).length + ' devices' + (totalUpcoming ? ' · ' + totalUpcoming + ' upcoming' : '');
+  const longTermCount = groups.filter(isGroupLongTerm).length;
+  document.getElementById('loans-count').textContent = groups.length + ' active loan' + (groups.length!==1?'s':'') + ' · ' + onLoan.filter(e => !(e.LoanStartDate && e.LoanStartDate > today)).length + ' devices' + (totalUpcoming ? ' · ' + totalUpcoming + ' upcoming' : '') + (longTermCount ? ' · ' + longTermCount + ' long-term' : '');
   if (!groups.length) {
     if (!upcomingLoansVisible.length) {
       document.getElementById('loans-list').innerHTML = `<div style="text-align:center;padding:40px;color:var(--text3)">No active loans</div>`;
@@ -5268,23 +5463,40 @@ function renderLoans() {
       + scheduledCards + upcomingCards
       + '<div style="margin:8px 0 16px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--border)"></div><span style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">Current Loans</span><div style="flex:1;height:1px;background:var(--border)"></div></div>'
     : '';
-  document.getElementById('loans-list').innerHTML = upcomingSection + groups.map((g, gi) => {
-    const overdue = g.endDate && g.endDate < today;
-    const key = _loanKey(g);
-    const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
-    const _rActive = getLoanReadiness(_rKeyActive);
-    const _startDate = g.items[0]?.LoanStartDate || '';
-    const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested && !_rActive.noTestRequired;
-    return `<div class="loan-card" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
-      <div class="loan-card-header" onclick="toggleLoanCard('lc_${gi}')">
+  const longTermGroups = groups.filter(isGroupLongTerm);
+  const longTermSection = longTermGroups.length
+    ? '<div style="margin:20px 0 8px;display:flex;align-items:center;gap:10px"><div style="flex:1;height:1px;background:var(--lt-border)"></div><span style="font-size:11px;font-weight:600;color:var(--lt);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap">∞ Long Term Loans</span><div style="flex:1;height:1px;background:var(--lt-border)"></div></div>'
+      + longTermGroups.map((g, i) => buildActiveLoanCard(g, i, 'ltc_')).join('')
+    : '';
+  document.getElementById('loans-list').innerHTML = upcomingSection
+    + groups.map((g, gi) => buildActiveLoanCard(g, gi, 'lc_')).join('')
+    + longTermSection;
+}
+
+// Shared by the Current Loans list and the Long Term Loans section below it —
+// a long-term loan renders in BOTH (tinted, per the feature's design), so the
+// template is a function rather than inlined, and idPrefix keeps their two
+// expand/collapse bodies from colliding on the same element id.
+function buildActiveLoanCard(g, gi, idPrefix) {
+  const today = nzDate();
+  const overdue = g.endDate && g.endDate < today;
+  const longTerm = isGroupLongTerm(g);
+  const key = _loanKey(g);
+  const bodyId = idPrefix + gi;
+  const _rKeyActive = _readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate);
+  const _rActive = getLoanReadiness(_rKeyActive);
+  const _startDate = g.items[0]?.LoanStartDate || '';
+  const _notTestedActive = _startDate && _startDate <= today && daysBetween(_startDate, today) <= 7 && !_rActive.tested && !_rActive.noTestRequired;
+  return `<div class="loan-card${longTerm ? ' loan-longterm' : ''}" style="${_notTestedActive ? 'border-color:var(--red-border);' : ''}">
+      <div class="loan-card-header" onclick="toggleLoanCard('${bodyId}')">
         <div>
           <div class="loan-card-customer">${esc(g.loanTo)}</div>
-          <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : ''} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const pdfKey = bId || fallbackKey; const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; return sj ? ` · <span style="color:var(--accent);font-weight:500;cursor:pointer;text-decoration:underline dotted" title="Click to correct this job number" onclick="event.stopPropagation();promptEditSimproJob('${esc(pdfKey)}','${esc(sj)}','${esc(g.loanTo).replace(/'/g,"\\'")}')">Job #${esc(sj)}</span>` : ''; })()}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
+          <div class="loan-card-meta">${getGroupAM(g) ? `<span style="color:var(--accent);font-weight:500">${esc(getGroupAM(g))}</span> · ` : ''}${esc(g.location)}${longTerm ? ` · <span style="color:var(--lt);font-weight:500">No end date</span>` : (g.endDate ? ` · Due: <span style="color:${overdue?'var(--red)':'inherit'}">${formatDisplayDate(g.endDate)}</span>` : '')} · ${g.items.length} device${g.items.length!==1?'s':''}${g._pendingItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._pendingItems.length} pending pickup)</span>` : ''}${g._ghostItems?.length ? ` <span style="color:#6d28d9;font-size:11px">(+${g._ghostItems.length} transferred out)</span>` : ''}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const pdfKey = bId || fallbackKey; const sj = (bId && window._loanDocCache?.[bId]?.simproJobId) || window._loanDocCache?.[fallbackKey]?.simproJobId; const closed = (bId && window._loanDocCache?.[bId]?.simproClosedAt) || window._loanDocCache?.[fallbackKey]?.simproClosedAt; return sj ? ` · <span style="${closed ? 'color:var(--text3);text-decoration:line-through' : 'color:var(--accent);font-weight:500;cursor:pointer;text-decoration:underline dotted'}" title="${closed ? 'This job was closed when the loan became long-term' : 'Click to correct this job number'}" ${closed ? '' : `onclick="event.stopPropagation();promptEditSimproJob('${esc(pdfKey)}','${esc(sj)}','${esc(g.loanTo).replace(/'/g,"\\'")}')"`}>Job #${esc(sj)}</span>` : ''; })()}${(() => { const bId = g.items[0]?.BatchID; const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo||'') + '|||' + (g.endDate||'')); const dt = (bId && window._loanDocCache?.[bId]?.demoType) || window._loanDocCache?.[fallbackKey]?.demoType; return _demoTypeBadge(dt); })()}</div>${g._loanNotes ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">&#x1F4CB; ${esc(g._loanNotes)}</div>` : ''}
         </div>
         <div class="loan-card-badge">
           <div class="loan-card-badge-row">
           ${buildLoanUpdateBadge(g.items[0]?.BatchID, g.loanTo)}
-          ${overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>'}
+          ${longTerm ? '<span class="status-badge badge-longterm">∞ Long term</span>' : (overdue ? '<span class="status-badge badge-loan">⚠ Overdue</span>' : '<span class="status-badge badge-avail">Active</span>')}
           ${buildReadinessButtons(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), false, g.items[0]?.LoanStartDate || '')}
           </div>
           <div class="loan-card-badge-row">
@@ -5292,7 +5504,10 @@ function renderLoans() {
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
           ${_reportsButtonHtml(_readinessKey(g.items[0]?.BatchID, g.loanTo, g.endDate), g.loanTo)}
-          <button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+          ${longTerm
+            ? `<button class="btn btn-sm" onclick="event.stopPropagation();openLongTermModal('${key}','toActive')" title="Set an end date and move this back to a normal loan" style="background:var(--lt);border-color:var(--lt);color:white">Return to Active</button>`
+            : `<button class="btn btn-sm" onclick="event.stopPropagation();openExtendLoanByKey('${key}')" style="background:var(--accent);border-color:var(--accent);color:white">Extend</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openLongTermModal('${key}','toLongTerm')" title="Hand this equipment to the account manager indefinitely" style="color:var(--lt);border-color:var(--lt-border)">Make long-term</button>`}
           <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}','edit')" title="Edit this loan's details" style="font-size:11px">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>Edit
           </button>
@@ -5309,13 +5524,12 @@ function renderLoans() {
           </div>
         </div>
       </div>
-      <div class="loan-card-body" id="lc_${gi}" style="display:none">
+      <div class="loan-card-body" id="${bodyId}" style="display:none">
         ${g.items.map(e => buildLoanDeviceRow(e, g._loanNotes)).join('')}
         ${g._ghostItems?.length ? g._ghostItems.map(e => buildGhostDeviceRow(e)).join('') : ''}
         ${buildPendingItemsHtml(g._pendingItems, g.items[0]?.BatchID || '')}
       </div>
     </div>`;
-  }).join('');
 }
 
 function toggleLoanCard(id) {
@@ -5362,7 +5576,7 @@ function selectAllBatchReturn(val) {
 
 let _confirmingBatchReturn = false; // re-entrancy guard — see below
 
-async function confirmBatchReturn() {
+async function confirmBatchReturn(opts) {
   // The Simpro job-close/loanDoc-prune work below can take a few seconds,
   // and nothing previously stopped a second click on "Confirm Returns"
   // (or a second mpConfirmReturnItems() call) from running this whole
@@ -5374,6 +5588,12 @@ async function confirmBatchReturn() {
   if (_confirmingBatchReturn) return;
   const toReturn = Object.entries(batchReturnChecked).filter(([k,v])=>v).map(([k])=>k);
   if (!toReturn.length) { showToast('error','No items selected'); return; }
+  // Long-term loans are meant to be indefinite — confirm before undoing
+  // that. mpConfirmReturnItems() asks its own native-feeling sheet first and
+  // passes longTermConfirmed so this isn't asked twice.
+  if (!opts?.longTermConfirmed && currentBatchGroup && isGroupLongTerm(currentBatchGroup)) {
+    if (!confirm('This is a LONG-TERM loan to ' + currentBatchGroup.loanTo + ' — the equipment is meant to stay with them indefinitely.\n\nReturn ' + toReturn.length + ' item' + (toReturn.length !== 1 ? 's' : '') + ' anyway?')) return;
+  }
   _confirmingBatchReturn = true;
   const _btn = document.getElementById('btn-confirm-batch-return');
   const _btnLabel = document.getElementById('btn-confirm-batch-return-label');
@@ -5744,7 +5964,7 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
       customer_name:     loanInfo.loanTo    || '',
       customer_location: loanInfo.location  || '',
       loan_start:        formatDisplayDate(loanInfo.startDate || nzDate()),
-      loan_end:          formatDisplayDate(loanInfo.endDate   || ''),
+      loan_end:          loanInfo.longTerm ? 'Long term — no end date' : formatDisplayDate(loanInfo.endDate || ''),
       loan_form_html:    loanFormHtml,
       manage_link:       manageLink,
       return_link:       returnLink,
@@ -6220,7 +6440,7 @@ async function viewUpcomingLoanDoc(upcomingId) {
     ? { items, info: { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '' }, email: uAmEmail, amName: u.accountManager || '' }
     : null;
   window._pendingLoanDocPdfKey = u.id;
-  generateLoanDoc(items, { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '' }, savedRows, savedExtra);
+  generateLoanDoc(items, { loanTo: u.loanTo, location: u.location || '', startDate: u.startDate || '', endDate: u.endDate || '', accountManager: u.accountManager || '', longTerm: isLoanLongTerm(u.id) }, savedRows, savedExtra);
 }
 
 function _loanDocEditHandler() {
@@ -6297,7 +6517,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:18%">Event and/or Customer Name</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:20%">Customer Address</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:12%">Loan Date</td>
-          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date</td>
+          <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:14%">Loan Ends Date${loanInfo.longTerm ? ' — long term' : ''}</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700;width:18%">Account Manager</td>
           <td style="border:1px solid #ccc;padding:2px 8px;font-size:11px;font-weight:700">Contact Number</td>
         </tr>
@@ -6517,7 +6737,13 @@ async function closeLoanDoc() {
     const _closePdfKey = window._currentLoanDocInfo?._pdfKey;
     const _cachedId = _closePdfKey && window._simproJobCache?.[_closePdfKey];
     const _alreadyCreated = _cachedId && _cachedId !== 'pending' && !(typeof _cachedId === 'object' && _cachedId.status === 'pending');
-    if (!_alreadyCreated) {
+    if (!SIMPRO_CFG.createJobs) {
+      // Wound down — _submitSimproJob() blocks this authoritatively anyway;
+      // skipping here just avoids a pointless DOM scrape + Firebase read on
+      // every close. The auto-send email above and the .ics return invite
+      // fired earlier in doLoan() are untouched by this.
+      console.log('Simpro: job creation switched off — skipping auto-create on close');
+    } else if (!_alreadyCreated) {
       try { await createSimproJob(); } catch(e) { console.warn('Auto Simpro job failed:', e); }
     } else {
       console.log('Simpro: job already created by auto-save, skipping close-handler call');
@@ -6545,7 +6771,7 @@ async function viewHistoryPDF(pdfKey) {
     if (d && (d.items || d.loanTo)) {
       if (!d.items) d.items = [];
       window._pendingLoanDocPdfKey = pdfKey;
-      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '', jobType: d.jobType || '' }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' });
+      generateLoanDoc(d.items, { loanTo: d.loanTo, location: d.location, startDate: d.startDate, endDate: d.endDate, accountManager: d.accountManager || '', jobType: d.jobType || '', longTerm: !!d.longTerm }, d.savedRows || null, { notesCell: d.notesCell||'', authCell: d.authCell||'', batchNotes: d.notes||'' });
     } else {
       showToast('error', 'Loan document not found');
     }
@@ -6645,6 +6871,11 @@ async function saveLoanDocChanges() {
   }
   window._currentLoanDocInfo._pdfKey = pdfKey;
 
+  // Declared here (not inside the try below) so the equipment-record update
+  // loop further down — outside that try/catch — can read saveBody.longTerm
+  // without a scoping error.
+  let saveBody;
+
   // Persist to Firebase — this is what makes it survive page reloads
   try {
     // Preserve any real simproJobId so a PUT doesn't wipe out what GAS
@@ -6679,7 +6910,7 @@ async function saveLoanDocChanges() {
         localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
       }
     }
-    const saveBody = {
+    saveBody = {
       loanTo: newLoanTo || info.loanTo || '',
       location: newLocation || info.location || '',
       startDate: toISO(newStartDate) || info.startDate || '',
@@ -6689,6 +6920,14 @@ async function saveLoanDocChanges() {
       jobType: info.jobType || _existDoc?.jobType || '',
       demoType: info.demoType || _existDoc?.demoType || '',
       island: info.island || _existDoc?.island || '',
+      // Explicit boolean check, not ||  — a plain || would treat an explicit
+      // `false` the same as "not set" and fall through to _existDoc's value,
+      // which is wrong the moment a loan's long-term status needs to read as
+      // false while an older doc still says true. Same carry-forward need as
+      // demoType/island above (the exact bug documented in TODO.md:99): any
+      // caller that doesn't know about this field (Add items, etc.) must not
+      // silently wipe it on its next save.
+      longTerm: (typeof info.longTerm === 'boolean') ? info.longTerm : !!_existDoc?.longTerm,
       items: loanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })),
       savedRows,
       notesCell,
@@ -6719,16 +6958,30 @@ async function saveLoanDocChanges() {
       if (equipment[idx].BatchID && equipment[idx].BatchID !== pdfKey) return;
       if (newLoanTo)         equipment[idx].OnLoanTo       = newLoanTo;
       if (newLocation)       equipment[idx].Location       = newLocation;
-      if (newEndDate)        equipment[idx].LoanEndDate    = toISO(newEndDate);
+      // Guarded on !saveBody.longTerm as well as truthiness — the printable
+      // form's end-date cell is always left blank for a long-term loan, so
+      // newEndDate is already '' in the normal case, but this stops a stray
+      // typed value in that cell from resurrecting a due date out from
+      // under a loan that's meant to have none.
+      if (newEndDate && !saveBody.longTerm) equipment[idx].LoanEndDate = toISO(newEndDate);
       if (newStartDate)      equipment[idx].LoanStartDate  = toISO(newStartDate);
       updated++;
     }
   });
-  // Keep _loanDocCache fresh so renderLoans() shows the new notes immediately
+  // Keep _loanDocCache fresh so renderLoans() shows the new notes immediately.
+  // Merged, not a blind overwrite — this used to wipe simproJobId/demoType/
+  // island/longTerm/simproClosedAt from the in-memory cache on every save
+  // (the same class of bug as viewLoanDocByKey()'s cache write above, but
+  // reached far more often since this is the path "Add items" and the
+  // printable form's own "Save Changes" both go through). Only visible as
+  // badges disappearing until the next full reload, which is presumably why
+  // it went unnoticed — but it would otherwise make the Job # badge's new
+  // closed/muted styling, and the long-term badge's _loanDocCache fallback,
+  // flicker off right after any save.
   const _cacheKey = loanItems[0]?.BatchID;
   if (_cacheKey) {
     window._loanDocCache = window._loanDocCache || {};
-    window._loanDocCache[_cacheKey] = { notesCell, notes: notesCell };
+    window._loanDocCache[_cacheKey] = { ...(window._loanDocCache[_cacheKey] || {}), notesCell, notes: notesCell };
     if (newAM) { loanMeta[_cacheKey] = { ...(loanMeta[_cacheKey] || {}), accountManager: newAM }; saveLoanMeta().catch(() => {}); }
   }
   if (updated > 0) { scheduleSave(); renderTable(); }
@@ -6778,7 +7031,14 @@ async function saveLoanDocChanges() {
   // calling createSimproJob() here for a brand-new loan would fire before the job exists,
   // then _autoCreateSimproOnClose fires again on close and sees the real ID, causing a
   // redundant update call that shows "Simpro job updated" instead of "created".
-  if (SIMPRO_PROXY_URL && !window._simproCreating && !window._autoCreateSimproOnClose) {
+  //
+  // A long-term loan never gets a job at all, REGARDLESS of whether
+  // SIMPRO_CFG.createJobs is later switched back on — submitBatchLoan()'s
+  // window._autoCreateSimproOnClose = !isLongTerm only protects the first
+  // close; it's cleared right after, so without this check, the very next
+  // "Save Changes" or "Add items" on the SAME long-term loan would otherwise
+  // reach createSimproJob() and mint one.
+  if (SIMPRO_PROXY_URL && !window._simproCreating && !window._autoCreateSimproOnClose && !isLoanLongTerm(loanItems[0]?.BatchID)) {
     try { await createSimproJob(); } catch(e) {}
   }
 }
@@ -6793,8 +7053,21 @@ function getLoanGroupByKey(key) {
 // unrelated loans, so it's not safe as an identity key. The old key here was loanTo+endDate
 // only (no location), so two differently-located loans to the same customer with the same
 // due date could collide and hijack each other's Add items/Reassign/Extend/Return/Delete.
+//
+// A long-term loan has no end date at all, so two long-term loans to the
+// same customer at the same location would otherwise produce an IDENTICAL
+// key — swap the tail for 'LT|||batchId' in that case instead, which is
+// always unique per loan. batchId/longTerm are resolved from g HERE rather
+// than trusted from the caller, because different call sites name/shape the
+// group differently: desktop calls it g.batchKey, mobile's mpActiveGroups()
+// calls it g.batchId, and some ad-hoc literals (e.g. openStuckLoanReassign())
+// carry neither — so every one of them still needs a correct answer.
+// Every short-term loan's key is byte-identical to before this change.
 function _loanKey(g) {
-  return encodeURIComponent(g.loanTo + '|||' + (g.location || '') + '|||' + (g.endDate || '')).replace(/'/g, '%27');
+  const batchId = g.batchKey || g.batchId || g.items?.[0]?.BatchID || '';
+  const longTerm = (typeof g.longTerm === 'boolean') ? g.longTerm : isLoanLongTerm(batchId);
+  const tail = (longTerm && batchId) ? ('LT|||' + batchId) : (g.endDate || '');
+  return encodeURIComponent(g.loanTo + '|||' + (g.location || '') + '|||' + tail).replace(/'/g, '%27');
 }
 
 function viewLoanDoc(gi) {
@@ -6879,10 +7152,19 @@ async function viewLoanDocByKey(key) {
       savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
     }
   }
-  // Cache the loanDoc so loan card can show loan-specific notes
+  // Cache the loanDoc so loan card can show loan-specific notes. Merged
+  // rather than a blind overwrite — this used to wipe simproJobId/demoType/
+  // island/longTerm/simproClosedAt from the in-memory cache (set earlier by
+  // loadLoanDocNotes() at startup) every time someone opened "View loan
+  // form", even though the Firebase doc itself was untouched. Only visible
+  // after the fact (badges disappearing until the next full reload), which
+  // is presumably why it went unnoticed — but it would otherwise silently
+  // undo the Job # badge's closed/muted styling and the Long-term state
+  // right after converting a loan, so it's fixed here rather than worked
+  // around.
   if (batchId) {
     window._loanDocCache = window._loanDocCache || {};
-    window._loanDocCache[batchId] = { notes: savedExtra.batchNotes || '', notesCell: savedExtra.notesCell || '' };
+    window._loanDocCache[batchId] = { ...(window._loanDocCache[batchId] || {}), notes: savedExtra.batchNotes || '', notesCell: savedExtra.notesCell || '' };
   }
   // Populate email for the manual Send Email button, but do NOT auto-send on close
   // (auto-send only happens right after a new loan is confirmed)
@@ -6893,14 +7175,183 @@ async function viewLoanDocByKey(key) {
       : null;
   }
   window._pendingLoanDocPdfKey = batchId || null;
-  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am, contactNumber: savedExtra.contactNumber || '' }, savedRows, savedExtra);
+  generateLoanDoc(items, { loanTo: g.loanTo, location: g.location, startDate, endDate: g.endDate, accountManager: am, contactNumber: savedExtra.contactNumber || '', longTerm: !!g.longTerm }, savedRows, savedExtra);
 }
 
 function openExtendLoanByKey(key) {
   const g = getLoanGroupByKey(key);
   if (!g) return;
-  const gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
+  // Match on BatchID first — two loans with the same loanTo+endDate (most
+  // commonly two long-term loans, which both have endDate==='') would
+  // otherwise resolve to the wrong one.
+  const wantBatchId = g.batchKey || g.items?.[0]?.BatchID || null;
+  let gi = wantBatchId ? (window._loanGroups || []).findIndex(x => (x.batchKey || x.items?.[0]?.BatchID) === wantBatchId) : -1;
+  if (gi < 0) gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
   if (gi >= 0) openExtendLoan(gi);
+}
+
+// ── LONG-TERM LOAN TRANSFER (Active ⇄ Long-term) ───────────────────────
+let _longTermModalKey = null;
+let _longTermModalMode = null; // 'toLongTerm' | 'toActive'
+
+function openLongTermModal(key, mode) {
+  renderLoans(); // rebuild _loanGroupMap fresh before looking the loan up in it — same defensive pattern used elsewhere
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  _longTermModalKey = key;
+  _longTermModalMode = mode;
+  const dateGroup = document.getElementById('longterm-date-group');
+  const title = document.getElementById('longterm-title');
+  const sub = document.getElementById('longterm-subtitle');
+  const btn = document.getElementById('longterm-confirm-btn');
+  if (mode === 'toLongTerm') {
+    title.textContent = 'Make Long-term — ' + g.loanTo;
+    sub.textContent = 'This loan will move to Long Term Loans, stop sending due-date reminders, and lose its end date.' +
+      '\n\nIf it has a Simpro job, that job will be closed (the item list stays recorded on it — nothing is wiped).' +
+      '\n\nIf a "Return due" calendar invite was already sent to the account manager, please delete it from their calendar manually — it can’t be withdrawn from here.';
+    dateGroup.style.display = 'none';
+    btn.disabled = false;
+    btn.textContent = 'Make Long-term';
+  } else {
+    title.textContent = 'Return to Active — ' + g.loanTo;
+    sub.textContent = 'Set a new end date to bring this loan back onto the normal Active list with due-date reminders again.' +
+      '\n\nIts Simpro job (if it had one) was already closed when this became a long-term loan and can’t be reopened — the number stays on the card as a record, shown as closed. Use "Create Job" in Settings → Simpro Job Health afterwards if this loan needs a fresh one.';
+    dateGroup.style.display = '';
+    const _suggested = (g.startDate && g.startDate > nzDate()) ? g.startDate : nzDate();
+    document.getElementById('longterm-date').value = _suggested;
+    btn.disabled = false;
+    btn.textContent = 'Return to Active';
+  }
+  document.getElementById('longterm-modal').classList.add('open');
+}
+function closeLongTermModal() {
+  document.getElementById('longterm-modal').classList.remove('open');
+  _longTermModalKey = null;
+  _longTermModalMode = null;
+}
+async function confirmLongTermModal() {
+  const key = _longTermModalKey, mode = _longTermModalMode;
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); closeLongTermModal(); return; }
+  const btn = document.getElementById('longterm-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    if (mode === 'toLongTerm') {
+      await convertLoanToLongTerm(g);
+    } else {
+      const newDate = document.getElementById('longterm-date').value;
+      const today = nzDate();
+      if (!newDate) { showToast('error', 'Please select a new end date.'); if (btn) { btn.disabled = false; btn.textContent = 'Return to Active'; } return; }
+      if (newDate < today) { showToast('error', 'End date cannot be in the past.'); if (btn) { btn.disabled = false; btn.textContent = 'Return to Active'; } return; }
+      if (g.startDate && newDate < g.startDate) { showToast('error', 'End date cannot be before the loan\'s start date.'); if (btn) { btn.disabled = false; btn.textContent = 'Return to Active'; } return; }
+      await confirmLongTermToActive(g, newDate);
+    }
+    closeLongTermModal();
+  } catch(e) {
+    showToast('error', 'Could not save: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = mode === 'toLongTerm' ? 'Make Long-term' : 'Return to Active'; }
+  }
+}
+
+// Active → Long-term. Closes the Simpro job (keeping its item list, unlike a
+// return's empty-list close — the gear stays with the customer), blanks the
+// end date on every item (that blank is what makes overdue/due-soon/.ics all
+// skip this loan naturally), and dual-writes longTerm the same way
+// accountManager already is (loanMeta for synchronous rendering, loanDoc for
+// the server's reminder gate).
+async function convertLoanToLongTerm(g) {
+  const batchId = g.items?.[0]?.BatchID || null;
+  const loanTo = g.loanTo;
+  if (!batchId) { showToast('error', 'This loan has no BatchID — too old to convert. Use Extend/Edit instead.'); return; }
+
+  let _closedJobId = null;
+  try {
+    const jobId = await _getJobId(batchId);
+    if (jobId) {
+      _closedJobId = jobId;
+      await _closeSimproJobWithNote(batchId, loanTo,
+        'Converted to a long-term loan on ' + formatDisplayDate(nzDate()) + ' — equipment remains with ' + (getGroupAM(g) || loanTo) + '. Closing this job; no return date.',
+        g.items.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })));
+    }
+  } catch(e) { console.warn('Could not close Simpro job on long-term conversion:', e); }
+
+  const oldEndDate = g.endDate || '';
+  g.items.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id);
+    if (idx >= 0) equipment[idx].LoanEndDate = '';
+  });
+
+  loanMeta[batchId] = { ...(loanMeta[batchId] || {}), longTerm: true };
+  await saveLoanMeta();
+
+  // PATCH (not PUT) — saveLoanDocChanges() does a full PUT and silently wipes
+  // any field a caller doesn't carry forward (the demoType/island/jobType bug
+  // in TODO.md); PATCH merges instead, so this can't trip that hazard.
+  // simproClosedAt marks the job as closed-by-conversion so the Job # badge
+  // can render it struck-through rather than looking like a live job.
+  try {
+    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ longTerm: true, endDate: '', ...(_closedJobId ? { simproClosedAt: nzNow() } : {}) })
+    });
+    window._loanDocCache = window._loanDocCache || {};
+    window._loanDocCache[batchId] = { ...(window._loanDocCache[batchId] || {}), longTerm: true, ...(_closedJobId ? { simproClosedAt: nzNow() } : {}) };
+  } catch(e) { console.warn('Could not update loanDoc for long-term conversion:', e); }
+
+  // Clear the stale due-soon reminder dedup keyed to the old end date — same
+  // cleanup confirmExtendLoan() does when an end date changes.
+  if (oldEndDate) {
+    try { await fetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(loanTo + '|||' + oldEndDate) + '.json', { method: 'DELETE' }); } catch(e) {}
+  }
+
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+  } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
+
+  renderLoans(); renderTable(); updateStats();
+  writeAudit('loan_longterm_on', loanTo + '’s loan converted to long-term' + (g.items.length ? ' — ' + g.items.length + ' item' + (g.items.length !== 1 ? 's' : '') : ''),
+    { loanTo, batchId, items: g.items.map(e => e.CHSAssetNo) });
+  showToast('success', loanTo + ' is now a long-term loan.');
+}
+
+// Long-term → Active. The Simpro job (if any) was already closed on the way
+// in and closeJob() has no reopen — Stage only ever goes to Complete — so
+// the number simply stays on record (per the confirm copy above) rather than
+// either vanishing or quietly implying it's live again.
+async function confirmLongTermToActive(g, newDate) {
+  const batchId = g.items?.[0]?.BatchID || null;
+  const loanTo = g.loanTo;
+  if (!batchId) { showToast('error', 'This loan has no BatchID.'); return; }
+
+  g.items.forEach(item => {
+    const idx = equipment.findIndex(e => e.id === item.id);
+    if (idx >= 0) equipment[idx].LoanEndDate = newDate;
+  });
+
+  loanMeta[batchId] = { ...(loanMeta[batchId] || {}), longTerm: false };
+  await saveLoanMeta();
+
+  try {
+    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ longTerm: false, endDate: newDate })
+    });
+    window._loanDocCache = window._loanDocCache || {};
+    window._loanDocCache[batchId] = { ...(window._loanDocCache[batchId] || {}), longTerm: false };
+  } catch(e) { console.warn('Could not update loanDoc returning loan to Active:', e); }
+
+  setSync('saving', 'Saving...');
+  try {
+    await saveBin({ equipment, history: historyLog });
+    setSync('ok', 'Saved');
+  } catch(e) { setSync('err', 'Save failed'); showToast('error', 'Save failed: ' + e.message); return; }
+
+  renderLoans(); renderTable(); updateStats();
+  writeAudit('loan_longterm_off', loanTo + '’s long-term loan returned to Active, due ' + formatDisplayDate(newDate),
+    { loanTo, batchId, newDate, items: g.items.map(e => e.CHSAssetNo) });
+  showToast('success', loanTo + ' is back on Active loans, due ' + formatDisplayDate(newDate) + '.');
 }
 
 function openExtendUpcomingLoan(upcomingId) {
@@ -7056,7 +7507,7 @@ async function createSimproJob(existingJobId) {
 // never have been opened at all — see "Missing Simpro Jobs" below). Takes
 // every field explicitly so it has no dependency on DOM state that could be
 // stale or belong to a different loan.
-async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, accountManager, contactNumber, jobType, items, notes, shippingDetails, existingJobId }) {
+async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, accountManager, contactNumber, jobType, items, notes, shippingDetails, existingJobId, allowCreate }) {
   if (!SIMPRO_PROXY_URL) return;
 
   function toISO(d) {
@@ -7126,6 +7577,31 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
   }
 
   const isNew = !jobId;
+
+  // ── Wind-down gate (see SIMPRO_CFG / loadSimproConfig) ────────────────
+  // Deliberately here rather than at any caller: this is the single point
+  // every creation funnels through, and it sits AFTER the cache/Firebase
+  // job-ID resolution above — so "already has a job" (an update, still
+  // allowed: that's how a live job's items, dates and notes stay right) and
+  // "has no job yet" (a create, blocked) are already distinguished for us.
+  //
+  // It also sits BEFORE the pending-placeholder write below, so a blocked
+  // create leaves no {status:'pending'} stub in Firebase to confuse the
+  // Job # badge, the Missing Jobs list, or a later genuine attempt.
+  //
+  // Gating only closeLoanDoc() would NOT be enough — saveLoanDocChanges()
+  // also reaches here with no jobId (any form edit or Add items on a
+  // job-less loan), and would quietly mint one.
+  //
+  // allowCreate is passed only by retryMissingSimproJob() — the manual
+  // "Create Job" escape hatch in Settings → Simpro Job Health.
+  // Silent by design: someone booking a loan shouldn't get a message about
+  // a system they no longer use.
+  if (isNew && !SIMPRO_CFG.createJobs && !allowCreate) {
+    console.log('Simpro: job creation is switched off — skipping create for', pdfKey || loanTo);
+    return;
+  }
+
   if (isNew && pdfKey) {
     // Write a placeholder with timestamp immediately so subsequent reads don't create a duplicate
     window._simproCreating = pdfKey;
@@ -7181,7 +7657,8 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
     jobType:        jobType || 'Demo',
     items:          items || [],
     jobId:          (jobId != null && !isNaN(Number(jobId))) ? Number(jobId) : (jobId || null),
-    pdfKey:         pdfKey || null
+    pdfKey:         pdfKey || null,
+    allowCreate:    allowCreate === true
   });
 
   try {
@@ -7268,7 +7745,11 @@ function closeSimproJob(jobId, loanTo) {
 // reassign flow already leaves on its own source job. Resolves the jobId
 // itself (cache, falling back to the loanDoc) so callers don't each have
 // to.
-async function _closeSimproJobWithNote(batchId, loanTo, closeNote) {
+// items defaults to [] — correct for a return, where everything's physically
+// back. A long-term conversion (convertLoanToLongTerm()) passes the loan's
+// actual items instead: the gear stays with the customer, so blanking the
+// job's item table there would lose the record of what's out.
+async function _closeSimproJobWithNote(batchId, loanTo, closeNote, items) {
   if (!batchId) return;
   let doc = null;
   try {
@@ -7279,7 +7760,7 @@ async function _closeSimproJobWithNote(batchId, loanTo, closeNote) {
   if (simproJobId) {
     await _simproPush(batchId, simproJobId,
       { loanTo: loanTo || '', location: doc?.location || '', startDate: doc?.startDate || '', endDate: doc?.endDate || '', accountManager: getLoanAM(batchId, loanTo, doc?.endDate || ''), notes: (doc?.notesCell ? doc.notesCell + '\n\n' : '') + closeNote, shippingDetails: doc?.authCell || '', contactNumber: doc?.contactNumber || '', jobType: doc?.jobType || 'Demo' },
-      []);
+      items || []);
   }
   closeSimproJob(simproJobId, loanTo);
 }
@@ -7346,6 +7827,11 @@ function findLoansMissingSimproJob() {
     if (seen.has(pdfKey)) return;
     seen.add(pdfKey);
     if (window._loanDocCache?.[pdfKey]?.simproJobId) return;
+    // Converted long-term loans have their job closed on purpose — don't nag
+    if (isLoanLongTerm(g.batchId)) return;
+    // Creation is wound down — only chase loans from before that change, so
+    // this list winds down to zero instead of flagging every new loan forever
+    if (!_isPreWindDownLoan(pdfKey, g.startDate)) return;
     results.push({
       pdfKey, loanTo: g.loanTo, location: g.location, startDate: g.startDate, endDate: g.endDate,
       accountManager: getGroupAM(g),
@@ -7360,6 +7846,8 @@ function findLoansMissingSimproJob() {
     if (!u.loanTo || !u.loanTo.trim() || seen.has(u.id)) return;
     seen.add(u.id);
     if (window._loanDocCache?.[u.id]?.simproJobId) return;
+    if (isLoanLongTerm(u.id)) return;
+    if (!_isPreWindDownLoan(u.id, u.startDate)) return;
     results.push({
       pdfKey: u.id, loanTo: u.loanTo, location: u.location||'', startDate: u.startDate||'', endDate: u.endDate||'',
       accountManager: u.accountManager||'',
@@ -7411,10 +7899,19 @@ function checkStuckLoansForAM() {
   if (!currentOperator) return;
   const today = nzDate();
   const isServiceTeam = isServiceTeamMember(currentOperator);
-  const stuck = upcomingLoans.filter(u =>
-    (TEST_MODE || !isTestBatch(u.id)) &&
-    u.startDate && u.startDate <= today && (isServiceTeam || u.accountManager === currentOperator)
-  );
+  const stuck = upcomingLoans.filter(u => {
+    if (!(TEST_MODE || !isTestBatch(u.id))) return false;
+    if (!(u.startDate && u.startDate <= today && (isServiceTeam || u.accountManager === currentOperator))) return false;
+    // Same reasoning as the server's daily stuck-loan reminder — a long-term
+    // loan is a known, deliberate state, not something to chase. Skip only
+    // when EVERY blocking item is long-term; if even one isn't, there's
+    // still something genuinely actionable here.
+    const blockers = u.items
+      .map(uItem => equipment.find(e => (e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo) && e.OnLoanTo && e.OnLoanTo !== u.loanTo && e.Returned !== 'Yes'))
+      .filter(Boolean);
+    if (blockers.length && blockers.every(e => isLoanLongTerm(e.BatchID))) return false;
+    return true;
+  });
   // One toast PER stuck loan, always — collapsing to a bare count when
   // there's more than one left no way to tell which loans they actually
   // were without hunting through the whole Loans tab. Toasts stack
@@ -7446,7 +7943,7 @@ function openStuckLoanReassign(upcomingId) {
     const eq = equipment.find(e => e.id === uItem.id || e.CHSAssetNo === uItem.CHSAssetNo);
     if (eq && eq.OnLoanTo && eq.OnLoanTo !== u.loanTo && eq.Returned !== 'Yes') {
       blockedAssetNos.push(eq.CHSAssetNo);
-      if (!blockingKey) blockingKey = _loanKey({ loanTo: eq.OnLoanTo, location: eq.Location || '', endDate: eq.LoanEndDate || '' });
+      if (!blockingKey) blockingKey = _loanKey({ loanTo: eq.OnLoanTo, location: eq.Location || '', endDate: eq.LoanEndDate || '', batchId: eq.BatchID || null });
     }
   });
   if (!blockingKey) {
@@ -7497,7 +7994,10 @@ function checkMissingSimproJobs() {
   // actionable on mobile, so skip the toast there (detection/badge still
   // run either way, for whenever this is checked from desktop).
   if (missing.length && !isMobilePWA()) {
-    showToast('warn', missing.length + ' loan' + (missing.length > 1 ? 's have' : ' has') + ' no Simpro job — see Settings → Simpro Job Health.');
+    const plural = missing.length > 1;
+    const scope = SIMPRO_CFG.createJobs ? '' : ' from before the Simpro wind-down';
+    showToast('warn', missing.length + ' loan' + (plural ? 's' : '') + scope + ' still ' +
+      (plural ? 'have' : 'has') + ' no Simpro job — see Settings → Simpro Job Health.');
   }
 }
 
@@ -7507,6 +8007,55 @@ function renderSimproHealthBadge() {
   const n = findLoansMissingSimproJob().length;
   el.textContent = n ? n + ' missing' : 'All good';
   el.style.color = n ? 'var(--red)' : 'var(--green)';
+  const sub = document.getElementById('simpro-health-sub');
+  if (sub) {
+    sub.textContent = SIMPRO_CFG.createJobs
+      ? 'A loan\'s Simpro job is only created once its confirmation form is closed — if that never happens (browser closed early, crash, dropped network), the job silently never gets created. Check here for any current loan missing one.'
+      : 'New loans no longer create Simpro jobs. This lists only loans created before that change that still have no job number — it winds down to zero as those loans close out. "Link" records a number you already have; "Create Job" still makes a real one in Simpro, for the rare pre-wind-down loan that genuinely needs one.';
+  }
+  renderSimproToggleUI();
+}
+
+function renderSimproToggleUI() {
+  const statusEl = document.getElementById('simpro-toggle-status');
+  const btnEl = document.getElementById('simpro-toggle-btn');
+  if (!statusEl || !btnEl) return;
+  if (SIMPRO_CFG.createJobs) {
+    statusEl.innerHTML = 'Job creation is <strong style="color:var(--green)">ON</strong>' +
+      (SIMPRO_CFG.changedBy ? ' — switched on ' + formatDisplayDateTime(SIMPRO_CFG.changedAt || '') + ' by ' + esc(SIMPRO_CFG.changedBy) : '');
+    btnEl.textContent = 'Turn Off (stop creating new jobs)';
+    btnEl.className = 'btn btn-red';
+  } else {
+    statusEl.innerHTML = 'Job creation is <strong style="color:var(--red)">OFF</strong>' +
+      (SIMPRO_CFG.windDownFrom ? ' — switched off ' + formatDisplayDate(SIMPRO_CFG.windDownFrom) + (SIMPRO_CFG.changedBy ? ' by ' + esc(SIMPRO_CFG.changedBy) : '') : '');
+    btnEl.textContent = 'Turn On (requires admin password)';
+    btnEl.className = 'btn btn-primary';
+  }
+}
+
+async function toggleSimproJobCreation() {
+  const turningOn = !SIMPRO_CFG.createJobs;
+  // Turning it ON resumes an integration the team is actively retiring, so
+  // it's gated the same way Test Mode's "on" direction is. Turning it back
+  // OFF just returns to the safe, wound-down default — no gate needed.
+  if (turningOn) {
+    const pw = await adminPrompt('Enter admin password to turn Simpro job creation back ON:');
+    if (pw === null) return;
+    if (pw !== ADMIN_PASSWORD) { showToast('error', 'Incorrect password'); return; }
+    if (!confirm('Turn Simpro job creation back ON? New loans will start creating Simpro jobs again.')) return;
+  } else {
+    if (!confirm('Turn Simpro job creation OFF? New loans will stop creating Simpro jobs. Existing jobs will still update and close normally.')) return;
+  }
+  SIMPRO_CFG.createJobs = turningOn;
+  // windDownFrom is stamped once, on the very first flip to off, and never
+  // moved again — see the comment on SIMPRO_CFG above for why.
+  if (!turningOn && !SIMPRO_CFG.windDownFrom) SIMPRO_CFG.windDownFrom = nzDate();
+  SIMPRO_CFG.changedBy = currentOperator || null;
+  SIMPRO_CFG.changedAt = new Date().toISOString();
+  await saveSimproConfig();
+  renderSimproHealthBadge();
+  if (_dirty.loans === false) renderLoans();
+  showToast(turningOn ? 'success' : 'info', turningOn ? 'Simpro job creation turned ON' : 'Simpro job creation turned OFF');
 }
 
 function openMissingSimproJobsModal() {
@@ -7522,10 +8071,14 @@ function refreshMissingSimproModal() {
 }
 function renderMissingSimproJobsModal() {
   const missing = findLoansMissingSimproJob();
+  const scope = SIMPRO_CFG.createJobs ? '' : ' from before the wind-down';
   document.getElementById('missing-simpro-subtitle').textContent = missing.length
-    ? missing.length + ' loan' + (missing.length > 1 ? 's' : '') + ' with no Simpro job recorded'
-    : 'All current loans have a Simpro job';
-  document.getElementById('missing-simpro-body').innerHTML = missing.length
+    ? missing.length + ' loan' + (missing.length > 1 ? 's' : '') + scope + ' with no Simpro job recorded'
+    : (SIMPRO_CFG.createJobs ? 'All current loans have a Simpro job' : 'No pre-wind-down loans left without a Simpro job');
+  const banner = (!SIMPRO_CFG.createJobs && SIMPRO_CFG.windDownFrom)
+    ? `<div style="background:var(--lt-mid,#cffafe);border:1px solid var(--lt-border,#67e8f9);border-radius:var(--radius);padding:8px 12px;font-size:12px;margin-bottom:10px">New loans no longer create Simpro jobs (switched off ${esc(formatDisplayDate(SIMPRO_CFG.windDownFrom))}). Only loans from before that date are listed here.</div>`
+    : '';
+  document.getElementById('missing-simpro-body').innerHTML = banner + (missing.length
     ? missing.map(m => `
       <div class="loan-device" id="msj_${esc(m.pdfKey)}" style="align-items:center">
         <div class="loan-device-info">
@@ -7535,23 +8088,44 @@ function renderMissingSimproJobsModal() {
         <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
           <input type="text" inputmode="numeric" placeholder="Existing job #" id="msj-input-${esc(m.pdfKey)}" style="width:100px;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:12px" onkeydown="if(event.key==='Enter')linkExistingSimproJob('${esc(m.pdfKey)}')">
           <button class="btn btn-sm" onclick="linkExistingSimproJob('${esc(m.pdfKey)}')" title="Already have a Simpro job for this loan? Enter its number and link it, instead of creating a new one.">Link</button>
-          <button class="btn btn-sm btn-primary" onclick="retryMissingSimproJob('${esc(m.pdfKey)}')">Create Job</button>
+          <button class="btn btn-sm btn-primary" onclick="retryMissingSimproJob('${esc(m.pdfKey)}')" title="${SIMPRO_CFG.createJobs ? 'Creates a real job in Simpro.' : 'Creates a real, new job in Simpro. New loans no longer do this automatically — use only if this pre-wind-down loan genuinely needs one.'}">Create Job</button>
         </div>
       </div>`).join('')
-    : '<div style="text-align:center;padding:24px;color:var(--text3)">&#10003; No missing Simpro jobs right now.</div>';
+    : '<div style="text-align:center;padding:24px;color:var(--text3)">&#10003; No missing Simpro jobs right now.</div>');
 }
 
 async function retryMissingSimproJob(pdfKey) {
   const missing = findLoansMissingSimproJob();
   const m = missing.find(x => x.pdfKey === pdfKey);
   if (!m) { showToast('error', 'Could not find that loan — it may already have a job now.'); renderMissingSimproJobsModal(); return; }
+  // Creation is off for new loans — this button is the deliberate exception,
+  // so make it deliberate rather than a silent one-click mint.
+  if (!SIMPRO_CFG.createJobs && !confirm(
+      'Create a NEW Simpro job for ' + m.loanTo + '?\n\n' +
+      'New loans no longer create Simpro jobs automatically. Only do this if this ' +
+      'loan genuinely needs one — if the job already exists in Simpro, use "Link" instead.'))
+    return;
+  // findLoansMissingSimproJob() reads _loanDocCache, a snapshot taken at page
+  // load — re-read Firebase directly first so a job created in another
+  // session since then gives an honest message instead of silently turning
+  // into an update.
+  try {
+    const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+    const _d = await _r.json();
+    if (_d?.simproJobId && _d.simproJobId !== 'pending' && !(typeof _d.simproJobId === 'object')) {
+      _cacheSimproJobId(pdfKey, _d.simproJobId);
+      showToast('info', 'This loan already has job #' + _d.simproJobId + ' — nothing created.');
+      refreshMissingSimproModal();
+      return;
+    }
+  } catch(e) {}
   const row = document.getElementById('msj_' + pdfKey);
   const btn = row?.querySelector('button');
   if (btn) { btn.disabled = true; btn.textContent = TEST_MODE ? 'Simulating…' : 'Creating…'; }
   await _submitSimproJob({
     pdfKey: m.pdfKey, loanTo: m.loanTo, location: m.location, startDate: m.startDate, endDate: m.endDate,
     accountManager: m.accountManager, contactNumber: '', jobType: 'Demo', items: m.items,
-    notes: '', shippingDetails: ''
+    notes: '', shippingDetails: '', allowCreate: true
   });
   // TEST_MODE and the "no pdfKey" path resolve synchronously above; the real
   // path polls Firebase in the background over ~15s. Refresh shortly after
@@ -7609,16 +8183,26 @@ async function linkExistingSimproJob(pdfKey) {
 // linkExistingSimproJob() never call Simpro themselves either way; only
 // retryMissingSimproJob() (Create Job) actually does.
 async function promptEditSimproJob(pdfKey, currentJobId, loanTo) {
-  const raw = prompt('Simpro job number for ' + loanTo + ' — clear this field if the job no longer exists in Simpro (it\'ll show up in "Missing Simpro Jobs" again, where you can create a fresh one):', currentJobId != null ? String(currentJobId) : '');
+  // The "will show up in Missing Simpro Jobs again" promise only holds for a
+  // loan the wind-down cutoff would still chase — a post-cutoff loan having
+  // had a job at all is itself the anomaly (only possible via a stale open
+  // tab), so clearing it is a correction with nothing to relink to.
+  const _willReappear = _isPreWindDownLoan(pdfKey);
+  const raw = prompt('Simpro job number for ' + loanTo + ' — clear this field if the job no longer exists in Simpro' +
+    (_willReappear ? ' (it\'ll show up in "Missing Simpro Jobs" again, where you can create a fresh one)' : '') + ':',
+    currentJobId != null ? String(currentJobId) : '');
   if (raw === null) return; // cancelled
   const trimmed = raw.trim();
   if (!trimmed) {
-    if (!confirm('Remove the recorded Simpro job number for ' + loanTo + '? This loan will show up in "Missing Simpro Jobs" again.')) return;
+    const confirmMsg = _willReappear
+      ? 'Remove the recorded Simpro job number for ' + loanTo + '? This loan will show up in "Missing Simpro Jobs" again.'
+      : 'Remove the recorded Simpro job number for ' + loanTo + '? There\'s no way to re-link it from this card afterwards.';
+    if (!confirm(confirmMsg)) return;
     try {
       await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', { method: 'DELETE' });
       if (window._loanDocCache?.[pdfKey]) delete window._loanDocCache[pdfKey].simproJobId;
       writeAudit('simpro_updated', 'Simpro job number cleared — ' + loanTo, { loanTo, pdfKey });
-      showToast('info', 'Job number cleared for ' + loanTo + ' — open Missing Simpro Jobs to create a fresh one.');
+      showToast('info', 'Job number cleared for ' + loanTo + (_willReappear ? ' — open Missing Simpro Jobs to create a fresh one.' : '.'));
       if (_dirty.loans === false) renderLoans();
       renderSimproHealthBadge();
     } catch(e) {
@@ -7757,6 +8341,22 @@ function getGroupAM(g) {
   const loanTo  = g.loanTo  || g.items?.[0]?.OnLoanTo  || '';
   const endDate = g.endDate || g.items?.[0]?.LoanEndDate || '';
   return getLoanAM(batchId, loanTo, endDate) || g.accountManager || '';
+}
+
+// Long-term loans are dual-written to loanMeta (synchronous, drives
+// rendering) and loanDocs (so the Apps Script server can gate reminders),
+// mirroring exactly how accountManager is already stored above. loanMeta is
+// authoritative when present; _loanDocCache is the fallback for a loan whose
+// loanMeta write failed but whose loanDoc write succeeded (loadLoanDocNotes()
+// self-heals this back into loanMeta on the next load — see there).
+function isLoanLongTerm(batchId) {
+  if (!batchId) return false;
+  if (loanMeta[batchId] && typeof loanMeta[batchId].longTerm === 'boolean') return loanMeta[batchId].longTerm;
+  return !!(window._loanDocCache && window._loanDocCache[batchId] && window._loanDocCache[batchId].longTerm);
+}
+function isGroupLongTerm(g) {
+  if (typeof g.longTerm === 'boolean') return g.longTerm;
+  return isLoanLongTerm(g.batchKey || g.batchId || g.items?.[0]?.BatchID || null);
 }
 // ── KIT SUGGESTIONS ──────────────────────────────────────────────────
 const DEMO_KITS = {
@@ -9799,6 +10399,11 @@ function closeReassignAMModal() {
 // Direct Simpro proxy call — used when we have all data in-memory (no DOM dependency)
 async function _simproPush(batchId, jobId, loanData, items) {
   if (!SIMPRO_PROXY_URL || TEST_MODE) return;
+  // Update-only. Every caller already guards on a resolved numeric job ID,
+  // but the payload below sends jobId:null for anything non-numeric, which
+  // the proxy's router reads as "create a new job" — make that impossible
+  // here too rather than relying on every call site staying correct forever.
+  if (jobId == null || isNaN(Number(jobId))) return;
   function _toISO(d) {
     if (!d) return '';
     if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
@@ -10850,8 +11455,12 @@ function renderCalendar() {
   // Collect all loans (active + upcoming) that intersect the window
   const rows = [];
 
-  // Active loans from equipment (exclude scheduled — future start date)
-  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && !isHiddenTestLoan(e));
+  // Active loans from equipment (exclude scheduled — future start date).
+  // Long-term loans are deliberately excluded from the calendar: they have
+  // no end date, so an open-ended bar would either misrepresent a due date
+  // that doesn't exist or need special-case rendering everywhere below —
+  // they're already visible in their own Loans tab section instead.
+  const onLoan = equipment.filter(e => e.OnLoanTo && e.Returned !== 'Yes' && !isHiddenTestLoan(e) && !isLoanLongTerm(e.BatchID));
   const grouped = {};
   onLoan.forEach(e => {
     const key = e.OnLoanTo + '|||' + (e.Location || '') + '|||' + (e.LoanEndDate || '');
@@ -10870,6 +11479,7 @@ function renderCalendar() {
   // Upcoming loans (conflict-queued, not already in equipment records)
   upcomingLoans.forEach(u => {
     if (!TEST_MODE && isTestBatch(u.id)) return;
+    if (isLoanLongTerm(u.id)) return; // excluded from the calendar — see above
     if (u.endDate && u.endDate < winStart) return;
     if (u.startDate && u.startDate > winEnd) return;
     // Skip if already represented by a scheduled equipment group for the same customer
@@ -11216,10 +11826,15 @@ function startAutoSync() {
       <!-- SIMPRO JOB HEALTH -->
       <div class="settings-section">
         <div class="settings-section-title">🔧 Simpro Job Health</div>
-        <div class="settings-section-sub">A loan's Simpro job is only created once its confirmation form is closed — if that never happens (browser closed early, crash, dropped network), the job silently never gets created. Check here for any current loan missing one.</div>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:8px">
+        <div class="settings-section-sub" id="simpro-health-sub">A loan's Simpro job is only created once its confirmation form is closed — if that never happens (browser closed early, crash, dropped network), the job silently never gets created. Check here for any current loan missing one.</div>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="openMissingSimproJobsModal()">Review Missing Jobs</button>
           <span id="simpro-health-count" style="font-size:13px;font-weight:500"></span>
+        </div>
+        <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px">Job Creation</div>
+          <div id="simpro-toggle-status" style="font-size:13px;margin-bottom:8px"></div>
+          <button class="btn" id="simpro-toggle-btn" onclick="toggleSimproJobCreation()"></button>
         </div>
       </div>
 
@@ -11349,6 +11964,7 @@ function startAutoSync() {
       <div class="mp-screen" id="mp-screen-additems"></div>
       <div class="mp-screen" id="mp-screen-returnitems"></div>
       <div class="mp-screen" id="mp-screen-extend"></div>
+      <div class="mp-screen" id="mp-screen-longterm"></div>
       <div class="mp-screen" id="mp-screen-reassign"></div>
       <div class="mp-screen" id="mp-screen-deleteloan"></div>
       <div class="mp-screen" id="mp-screen-loanform"></div>
@@ -11714,13 +12330,14 @@ function mpGoScreen(screen) {
   else if (screen === 'additems') { document.getElementById('mp-screen-additems').classList.add('mp-active'); mpRenderAddItems(); }
   else if (screen === 'returnitems') { document.getElementById('mp-screen-returnitems').classList.add('mp-active'); mpRenderReturnItems(); }
   else if (screen === 'extend') { document.getElementById('mp-screen-extend').classList.add('mp-active'); mpRenderExtend(); }
+  else if (screen === 'longterm') { document.getElementById('mp-screen-longterm').classList.add('mp-active'); mpRenderLongTerm(); }
   else if (screen === 'reassign') { document.getElementById('mp-screen-reassign').classList.add('mp-active'); mpRenderReassign(); }
   else if (screen === 'deleteloan') { document.getElementById('mp-screen-deleteloan').classList.add('mp-active'); mpRenderDeleteLoan(); }
   else if (screen === 'loanform') { document.getElementById('mp-screen-loanform').classList.add('mp-active'); mpRenderLoanForm(); }
   else if (screen === 'equipmentdetail') { document.getElementById('mp-screen-equipmentdetail').classList.add('mp-active'); mpRenderEquipmentDetail(); }
   else { showToast('info', 'That screen isn\'t built yet — coming in a later update.'); _mp.screen = _mp.role === 'am' ? 'today' : 'overview'; return mpGoScreen(_mp.screen); }
   document.getElementById('mp-header-title').textContent =
-    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'reassign' ? (_mp.reassign && _mp.reassign.mode === 'edit' ? 'Edit loan' : 'Transfer items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : screen === 'equipmentdetail' ? 'Item details' : 'Loans';
+    screen === 'today' ? 'Today' : screen === 'overview' ? 'Fleet overview' : screen === 'more' ? 'More' : screen === 'equipment' ? 'Equipment' : screen === 'book' ? 'Book a demo' : screen === 'scan' ? 'Scan' : screen === 'additems' ? 'Add items' : screen === 'returnitems' ? 'Return items' : screen === 'extend' ? 'Extend loan' : screen === 'longterm' ? (_mpLongTermMode === 'toActive' ? 'Return to Active' : 'Make Long-term') : screen === 'reassign' ? (_mp.reassign && _mp.reassign.mode === 'edit' ? 'Edit loan' : 'Transfer items') : screen === 'deleteloan' ? 'Delete loan' : screen === 'loanform' ? 'Loan form' : screen === 'equipmentdetail' ? 'Item details' : 'Loans';
   // Service & Projects has no use for the "All loans" text (they see every
   // loan regardless) — that header slot becomes a quick Scan shortcut
   // instead, now that Scan is no longer the tab bar's center button (see
@@ -11751,7 +12368,7 @@ function mpActiveGroups() {
     if (!grouped[key]) grouped[key] = { loanTo: e.OnLoanTo, location: e.Location||'', endDate: e.LoanEndDate||'', startDate: e.LoanStartDate||'', items: [], batchId: e.BatchID||null };
     grouped[key].items.push(e);
   });
-  return Object.values(grouped).map(g => ({ ...g, scheduled: g.startDate && g.startDate > today, overdue: g.endDate && g.endDate < today, am: getGroupAM(g) }));
+  return Object.values(grouped).map(g => ({ ...g, scheduled: g.startDate && g.startDate > today, overdue: g.endDate && g.endDate < today, am: getGroupAM(g), longTerm: isLoanLongTerm(g.batchId) }));
 }
 function mpStuckLoans(forName) {
   const today = mpToday();
@@ -11968,11 +12585,16 @@ function mpRenderLoans() {
   else if (!_mp.scope) _mp.scope = 'all';
   const today = mpToday();
   const groups = mpActiveGroups().filter(g => _mp.scope === 'all' || g.am === _mp.scope);
+  // Long-term loans stay in "Active" too (they're genuinely still active,
+  // just open-ended) — this segment is an additional view onto the same
+  // loans, not a separate pool, matching desktop's Current Loans + Long Term
+  // Loans sections both showing the same card.
   const active = groups.filter(g => !g.scheduled && !g.overdue);
   const overdue = groups.filter(g => !g.scheduled && g.overdue);
+  const longTerm = groups.filter(g => g.longTerm && !g.scheduled);
   const upcoming = mpAllUpcoming(_mp.scope === 'all' ? null : _mp.scope);
   const seg = _mp.seg;
-  const list = seg === 'active' ? active : seg === 'overdue' ? overdue : upcoming;
+  const list = seg === 'active' ? active : seg === 'overdue' ? overdue : seg === 'longterm' ? longTerm : upcoming;
 
   const scopeRow = _mp.role === 'am'
     ? `<div class="mp-scope-row mp-locked">${mpIcon('list',16)}<span style="flex:1;font-weight:600;font-size:13px">Your loans · ${esc(_mp.name)}</span><span class="mp-mono" style="font-size:13px">${active.length + overdue.length}</span></div>`
@@ -11981,9 +12603,10 @@ function mpRenderLoans() {
   document.getElementById('mp-screen-loans').innerHTML = `
     ${scopeRow}
     <div class="mp-seg">
-      <button class="mp-seg-btn${seg==='active'?' mp-active':''}" onclick="mpSetSeg('active')">Active (${active.length})</button>
-      <button class="mp-seg-btn${seg==='upcoming'?' mp-active':''}" onclick="mpSetSeg('upcoming')">Upcoming (${upcoming.length})</button>
-      <button class="mp-seg-btn${seg==='overdue'?' mp-active':''}" onclick="mpSetSeg('overdue')">Overdue (${overdue.length})</button>
+      <button class="mp-seg-btn${seg==='active'?' mp-active':''}" style="font-size:12px;white-space:nowrap;padding:0 2px" onclick="mpSetSeg('active')">Active (${active.length})</button>
+      <button class="mp-seg-btn${seg==='upcoming'?' mp-active':''}" style="font-size:12px;white-space:nowrap;padding:0 2px" onclick="mpSetSeg('upcoming')">Upcoming (${upcoming.length})</button>
+      <button class="mp-seg-btn${seg==='overdue'?' mp-active':''}" style="font-size:12px;white-space:nowrap;padding:0 2px" onclick="mpSetSeg('overdue')">Overdue (${overdue.length})</button>
+      <button class="mp-seg-btn${seg==='longterm'?' mp-active':''}" style="font-size:12px;white-space:nowrap;padding:0 2px" onclick="mpSetSeg('longterm')">Long term (${longTerm.length})</button>
     </div>
     ${list.length ? list.map((g,i) => mpLoanCardHtml(g, seg, i)).join('') : '<div class="mp-empty">No loans in this view</div>'}
   `;
@@ -12015,7 +12638,7 @@ function mpSetSeg(seg) { _mp.seg = seg; mpRenderLoans(); }
 function mpJumpToLoan(g) {
   if (!g) return;
   if (g.am && _mp.role !== 'am') _mp.scope = g.am;
-  _mp.seg = (g.scheduled || g.isUpcoming) ? 'upcoming' : (g.overdue ? 'overdue' : 'active');
+  _mp.seg = (g.scheduled || g.isUpcoming) ? 'upcoming' : (g.overdue ? 'overdue' : (g.longTerm ? 'longterm' : 'active'));
   // isUpcoming rows come from upcomingLoans (mpAllUpcoming()), which have
   // no equipment assigned yet — _loanKey() only matches equipment-derived
   // groups, so these need their own stable id instead.
@@ -12029,8 +12652,12 @@ function mpLoanCardHtml(g, seg, i) {
   // start date has actually arrived are "stuck"/due, so the pill needs to
   // check the real date rather than assuming every isUpcoming row is due.
   const isStuckNow = g.isUpcoming && g.startDate && g.startDate <= mpToday();
-  const capColor = isStuckNow ? 'var(--mp-orange)' : seg === 'overdue' ? 'var(--mp-critical)' : seg === 'upcoming' ? 'var(--mp-purple)' : 'var(--mp-green)';
+  // Long-term takes priority over whichever segment this card is rendering
+  // in, so it looks identical whether seen under Active or under Long term
+  // — it's the same loan shown in both, not two different states.
+  const capColor = isStuckNow ? 'var(--mp-orange)' : g.longTerm ? 'var(--mp-teal)' : seg === 'overdue' ? 'var(--mp-critical)' : seg === 'upcoming' ? 'var(--mp-purple)' : 'var(--mp-green)';
   const statusPill = isStuckNow ? '<span class="mp-pill mp-pill-status-due">Starts today</span>'
+    : g.longTerm ? '<span class="mp-pill mp-pill-status-longterm">∞ Long term</span>'
     : seg === 'overdue' ? '<span class="mp-pill mp-pill-status-overdue">Overdue</span>'
     : seg === 'upcoming' ? '<span class="mp-pill mp-pill-status-scheduled">Scheduled</span>'
     : '<span class="mp-pill mp-pill-status-active">Active</span>';
@@ -12050,11 +12677,11 @@ function mpLoanCardHtml(g, seg, i) {
   const openId = 'mp-lc-' + i;
   const totalCount = g.items.length + (g._pendingItems?.length || 0);
   return `
-    <div class="mp-loan-card">
+    <div class="mp-loan-card${g.longTerm ? ' mp-longterm' : ''}">
       <div class="mp-loan-cap"><span style="background:${capColor}"></span></div>
       <div class="mp-loan-body">
         <div class="mp-loan-top" onclick="mpToggleCard('${openId}')" style="cursor:pointer">
-          <div style="min-width:0;flex:1"><div class="mp-loan-cust">${esc(g.loanTo)}</div><div class="mp-loan-meta">${esc(g.am||'—')} · ${esc(g.location)} · ${g.startDate?formatDisplayDate(g.startDate):''}${g.endDate?' – '+formatDisplayDate(g.endDate):''}</div></div>
+          <div style="min-width:0;flex:1"><div class="mp-loan-cust">${esc(g.loanTo)}</div><div class="mp-loan-meta">${esc(g.am||'—')} · ${esc(g.location)} · ${g.startDate?formatDisplayDate(g.startDate):''}${g.longTerm ? ' · No end date' : (g.endDate?' – '+formatDisplayDate(g.endDate):'')}</div></div>
           <button class="mp-kebab" onclick="event.stopPropagation();mpOpenLoanActions(${i})">${mpIcon('more',20)}</button>
         </div>
         <div class="mp-pill-row">${statusPill}<span class="mp-pill mp-mono" style="background:var(--mp-black-10);color:var(--mp-text-body)">${totalCount} device${totalCount!==1?'s':''}</span>${testPill}</div>
@@ -12213,6 +12840,7 @@ function mpEquipmentStatus(e, today) {
   }
   const on = !hidden && e.OnLoanTo && e.Returned !== 'Yes';
   const od = on && e.LoanEndDate && e.LoanEndDate < today;
+  if (on && isLoanLongTerm(e.BatchID)) return { key: 'longterm', label: 'Long term', bg: 'var(--mp-teal-20)', fg: 'var(--mp-teal-ink)', detail: e.OnLoanTo + ' · no end date' };
   if (od) return { key: 'overdue', label: 'Overdue', bg: 'var(--mp-critical-tint)', fg: 'var(--mp-critical)', detail: e.OnLoanTo + (e.LoanEndDate ? ' · due back ' + formatDisplayDate(e.LoanEndDate) : '') };
   if (on) return { key: 'on-loan', label: 'On loan', bg: 'var(--mp-orange-20)', fg: 'var(--mp-orange)', detail: e.OnLoanTo + (e.LoanEndDate ? ' · due back ' + formatDisplayDate(e.LoanEndDate) : '') };
   return { key: 'available', label: 'Available', bg: 'var(--mp-green-20)', fg: '#4d7a00' };
@@ -12499,9 +13127,15 @@ async function mpEquipmentDetailCheckIn(assetId, btnEl) {
   if (btnEl) { if (btnEl.disabled) return; btnEl.disabled = true; }
   const item = equipment.find(e => e.id === assetId);
   if (!item) return;
+  // Ask (if needed) BEFORE the blocking loader shows — a native confirm()
+  // popping up over/under that overlay reads as broken, not as "processing".
+  if (isLoanLongTerm(item.BatchID) && !confirm('This is a LONG-TERM loan to ' + item.OnLoanTo + ' — the equipment is meant to stay with them indefinitely.\n\nCheck in ' + item.CHSAssetNo + ' anyway?')) {
+    if (btnEl) btnEl.disabled = false;
+    return;
+  }
   currentItem = item;
   mpShowBlockingLoader('Checking in…', "Please don't close the app or navigate away.");
-  try { await submitReturn(); } finally { mpHideBlockingLoader(); }
+  try { await submitReturn({ longTermConfirmed: true }); } finally { mpHideBlockingLoader(); }
   mpRenderEquipmentDetail();
 }
 function mpEquipmentDetailCheckOut(assetNo) {
@@ -12550,7 +13184,7 @@ function mpResetBookWizard() {
   _mp.book = {
     step: 1,
     loanTo: '', location: '',
-    startDate: nzDate(), endDate: '',
+    startDate: nzDate(), endDate: '', longTerm: false,
     am: isAM ? _mp.name : '',
     email: isAM && self ? (self.email || '') : '',
     contact: '', jobType: 'Demo', demoType: '', island: '',
@@ -12588,16 +13222,23 @@ function mpRenderBookStep1() {
       <div style="font:400 13px var(--mp-font-body);color:var(--mp-purple);background:var(--mp-purple-20);padding:10px 14px;border-radius:var(--mp-radius-md)">Fields marked * are required. Devices come next.</div>
       <div><label style="${mpFieldLabel()}">Event / customer name *</label><input class="mp-input" value="${mpFormVal(b.loanTo)}" oninput="_mp.book.loanTo=this.value"></div>
       <div><label style="${mpFieldLabel()}">Location *</label><input class="mp-input" value="${mpFormVal(b.location)}" oninput="_mp.book.location=this.value"></div>
-      <div onclick="mpOpenIslandSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Shipping island *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.island?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${b.island==='North'?'North Island':b.island==='South'?'South Island':'Select…'}<span style="color:var(--mp-black-40)">›</span></div></div>
+      ${b.longTerm ? '' : `<div onclick="mpOpenIslandSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Shipping island *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.island?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${b.island==='North'?'North Island':b.island==='South'?'South Island':'Select…'}<span style="color:var(--mp-black-40)">›</span></div></div>`}
       <div><label style="${mpFieldLabel()}">Start date *</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(b.startDate)}" onchange="_mp.book.startDate=this.value"></div></div>
-      <div><label style="${mpFieldLabel()}">End date *</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div></div>
+      ${b.longTerm ? '' : `<div><label style="${mpFieldLabel()}">End date *</label><div class="mp-date-wrap"><input class="mp-input" type="date" value="${mpFormVal(b.endDate)}" onchange="_mp.book.endDate=this.value"></div></div>`}
+      <div onclick="mpBookToggleLongTerm()" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:var(--mp-radius-md);background:${b.longTerm?'var(--mp-teal-10)':'var(--mp-black-05)'};cursor:pointer">
+        <div style="min-width:0">
+          <div style="font:600 13px var(--mp-font-body);color:var(--mp-text-strong)">Long-term loan</div>
+          <div style="font:400 12px var(--mp-font-body);color:var(--mp-text-muted)">No end date — held indefinitely by the account manager</div>
+        </div>
+        <div style="width:26px;height:26px;flex-shrink:0;border-radius:6px;border:2px solid ${b.longTerm?'var(--mp-teal)':'var(--mp-black-20)'};background:${b.longTerm?'var(--mp-teal)':'transparent'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px">${b.longTerm?'✓':''}</div>
+      </div>
       ${isAM
         ? `<div><label style="${mpFieldLabel()}">Account manager</label><div class="mp-input" style="display:flex;align-items:center;color:var(--mp-text-muted);background:var(--mp-black-05)">${esc(b.am)}</div></div>`
         : `<div><label style="${mpFieldLabel()}">Account manager *</label><select class="mp-input" onchange="mpBookSetAM(this.value)"><option value="">Select…</option>${amOptions}</select></div>`}
       <div><label style="${mpFieldLabel()}">Account manager email *</label><input class="mp-input" type="email" value="${mpFormVal(b.email)}" oninput="_mp.book.email=this.value"></div>
       <div><label style="${mpFieldLabel()}">Contact number</label><input class="mp-input" type="tel" value="${mpFormVal(b.contact)}" oninput="_mp.book.contact=this.value"></div>
       <div onclick="mpOpenJobTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Job type</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between">${esc(b.jobType)}<span style="color:var(--mp-black-40)">›</span></div></div>
-      ${b.jobType === 'Demo' ? `<div onclick="mpOpenDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(b.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>` : ''}
+      ${(b.jobType === 'Demo' && !b.longTerm) ? `<div onclick="mpOpenDemoTypeSheet()" style="cursor:pointer"><label style="${mpFieldLabel()}">Demo type *</label><div class="mp-input" style="display:flex;align-items:center;justify-content:space-between;color:${b.demoType?'var(--mp-text-strong)':'var(--mp-text-muted)'}">${esc(b.demoType||'Select…')}<span style="color:var(--mp-black-40)">›</span></div></div>` : ''}
       <div><label style="${mpFieldLabel()}">Notes</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.notes=this.value">${mpFormVal(b.notes)}</textarea></div>
       <div><label style="${mpFieldLabel()}">Shipping details</label><textarea class="mp-input" rows="2" style="min-height:auto;padding:10px 14px" oninput="_mp.book.shipping=this.value">${mpFormVal(b.shipping)}</textarea></div>
     </div>
@@ -12611,6 +13252,15 @@ function mpRenderBookStep1() {
 function mpCancelBookWizard() {
   _mp.book = null;
   mpGoScreen(_mp.role === 'am' ? 'today' : 'overview');
+}
+function mpBookToggleLongTerm() {
+  const b = _mp.book;
+  b.longTerm = !b.longTerm;
+  // Clear the fields long-term drops, same as desktop's onLongTermToggle() —
+  // a stale leftover value shouldn't be able to resurrect a reminder this
+  // loan is meant to be exempt from.
+  if (b.longTerm) { b.endDate = ''; b.island = ''; b.demoType = ''; }
+  mpRenderBookStep1();
 }
 function mpBookSetAM(name) {
   _mp.book.am = name;
@@ -12677,10 +13327,16 @@ function mpBookSetDemoTypeOther() {
 }
 function mpBookGoStep2() {
   const b = _mp.book;
-  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.endDate || !b.am || !b.email.trim() || (b.jobType === 'Demo' && !b.demoType) || !b.island) {
+  if (!b.loanTo.trim() || !b.location.trim() || !b.startDate || !b.am || !b.email.trim()) {
     showToast('error', 'Fill in all required fields first.'); return;
   }
-  if (b.endDate < b.startDate) { showToast('error', 'End date must be on or after the start date.'); return; }
+  // Long-term drops End date / Demo type / Island — see mpBookToggleLongTerm().
+  if (!b.longTerm) {
+    if (!b.endDate || (b.jobType === 'Demo' && !b.demoType) || !b.island) {
+      showToast('error', 'Fill in all required fields first.'); return;
+    }
+    if (b.endDate < b.startDate) { showToast('error', 'End date must be on or after the start date.'); return; }
+  }
   b.step = 2;
   mpBookPickDevices();
 }
@@ -12758,6 +13414,12 @@ async function mpBookConfirm() {
   setVal('b-email', b.email);
   setVal('b-contact-number', b.contact);
   setVal('b-job-type', b.jobType);
+  // setVal() writes .value, which does nothing to a checkbox — set .checked
+  // directly, then run the same disable/clear logic the desktop toggle does
+  // (after b-job-type above, since it re-evaluates Demo Type against it) so
+  // submitBatchLoan()'s validation sees a consistent state either way.
+  const ltEl = document.getElementById('b-long-term');
+  if (ltEl) { ltEl.checked = !!b.longTerm; onLongTermToggle(ltEl.checked); }
   // b-demo-type's real <option> list is only the three fixed types — a
   // custom ("Other") value wouldn't match any of them, and a plain
   // el.value = ... assignment silently no-ops when nothing matches,
@@ -13292,10 +13954,25 @@ function mpCancelReturnItems() {
 async function mpConfirmReturnItems() {
   const n = Object.values(batchReturnChecked).filter(Boolean).length;
   if (!n) { showToast('error', 'Select at least one item to return.'); return; }
+  // Long-term loans are meant to be indefinite — confirm before undoing
+  // that. A native-feeling sheet asked BEFORE the blocking loader shows,
+  // rather than a raw confirm() popping up over/under it mid-flow.
+  if (currentBatchGroup && isGroupLongTerm(currentBatchGroup)) {
+    mpOpenSheet(
+      '<div class="mp-sheet-title">Long-term loan</div>',
+      `<div style="font:400 13px/1.5 var(--mp-font-body);color:var(--mp-text-muted);padding:0 2px 14px">This is a long-term loan to ${esc(currentBatchGroup.loanTo)} — the equipment is meant to stay with them indefinitely.</div>
+       <button class="mp-sheet-item mp-danger" onclick="mpCloseSheet();mpDoConfirmReturnItems()">Return ${n} item${n===1?'':'s'} anyway</button>
+       <button class="mp-sheet-item" onclick="mpCloseSheet()">Cancel</button>`
+    );
+    return;
+  }
+  await mpDoConfirmReturnItems();
+}
+async function mpDoConfirmReturnItems() {
   // confirmBatchReturn() is a straightforward save (no interactive modal
   // of its own, unlike proceedFromBasket()), so it's safe to block on here.
   mpShowBlockingLoader('Returning items…', "Please don't close the app or navigate away.");
-  try { await confirmBatchReturn(); } finally { mpHideBlockingLoader(); }
+  try { await confirmBatchReturn({ longTermConfirmed: true }); } finally { mpHideBlockingLoader(); }
   mpGoScreen('loans');
 }
 
@@ -13308,7 +13985,12 @@ function mpOpenExtendFlow(key) {
   renderLoans();
   const g = getLoanGroupByKey(key);
   if (!g) { showToast('error', 'Could not find that loan.'); return; }
-  const gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
+  // Match on BatchID first — two long-term (or otherwise open-ended) loans
+  // to the same customer both have endDate === '', so matching on loanTo +
+  // endDate alone can find the wrong one.
+  const wantBatchId = g.batchId || g.items?.[0]?.BatchID || null;
+  let gi = wantBatchId ? (window._loanGroups || []).findIndex(x => (x.batchId || x.items?.[0]?.BatchID) === wantBatchId) : -1;
+  if (gi < 0) gi = (window._loanGroups || []).findIndex(x => x.loanTo === g.loanTo && x.endDate === g.endDate);
   if (gi < 0) { showToast('error', 'Could not find that loan.'); return; }
   currentExtendGroup = window._loanGroups[gi];
   mpGoScreen('extend');
@@ -13338,6 +14020,75 @@ async function mpConfirmExtend() {
   // its own), so it's safe to block on here.
   mpShowBlockingLoader('Saving new due date…', "Please don't close the app or navigate away.");
   try { await confirmExtendLoan(); } finally { mpHideBlockingLoader(); }
+  mpGoScreen('loans');
+}
+
+// ── LONG-TERM LOAN TRANSFER (Active ⇄ Long-term) ───────────────────────
+// Unlike Extend, convertLoanToLongTerm()/confirmLongTermToActive() take the
+// loan group directly rather than reading hidden desktop DOM nodes, so this
+// screen just collects the one extra input (an end date, for the toActive
+// direction) and calls straight through — no desktop form to mirror into.
+let _mpLongTermGroup = null;
+let _mpLongTermMode = null; // 'toLongTerm' | 'toActive'
+function mpOpenLongTermFlow(key, mode) {
+  renderLoans(); // rebuild _loanGroupMap fresh — same requirement as the other loan-action flows
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find that loan.'); return; }
+  _mpLongTermGroup = g;
+  _mpLongTermMode = mode;
+  mpGoScreen('longterm');
+}
+function mpRenderLongTerm() {
+  const g = _mpLongTermGroup;
+  const mode = _mpLongTermMode;
+  if (!g) { mpGoScreen('loans'); return; }
+  if (mode === 'toLongTerm') {
+    document.getElementById('mp-screen-longterm').innerHTML = `
+      <div style="padding:16px 20px">
+        <div class="mp-h3" style="margin-bottom:4px">${esc(g.loanTo)}</div>
+        <div style="font:400 13px/1.6 var(--mp-font-body);color:var(--mp-text-muted)">
+          This loan will move to Long Term Loans, stop sending due-date reminders, and lose its end date.<br><br>
+          If it has a Simpro job, that job will be closed (its item list stays recorded on it — nothing is wiped).<br><br>
+          If a "Return due" calendar invite was already sent to the account manager, please delete it from their calendar manually — it can’t be withdrawn from here.
+        </div>
+      </div>
+      <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+        <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelLongTerm()">Cancel</button>
+        <button class="mp-btn mp-btn-primary" style="background:var(--mp-teal)" onclick="mpConfirmLongTerm()">Make Long-term</button>
+      </div>`;
+  } else {
+    const suggested = (g.startDate && g.startDate > nzDate()) ? g.startDate : nzDate();
+    document.getElementById('mp-screen-longterm').innerHTML = `
+      <div style="padding:16px 20px">
+        <div class="mp-h3" style="margin-bottom:4px">${esc(g.loanTo)}</div>
+        <div style="font:400 13px var(--mp-font-body);color:var(--mp-text-muted);margin-bottom:16px">Set a new end date to bring this loan back onto the normal Active list with due-date reminders again.</div>
+        <label style="${mpFieldLabel()}">New end date *</label>
+        <div class="mp-date-wrap"><input class="mp-input" type="date" id="mp-longterm-date" value="${mpFormVal(suggested)}"></div>
+        <div style="font:400 12px/1.5 var(--mp-font-body);color:var(--mp-text-muted);margin-top:10px">Its Simpro job (if it had one) was already closed when this became a long-term loan and can’t be reopened — the number stays on the card as a record, shown as closed.</div>
+      </div>
+      <div style="position:sticky;bottom:0;background:var(--mp-white);border-top:1px solid var(--mp-border-hairline);padding:14px 20px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0));display:flex;gap:10px">
+        <button class="mp-btn mp-btn-ghost" style="flex:none;width:auto;padding:0 20px" onclick="mpCancelLongTerm()">Cancel</button>
+        <button class="mp-btn mp-btn-primary" onclick="mpConfirmLongTerm()">Return to Active</button>
+      </div>`;
+  }
+}
+function mpCancelLongTerm() { _mpLongTermGroup = null; _mpLongTermMode = null; mpGoScreen('loans'); }
+async function mpConfirmLongTerm() {
+  const g = _mpLongTermGroup, mode = _mpLongTermMode;
+  if (!g) { mpGoScreen('loans'); return; }
+  if (mode === 'toLongTerm') {
+    mpShowBlockingLoader('Making this a long-term loan…', "Please don't close the app or navigate away.");
+    try { await convertLoanToLongTerm(g); } finally { mpHideBlockingLoader(); }
+  } else {
+    const newDate = document.getElementById('mp-longterm-date').value;
+    const today = nzDate();
+    if (!newDate) { showToast('error', 'Select a new end date.'); return; }
+    if (newDate < today) { showToast('error', 'End date cannot be in the past.'); return; }
+    if (g.startDate && newDate < g.startDate) { showToast('error', "End date cannot be before the loan's start date."); return; }
+    mpShowBlockingLoader('Returning to Active…', "Please don't close the app or navigate away.");
+    try { await confirmLongTermToActive(g, newDate); } finally { mpHideBlockingLoader(); }
+  }
+  _mpLongTermGroup = null; _mpLongTermMode = null;
   mpGoScreen('loans');
 }
 
@@ -13951,12 +14702,25 @@ function mpConfirmScanCheckout(cart) {
   mpGoScreen('book');
 }
 async function mpConfirmScanReturn(cart) {
+  // One grouped prompt for however many queued assets belong to long-term
+  // loans, asked BEFORE the blocking loader — not one prompt per item inside
+  // the loop below, which would mean tapping through N confirms for a
+  // multi-item long-term return.
+  const longTermNos = cart
+    .map(c => equipment.find(e => e.id === c.id))
+    .filter(item => item && isLoanLongTerm(item.BatchID))
+    .map(item => item.CHSAssetNo);
+  if (longTermNos.length && !confirm(
+      longTermNos.length + ' of these item' + (longTermNos.length !== 1 ? 's are' : ' is') +
+      ' on a LONG-TERM loan (meant to stay with the account manager indefinitely): ' + longTermNos.join(', ') +
+      '.\n\nReturn ' + cart.length + ' item' + (cart.length !== 1 ? 's' : '') + ' anyway?'))
+    return;
   mpShowBlockingLoader(`Returning ${cart.length} item${cart.length === 1 ? '' : 's'}…`, "Please don't close the app or navigate away.");
   for (const c of cart) {
     const item = equipment.find(e => e.id === c.id);
     if (!item) continue;
     currentItem = item;
-    await submitReturn({ silent: true });
+    await submitReturn({ silent: true, longTermConfirmed: true });
   }
   mpHideBlockingLoader();
   showToast('success', `${cart.length} item${cart.length === 1 ? '' : 's'} returned`);
@@ -14199,9 +14963,15 @@ function mpOpenLoanActionsForGroup(g) {
       ['Edit loan', () => mpOpenReassignFlow(key, 'edit')],
       ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')]
     ];
+    // Extend is meaningless without a due date, so it's swapped for the
+    // opposite long-term transfer action instead of just disappearing.
+    const extendOrLongTermAction = g.longTerm
+      ? ['Return to Active', () => mpOpenLongTermFlow(key, 'toActive')]
+      : ['Extend', () => mpOpenExtendFlow(key)];
+    const longTermToggleAction = g.longTerm ? [] : [['Make long-term', () => mpOpenLongTermFlow(key, 'toLongTerm')]];
     items = _mp.role === 'am'
-      ? [ ...reassignActions, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ['Loan form', () => mpOpenLoanFormFlow(key)] ]
-      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], ['Extend', () => mpOpenExtendFlow(key)], ['Add items', () => mpOpenAddItemsFlow(key)], ...reassignActions, ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
+      ? [ ...reassignActions, ['Return items', () => mpOpenReturnItemsFlow(key)], extendOrLongTermAction, ['Add items', () => mpOpenAddItemsFlow(key)], ...longTermToggleAction, ['Loan form', () => mpOpenLoanFormFlow(key)] ]
+      : [ ...testItem, ['Return items', () => mpOpenReturnItemsFlow(key)], extendOrLongTermAction, ['Add items', () => mpOpenAddItemsFlow(key)], ...reassignActions, ...longTermToggleAction, ['Loan form', () => mpOpenLoanFormFlow(key)], ['Delete loan', () => mpOpenDeleteLoanFlow(key), true] ];
   }
   window._mpSheetActions = items;
   // Where the devices currently are and when they're due back — otherwise
@@ -14213,6 +14983,8 @@ function mpOpenLoanActionsForGroup(g) {
     if (g.startDate) subtitleParts.push('Starts ' + formatDisplayDate(g.startDate));
   } else if (g.scheduled) {
     if (g.startDate) subtitleParts.push('Starts ' + formatDisplayDate(g.startDate));
+  } else if (g.longTerm) {
+    subtitleParts.push('Long term — no end date');
   } else if (g.endDate) {
     subtitleParts.push((g.overdue ? 'Overdue since ' : 'Due back ') + formatDisplayDate(g.endDate));
   }
