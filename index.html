@@ -1998,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 181;
+const APP_VERSION = 182;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -7408,7 +7408,7 @@ async function convertLoanToLongTerm(g) {
     // in "Recover Orphaned Loan" despite being completely fine.
     g.items.forEach(item => {
       logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model,
-        action: 'Converted', loanTo, location: g.location || '',
+        action: 'Converted', loanTo, location: g.location || '', batchId,
         notes: loanTo + '’s loan adopted into BatchID tracking (predates it) as part of converting to long-term.' });
     });
   }
@@ -9818,7 +9818,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       Returned: 'No', BatchID: batchId,
       BorrowerEmail: g.items[0]?.BorrowerEmail || ''
     });
-    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan', batchId });
     added++;
   });
 
@@ -9848,7 +9848,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       if (!uLoan.items.some(i => i.CHSAssetNo === eq.CHSAssetNo)) {
         uLoan.items.push({ id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, SerialNo: eq.SerialNo });
       }
-      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: eq.CHSAssetNo, model: eq.Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Booked as upcoming (currently on loan to ' + eq.OnLoanTo + ')' });
+      logHistory({ id: uid(), ts: nzNow(), chsAssetNo: eq.CHSAssetNo, model: eq.Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Booked as upcoming (currently on loan to ' + eq.OnLoanTo + ')', batchId });
       added++;
     });
     await saveUpcomingLoans();
@@ -10242,7 +10242,7 @@ async function _doAddItemsToLoan(g, validRows) {
       Returned: 'No', BatchID: batchId,
       BorrowerEmail: g.items[0]?.BorrowerEmail || ''
     });
-    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan' });
+    logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan', batchId });
     added.push(equipment[idx]);
   });
   if (collisions.length) {
@@ -10863,7 +10863,7 @@ async function confirmReassignAM() {
     if (idx < 0) return;
     logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model,
       action: 'Transfer', loanTo: targetLoanData.loanTo, location: targetLoanData.location,
-      loanStart: targetLoanData.startDate, loanEnd: targetLoanData.endDate,
+      loanStart: targetLoanData.startDate, loanEnd: targetLoanData.endDate, batchId: targetBatchId,
       notes: 'Reassigned from ' + g.loanTo + ' (' + (g.location || '') + ') to ' + targetLoanData.loanTo + ' (' + targetLoanData.location + ')'
     });
     equipment[idx].OnLoanTo      = targetLoanData.loanTo;
@@ -11196,7 +11196,7 @@ async function _tryActivateUpcomingLoan(upcoming) {
     if (prevLoanTo && prevLoanTo !== upcoming.loanTo) {
       logHistory({ id: uid(), ts: nzNow(), chsAssetNo: prev.CHSAssetNo, model: prev.Model,
         action: 'Transfer', loanTo: upcoming.loanTo, location: upcoming.location,
-        loanStart: upcoming.startDate, loanEnd: upcoming.endDate,
+        loanStart: upcoming.startDate, loanEnd: upcoming.endDate, batchId: upcoming.id,
         notes: 'Auto-transferred from ' + prevLoanTo + ' (' + prevLoc + ') to ' + upcoming.loanTo + ' (' + upcoming.location + ') — upcoming loan started ' + upcoming.startDate,
         operator: null
       });
