@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CHS SharePoint hosting — validation test page</title>
+<!-- Probes font-src: does an external stylesheet load and apply? -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="./test-manifest.json">
+<style>
+  body{font-family:system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 20px;line-height:1.5;color:#1a1917}
+  h1{font-size:20px;margin-bottom:4px}
+  .sub{color:#6b6860;font-size:13px;margin-bottom:24px}
+  .check{border:1px solid #e5e3de;border-radius:8px;padding:14px 16px;margin-bottom:12px}
+  .check h2{font-size:14px;margin:0 0 6px}
+  .result{font-weight:700;font-size:14px}
+  .pass{color:#15803d}
+  .fail{color:#dc2626}
+  .pending{color:#d97706}
+  .detail{font-size:12px;color:#6b6860;margin-top:4px;word-break:break-all}
+  .dm-sans-test{font-family:'DM Sans',sans-serif;font-weight:700}
+  code{background:#f4f3f0;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<h1>SharePoint hosting validation</h1>
+<div class="sub">If you can read this with the checks below filled in, inline &lt;script&gt; at least ran enough to get this far. Record each result in the Phase 1 checklist.</div>
+
+<div class="check">
+  <h2>1. Inline &lt;script&gt; execution (script-src)</h2>
+  <div class="result" id="result-inline">pending — JS hasn't run</div>
+  <div class="detail">If this never changes from "pending", inline script is blocked outright — the whole app would fail to execute as-is.</div>
+</div>
+
+<div class="check">
+  <h2>2. Google Fonts stylesheet (font-src)</h2>
+  <div class="dm-sans-test" style="font-size:18px">This text should look like DM Sans (not a generic system font)</div>
+  <div class="detail">Judge by eye — compare against the body text above it, which is deliberately a plain system font.</div>
+</div>
+
+<div class="check">
+  <h2>3. fetch() to a generic external API (connect-src, general case)</h2>
+  <div class="result" id="result-github">pending…</div>
+  <div class="detail">Target: <code>https://api.github.com</code></div>
+</div>
+
+<div class="check">
+  <h2>4. fetch() to the real Firebase Realtime Database (connect-src, the actual dependency)</h2>
+  <div class="result" id="result-firebase">pending…</div>
+  <div class="detail">Target: <code>https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app/.json</code> — read-only root fetch, no write, safe to run against production. This is the single most decision-relevant result: if this fails, the real app's Firebase calls would fail the same way.</div>
+</div>
+
+<div class="check">
+  <h2>5. Service worker registration + scope</h2>
+  <div class="result" id="result-sw">pending…</div>
+  <div class="detail">
+    If this passes, open DevTools → Application → Manifest next and check "Installability" / try "Install app" (Phase 1 step 10), then test on a real phone (step 11), then camera (step 12), then a real FCM push send (step 13) — those three are manual, not scripted here.
+  </div>
+</div>
+
+<script>
+  document.getElementById('result-inline').textContent = 'PASS — inline script ran at ' + new Date().toLocaleString();
+  document.getElementById('result-inline').className = 'result pass';
+
+  function setResult(id, ok, detail) {
+    var el = document.getElementById(id);
+    el.textContent = (ok ? 'PASS' : 'FAIL') + (detail ? ' — ' + detail : '');
+    el.className = 'result ' + (ok ? 'pass' : 'fail');
+  }
+
+  fetch('https://api.github.com')
+    .then(function(r) { return r.json().then(function(j) { setResult('result-github', true, 'HTTP ' + r.status); }); })
+    .catch(function(e) { setResult('result-github', false, e.message); });
+
+  fetch('https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app/.json')
+    .then(function(r) { return r.text().then(function(t) { setResult('result-firebase', true, 'HTTP ' + r.status + ', ' + t.length + ' bytes returned'); }); })
+    .catch(function(e) { setResult('result-firebase', false, e.message); });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./test-sw.js')
+      .then(function(reg) { setResult('result-sw', true, 'registered, scope = ' + reg.scope); })
+      .catch(function(e) { setResult('result-sw', false, e.message); });
+  } else {
+    setResult('result-sw', false, 'navigator.serviceWorker not available at all in this context');
+  }
+</script>
+</body>
+</html>
