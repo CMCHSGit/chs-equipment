@@ -1998,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 182;
+const APP_VERSION = 183;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5072,19 +5072,6 @@ async function submitBatchLoan(opts) {
     // see createJob()'s DueDate fallback in .gas-proxy/Code.js).
     window._autoCreateSimproOnClose = !isLongTerm;
 
-    // Fire the due-back calendar invite immediately — unlike the confirmation
-    // email above (deferred until the loan-doc modal closes), this doesn't
-    // depend on anyone opening/sending the PDF, so every new loan reliably
-    // gets one. Needs an AM email to invite; skip silently if none is on file
-    // (mirrors sendReturnDueSoonReminder_() on the server, which does the same).
-    // Long-term loans have no due-back date to invite anyone to.
-    if (amEmailForConfirm && !isLongTerm) {
-      sendReturnCalendarInvite({
-        pdfKey: batchId, loanTo, location, endDate, island: batchIsland,
-        accountManager: batchAM, amEmail: amEmailForConfirm,
-        items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo }))
-      });
-    }
     const _rem = document.getElementById('loan-doc-confirm-reminder');
     if (_rem) {
       // Text reflects current state rather than assuming it — job creation
@@ -6093,28 +6080,24 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
 // The "due back soon" heads-up is entirely server-side — see
 // .gas-proxy/Code.js's sendReturnReminders(), which runs on a real daily
 // trigger regardless of whether anyone has this app open, and pushes to the
-// AM's phone as well as emailing them. This used to be a client-side check
+// AM's phone. This used to be a client-side check
 // (loadSentNotifications()/checkOverdueNotifications()/sendOverdueEmail(),
 // gated on someone having a tab open at 9am on a Monday NZ time) — removed
 // 2026-09-11 along with its /notifications.json store, replaced by
 // /returnDueSoonReminders/ on the Firebase side.
 //
-// Repeating overdue emails (sendReturnReminders() used to also nag every 7
-// days once a loan passed its due date) were removed 2026-09-23 — see
-// sendReturnCalendarInvite() below, which puts a due-back reminder on the
-// AM's own calendar instead.
-async function sendReturnCalendarInvite(payload) {
-  if (!SIMPRO_PROXY_URL) return;
-  if (TEST_MODE) { console.log('TEST MODE: return calendar invite simulated for', payload.amEmail); return; }
-  try {
-    await fetch(SIMPRO_PROXY_URL, {
-      method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
-      body: JSON.stringify({ action: 'returnInvite', ...payload })
-    });
-  } catch(e) { console.warn('Return calendar invite failed:', e); }
-}
+// Repeating overdue pushes (sendReturnReminders() used to also nag every 7
+// days once a loan passed its due date) were removed 2026-09-23 in favour of
+// a due-back .ics calendar invite emailed at loan creation instead; that
+// invite (sendReturnCalendarInvite(), posting action:'returnInvite') was
+// itself removed 2026-10-05 along with every other email this app sent —
+// cassserverroom@gmail.com, the account .gas-proxy ran as, was quarantined
+// under company IT security policy, and mobile push had already fully
+// replaced email as the real notification channel.
 
-// Handle return/extend links from email
+// Handle return/extend/reassign deep links — tapped from a push notification
+// (and, while EmailJS's loan confirmation email still links here too, from
+// that email's manage/return/extend links).
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
   if (!params.toString()) return; // nothing to handle
@@ -6128,7 +6111,7 @@ function handleReturnLink() {
   // Handle direct tab link e.g. ?tab=loans
   const tabParam = params.get('tab');
   if (tabParam) { switchTab(tabParam); return; }
-  // Deep link from the scheduled stuck-loan reminder email (see
+  // Deep link from the scheduled stuck-loan reminder push (see
   // .gas-proxy/Code.js sendStuckLoanReminders()) — jumps straight into the
   // Reassign modal, pre-filled, same as clicking the in-app toast.
   const reassignParam = params.get('reassign');
