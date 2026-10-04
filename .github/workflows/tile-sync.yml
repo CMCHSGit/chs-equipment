@@ -9,11 +9,6 @@ on:
   schedule:
     - cron: '0 18 * * *' # 18:00 UTC = 07:00 NZST (06:00 during daylight saving)
   workflow_dispatch:
-    inputs:
-      debug_fields:
-        description: 'Print raw Tile API field names (keys only, never values) for one sample tile - diagnostic only'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -32,7 +27,6 @@ jobs:
         env:
           TILE_EMAIL:    ${{ secrets.TILE_EMAIL }}
           TILE_PASSWORD: ${{ secrets.TILE_PASSWORD }}
-          TILE_SYNC_DEBUG_FIELDS: ${{ inputs.debug_fields }}
       # GitHub pauses timed workflows after 60 days without repo activity -
       # re-enabling this one on every run keeps it alive.
       - run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/tile-sync.yml/enable"
