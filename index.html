@@ -1998,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 185;
+const APP_VERSION = 186;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -6575,13 +6575,17 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   const today = nzDate();
   const spare = 3;
   let rows, blank;
+  // Hand-ticked on the printed/PDF form, not tracked by the app — a plain
+  // box, not contenteditable, so it's never picked up by saveLoanDocChanges()
+  // (which only reads contenteditable cells back out) or persisted.
+  const dataClearedCell = '<td style="border:1px solid #ccc;padding:2px 8px;text-align:center"><div style="width:14px;height:14px;border:1.5px solid #333;margin:0 auto"></div></td>';
   if (savedRows && savedRows.length > 0) {
     rows = savedRows.map(r => {
       const p = _parseLoanDocRow(r);
       const cols = [p.CHSAssetNo, p.Model, p.Description, p.SerialNo, p.Notes];
       return '<tr>' + cols.map(cell =>
         '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">' + (cell || '') + '</td>'
-      ).join('') + '</tr>';
+      ).join('') + dataClearedCell + '</tr>';
     }).join('');
     blank = '';
   } else {
@@ -6592,8 +6596,9 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.Description||e.Model||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e._pendingNote||''}</td>
+      ${dataClearedCell}
     </tr>`).join('');
-    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(5) + '</tr>').join('');
+    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(5) + dataClearedCell + '</tr>').join('');
   }
 
   document.getElementById('loan-doc-content').innerHTML = `
@@ -6639,6 +6644,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:18%;background:#f5f5f5">Description</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:14%;background:#f5f5f5">Serial/Part #</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;background:#f5f5f5">Notes/Additional Info</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:10px;text-align:center;width:9%;background:#f5f5f5">Data cleared on return</th>
           </tr>
         </thead>
         <tbody>${rows}${blank}</tbody>
@@ -6658,14 +6664,23 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <!-- FOOTER -->
       <table style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
-          <td style="border:1px solid #ccc;padding:12px 16px;width:50%;vertical-align:middle">
-            <div style="color:#1d4ed8;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
-            <div style="color:#dc2626;font-weight:700;font-size:11px;text-align:center;margin-top:6px">Check all units have current ESC</div>
-          </td>
-          <td style="border:1px solid #ccc;padding:8px 16px;vertical-align:top">
+          <td style="border:1px solid #ccc;padding:8px 16px;width:28%;vertical-align:top">
+            <div style="font-size:11px;font-weight:700;margin-bottom:6px">Loan authorised by:</div>
             <table style="width:100%;border-collapse:collapse">
               <tr><td style="font-size:11px;padding:4px 0;border-bottom:1px solid #ccc">Name (print):</td></tr>
               <tr><td style="font-size:11px;padding:8px 0;border-bottom:1px solid #ccc">Signature:</td></tr>
+              <tr><td style="font-size:11px;padding:4px 0">Date:</td></tr>
+            </table>
+          </td>
+          <td style="border:1px solid #ccc;padding:12px 16px;width:44%;vertical-align:middle">
+            <div style="color:#1d4ed8;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
+            <div style="color:#dc2626;font-weight:700;font-size:11px;text-align:center;margin-top:6px">Check all units have current ESC</div>
+          </td>
+          <td style="border:1px solid #ccc;padding:8px 16px;width:28%;vertical-align:top">
+            <div style="font-size:11px;font-weight:700;margin-bottom:6px">Return checked by:</div>
+            <table style="width:100%;border-collapse:collapse">
+              <tr><td style="font-size:11px;padding:4px 0;border-bottom:1px solid #ccc">Signed:</td></tr>
+              <tr><td style="font-size:11px;padding:8px 0;border-bottom:1px solid #ccc">Name (print):</td></tr>
               <tr><td style="font-size:11px;padding:4px 0">Date:</td></tr>
             </table>
           </td>
@@ -6898,7 +6913,7 @@ function addDocRow() {
   const tr = document.createElement('tr');
   tr.innerHTML = Array(5).fill(0).map(() =>
     '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px;min-width:40px;background:#fffef0" title="Click to edit"></td>'
-  ).join('');
+  ).join('') + '<td style="border:1px solid #ccc;padding:2px 8px;text-align:center;background:#fffef0"><div style="width:14px;height:14px;border:1.5px solid #333;margin:0 auto"></div></td>';
   if (insertBefore) tbody.insertBefore(tr, insertBefore);
   else tbody.appendChild(tr);
   // Track as edited
@@ -6940,7 +6955,10 @@ async function saveLoanDocChanges() {
   const savedRows = [];
   if (equipTable) {
     equipTable.querySelectorAll('tbody tr').forEach(row => {
-      const vals = Array.from(row.querySelectorAll('td')).map(td => td.innerText?.trim() || '');
+      // Only the editable cells — excludes the "Data cleared on return"
+      // checkbox box, which is hand-ticked on the printed form and was
+      // never meant to round-trip through here.
+      const vals = Array.from(row.querySelectorAll('td[contenteditable="true"]')).map(td => td.innerText?.trim() || '');
       if (vals.some(v => v)) savedRows.push(vals);
     });
   }
