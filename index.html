@@ -1998,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 187;
+const APP_VERSION = 188;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5877,7 +5877,7 @@ async function loadTileLocation(assetNo, tileNo) {
       contentEl.innerHTML =
         (d.alert ? '<div class="detail-field full" style="background:var(--amber-light);border:1px solid var(--amber-border);border-radius:6px;padding:8px 10px"><span style="color:var(--amber);font-weight:500">⚠ ' + esc2(d.alert) + '</span></div>' : '') +
         '<div class="detail-field full"><label>Address</label><span>' + esc2(d.location) + '</span></div>' +
-        '<div class="detail-field"><label>Last Updated</label><span>' + esc2(d.lastUpdated || '—') + '</span></div>' +
+        '<div class="detail-field"><label>Last Updated</label><span>' + esc2(d.lastUpdated || '—') + (d.lastTimestamp ? ' <span style="color:var(--text3)">(' + esc2(_auditFormatTs(d.lastTimestamp)) + ')</span>' : '') + '</span></div>' +
         (d.latitude && d.longitude ? '<div class="detail-field"><label>Coordinates</label><span style="font-family:\'DM Mono\',monospace;font-size:11px">' + d.latitude.toFixed(5) + ', ' + d.longitude.toFixed(5) + '</span></div>' : '') +
         '<div class="detail-field full" style="margin-top:4px"><a href="' + mapsUrl + '" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">📍 Open in Google Maps →</a></div>';
       if (d.alert) showToast('warn', 'Tile ' + tileNo + ': ' + d.alert);
