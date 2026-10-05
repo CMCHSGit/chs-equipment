@@ -116,8 +116,8 @@ self.addEventListener('push', event => {
 
 // Tapping the notification focuses an already-open tab (navigating it to
 // the target URL) or opens a new one — the URL is the same ?reassign=<id>
-// deep link the equivalent email already uses, so it lands in the same
-// place (handleReturnLink() in index.html).
+// style deep link handleReturnLink() in index.html already knows how to
+// read, so it lands in the same place regardless of which reminder sent it.
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = (event.notification.data && event.notification.data.url) || '/?mobile=1';
