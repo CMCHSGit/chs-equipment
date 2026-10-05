@@ -1998,7 +1998,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 183;
+const APP_VERSION = 187;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -5594,6 +5594,9 @@ function buildActiveLoanCard(g, gi, idPrefix, needsReassign) {
           <button class="btn btn-sm" onclick="event.stopPropagation();openReassignAMByKey('${key}','transfer')" title="Transfer equipment to another loan" style="font-size:11px">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Transfer
           </button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();openCopyLoanByKey('${key}')" title="Start a brand-new, separate loan for a different customer with the same devices" style="font-size:11px">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy
+          </button>
           <button class="btn btn-sm" onclick="event.stopPropagation();openAddItemsToLoanByKey('${key}')" title="Add more devices to this loan">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add items
           </button>
@@ -5872,10 +5875,12 @@ async function loadTileLocation(assetNo, tileNo) {
         ? 'https://www.google.com/maps?q=' + d.latitude + ',' + d.longitude
         : 'https://www.google.com/maps/search/' + encodeURIComponent(d.location);
       contentEl.innerHTML =
+        (d.alert ? '<div class="detail-field full" style="background:var(--amber-light);border:1px solid var(--amber-border);border-radius:6px;padding:8px 10px"><span style="color:var(--amber);font-weight:500">⚠ ' + esc2(d.alert) + '</span></div>' : '') +
         '<div class="detail-field full"><label>Address</label><span>' + esc2(d.location) + '</span></div>' +
         '<div class="detail-field"><label>Last Updated</label><span>' + esc2(d.lastUpdated || '—') + '</span></div>' +
         (d.latitude && d.longitude ? '<div class="detail-field"><label>Coordinates</label><span style="font-family:\'DM Mono\',monospace;font-size:11px">' + d.latitude.toFixed(5) + ', ' + d.longitude.toFixed(5) + '</span></div>' : '') +
         '<div class="detail-field full" style="margin-top:4px"><a href="' + mapsUrl + '" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">📍 Open in Google Maps →</a></div>';
+      if (d.alert) showToast('warn', 'Tile ' + tileNo + ': ' + d.alert);
     } else {
       contentEl.innerHTML = '<div class="detail-field full"><label>No data</label><span style="color:var(--text3)">No tile location data yet. Run the sync script to populate.</span></div>';
     }
@@ -6573,13 +6578,17 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
   const today = nzDate();
   const spare = 3;
   let rows, blank;
+  // Hand-ticked on the printed/PDF form, not tracked by the app — a plain
+  // box, not contenteditable, so it's never picked up by saveLoanDocChanges()
+  // (which only reads contenteditable cells back out) or persisted.
+  const dataClearedCell = '<td style="border:1px solid #ccc;padding:2px 8px;text-align:center"><div style="width:14px;height:14px;border:1.5px solid #333;margin:0 auto"></div></td>';
   if (savedRows && savedRows.length > 0) {
     rows = savedRows.map(r => {
       const p = _parseLoanDocRow(r);
       const cols = [p.CHSAssetNo, p.Model, p.Description, p.SerialNo, p.Notes];
       return '<tr>' + cols.map(cell =>
         '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">' + (cell || '') + '</td>'
-      ).join('') + '</tr>';
+      ).join('') + dataClearedCell + '</tr>';
     }).join('');
     blank = '';
   } else {
@@ -6590,8 +6599,9 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.Description||e.Model||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e.SerialNo||e.PartNo||''}</td>
       <td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px" title="Click to edit">${e._pendingNote||''}</td>
+      ${dataClearedCell}
     </tr>`).join('');
-    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(5) + '</tr>').join('');
+    blank = Array(spare).fill('<tr>' + '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;height:15px;font-size:11px" title="Click to edit"></td>'.repeat(5) + dataClearedCell + '</tr>').join('');
   }
 
   document.getElementById('loan-doc-content').innerHTML = `
@@ -6637,6 +6647,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:18%;background:#f5f5f5">Description</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;width:14%;background:#f5f5f5">Serial/Part #</th>
             <th style="border:1px solid #ccc;padding:2px 8px;font-size:11px;text-align:left;background:#f5f5f5">Notes/Additional Info</th>
+            <th style="border:1px solid #ccc;padding:2px 8px;font-size:10px;text-align:center;width:9%;background:#f5f5f5">Data cleared on return</th>
           </tr>
         </thead>
         <tbody>${rows}${blank}</tbody>
@@ -6656,14 +6667,23 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
       <!-- FOOTER -->
       <table style="width:100%;border-collapse:collapse;margin-top:0">
         <tr>
-          <td style="border:1px solid #ccc;padding:12px 16px;width:50%;vertical-align:middle">
-            <div style="color:#1d4ed8;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
-            <div style="color:#dc2626;font-weight:700;font-size:11px;text-align:center;margin-top:6px">Check all units have current ESC</div>
-          </td>
-          <td style="border:1px solid #ccc;padding:8px 16px;vertical-align:top">
+          <td style="border:1px solid #ccc;padding:8px 16px;width:28%;vertical-align:top">
+            <div style="font-size:11px;font-weight:700;margin-bottom:6px">Loan authorised by:</div>
             <table style="width:100%;border-collapse:collapse">
               <tr><td style="font-size:11px;padding:4px 0;border-bottom:1px solid #ccc">Name (print):</td></tr>
               <tr><td style="font-size:11px;padding:8px 0;border-bottom:1px solid #ccc">Signature:</td></tr>
+              <tr><td style="font-size:11px;padding:4px 0">Date:</td></tr>
+            </table>
+          </td>
+          <td style="border:1px solid #ccc;padding:12px 16px;width:44%;vertical-align:middle">
+            <div style="color:#1d4ed8;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
+            <div style="color:#dc2626;font-weight:700;font-size:11px;text-align:center;margin-top:6px">Check all units have current ESC</div>
+          </td>
+          <td style="border:1px solid #ccc;padding:8px 16px;width:28%;vertical-align:top">
+            <div style="font-size:11px;font-weight:700;margin-bottom:6px">Return checked by:</div>
+            <table style="width:100%;border-collapse:collapse">
+              <tr><td style="font-size:11px;padding:4px 0;border-bottom:1px solid #ccc">Signed:</td></tr>
+              <tr><td style="font-size:11px;padding:8px 0;border-bottom:1px solid #ccc">Name (print):</td></tr>
               <tr><td style="font-size:11px;padding:4px 0">Date:</td></tr>
             </table>
           </td>
@@ -6896,7 +6916,7 @@ function addDocRow() {
   const tr = document.createElement('tr');
   tr.innerHTML = Array(5).fill(0).map(() =>
     '<td contenteditable="true" style="border:1px solid #ccc;padding:2px 8px;font-size:11px;min-width:40px;background:#fffef0" title="Click to edit"></td>'
-  ).join('');
+  ).join('') + '<td style="border:1px solid #ccc;padding:2px 8px;text-align:center;background:#fffef0"><div style="width:14px;height:14px;border:1.5px solid #333;margin:0 auto"></div></td>';
   if (insertBefore) tbody.insertBefore(tr, insertBefore);
   else tbody.appendChild(tr);
   // Track as edited
@@ -6938,7 +6958,10 @@ async function saveLoanDocChanges() {
   const savedRows = [];
   if (equipTable) {
     equipTable.querySelectorAll('tbody tr').forEach(row => {
-      const vals = Array.from(row.querySelectorAll('td')).map(td => td.innerText?.trim() || '');
+      // Only the editable cells — excludes the "Data cleared on return"
+      // checkbox box, which is hand-ticked on the printed form and was
+      // never meant to round-trip through here.
+      const vals = Array.from(row.querySelectorAll('td[contenteditable="true"]')).map(td => td.innerText?.trim() || '');
       if (vals.some(v => v)) savedRows.push(vals);
     });
   }
@@ -10020,6 +10043,60 @@ function proceedFromBasket() {
       return eq ? { id: eq.id, CHSAssetNo: eq.CHSAssetNo, Model: eq.Model, Description: eq.Description, SerialNo: eq.SerialNo, locked: false } : null;
     }).filter(Boolean);
     renderBasket();
+  }, 150);
+}
+
+// Starts a brand-new, independent loan pre-populated with the same devices
+// as an existing one — for sending the same kit to a different customer.
+// Deliberately NOT a transfer: the source loan (BatchID, Simpro job, dates)
+// is left completely untouched; this only seeds the New Loan form's device
+// list, the same way proceedFromBasket()'s "new loan" branch above does.
+function openCopyLoanByKey(key) {
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find loan'); return; }
+  const assetNos = [...new Set((g.items || []).map(i => i.CHSAssetNo).filter(Boolean))];
+  if (!assetNos.length) { showToast('error', 'This loan has no items to copy'); return; }
+
+  const resolved = [], missing = [];
+  assetNos.forEach(no => {
+    const eq = equipment.find(e => e.CHSAssetNo === no);
+    if (eq) resolved.push(eq); else missing.push(no);
+  });
+  if (!resolved.length) { showToast('error', "None of this loan's items could be found (likely retired or deleted)"); return; }
+
+  if (!confirm(
+    'Start a new loan with the same ' + resolved.length + ' device' + (resolved.length !== 1 ? 's' : '') +
+    ' as ' + (g.loanTo || 'this loan') + (missing.length ? ' (' + missing.length + ' item' + (missing.length !== 1 ? 's' : '') + ' no longer found — skipped)' : '') +
+    '?\n\nThis starts a separate, independent loan — the original loan is not affected.'
+  )) return;
+
+  switchTab('scan');
+  setScanMode('batch'); // resets batchDevices to one blank row via initBatchForm() — overwritten below
+  setTimeout(() => {
+    // Devices carry over; who it's going to and when does not — this is a
+    // new loan for a new customer, not a continuation of the old one.
+    ['b-loan-to', 'b-location', 'b-end-date', 'b-email', 'b-account-manager', 'b-contact-number', 'b-notes', 'b-shipping-details', 'b-job-type', 'b-demo-type', 'b-island'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = '';
+    });
+    const ltEl = document.getElementById('b-long-term');
+    if (ltEl) ltEl.checked = false;
+
+    window._batchStatus = {};
+    batchDevices = resolved.map((eq, i) => ({ id: 'bd_copy_' + Date.now() + '_' + i, value: eq.CHSAssetNo }));
+    batchDevices.push({ id: 'bd_end_' + Date.now(), value: '' });
+    batchDevices.forEach(d => {
+      if (!d.value) return;
+      const item = equipment.find(e => e.CHSAssetNo === d.value);
+      if (item) {
+        const on = item.OnLoanTo && item.Returned !== 'Yes';
+        window._batchStatus[d.id] = on
+          ? '<span style="color:var(--amber)">&#x26A0; ' + (item.Model || item.CHSAssetNo) + ' already on loan to ' + item.OnLoanTo + '</span>'
+          : '<span style="color:var(--green)">&#x2713; ' + (item.Model || 'Found') + '</span>';
+      }
+    });
+    renderBatchDevices();
+    showToast('success', 'Copied ' + resolved.length + ' device' + (resolved.length !== 1 ? 's' : '') + ' — enter the new customer\'s details' + (missing.length ? ' (' + missing.length + ' skipped)' : ''));
   }, 150);
 }
 
@@ -15138,6 +15215,37 @@ function mpOpenLoanActions(i) {
   const g = (window._mpLoanList || [])[i];
   if (g) mpOpenLoanActionsForGroup(g);
 }
+// Same idea as desktop's openCopyLoanByKey() — a brand-new, independent loan
+// pre-populated with the same devices, for a different customer. The source
+// loan is never touched. Hands the asset list to the Book wizard via the
+// same window._mpPendingBookAssets hook Scan checkout and Reassign's
+// "create new loan" already use (see mpReassignCreateNewLoan() above) —
+// deliberately NOT that function itself, since it also moves the items off
+// the source loan as part of a transfer, which Copy must never do.
+function mpOpenCopyLoanFlow(key) {
+  renderLoans(); // rebuild _loanGroupMap fresh — same requirement as the other loan-action flows
+  const g = getLoanGroupByKey(key);
+  if (!g) { showToast('error', 'Could not find loan'); return; }
+  const assetNos = [...new Set((g.items || []).map(i => i.CHSAssetNo).filter(Boolean))];
+  if (!assetNos.length) { showToast('error', 'This loan has no items to copy'); return; }
+
+  const resolved = [], missing = [];
+  assetNos.forEach(no => {
+    const eq = equipment.find(e => e.CHSAssetNo === no);
+    if (eq) resolved.push(eq); else missing.push(no);
+  });
+  if (!resolved.length) { showToast('error', "None of this loan's items could be found (likely retired or deleted)"); return; }
+
+  if (!confirm(
+    'Start a new loan with the same ' + resolved.length + ' device' + (resolved.length !== 1 ? 's' : '') +
+    (missing.length ? ' (' + missing.length + ' item' + (missing.length !== 1 ? 's' : '') + ' no longer found — skipped)' : '') +
+    '?\n\nThis starts a separate, independent loan — the original loan is not affected.'
+  )) return;
+
+  window._mpPendingBookAssets = resolved.map(eq => eq.CHSAssetNo);
+  mpGoScreen('book');
+  showToast('success', 'Copied ' + resolved.length + ' device' + (resolved.length !== 1 ? 's' : '') + ' — enter the new customer\'s details' + (missing.length ? ' (' + missing.length + ' skipped)' : ''));
+}
 function mpOpenLoanActionsForGroup(g) {
   let items;
   if (g.isUpcoming) {
@@ -15180,7 +15288,8 @@ function mpOpenLoanActionsForGroup(g) {
     // after dispatch, with no way to do that at all before this.
     const reassignActions = [
       ['Edit loan', () => mpOpenReassignFlow(key, 'edit')],
-      ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')]
+      ['Transfer items', () => mpOpenReassignFlow(key, 'transfer')],
+      ['Copy to new loan', () => mpOpenCopyLoanFlow(key)]
     ];
     // Extend is meaningless without a due date, so it's swapped for the
     // opposite long-term transfer action instead of just disappearing.

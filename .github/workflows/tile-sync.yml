@@ -1,0 +1,34 @@
+# Daily Tile location sync - see scripts/tile_sync.py for what this replaced
+# (a BlueStacks/ADB UI-scraping setup that needed a dedicated machine left
+# running). This just calls Tile's own API, so it runs here instead.
+# NB: this repo is public, so run logs are too - tile_sync.py only ever
+# prints tile counts, never names or addresses.
+name: Tile location sync
+
+on:
+  schedule:
+    - cron: '0 18 * * *' # 18:00 UTC = 07:00 NZST (06:00 during daylight saving)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  tile-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/tile_sync.py
+        env:
+          TILE_EMAIL:    ${{ secrets.TILE_EMAIL }}
+          TILE_PASSWORD: ${{ secrets.TILE_PASSWORD }}
+      # GitHub pauses timed workflows after 60 days without repo activity -
+      # re-enabling this one on every run keeps it alive.
+      - run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/tile-sync.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}
