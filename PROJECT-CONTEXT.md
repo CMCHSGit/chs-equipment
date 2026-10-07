@@ -20,6 +20,7 @@ Script Property. It is still in git history and needs rotating — see Open item
 | Simpro proxy + push reminders | Apps Script web app | `chs-equipment/.gas-proxy/` | — |
 | Daily Firebase→Drive backup | Apps Script | `chs-equipment/.gas-backup/` | — |
 | Tile location sync | GitHub Actions (daily 07:00 NZST) | `chs-equipment/scripts/tile_sync.py` | Firebase RTDB |
+| Intranet hub | internal.chsnz.co.nz | `cmchs-internal-hub` (separate repo) | Firebase Auth |
 
 Both repos are **public** on GitHub (`CMCHSGit`), deployed by GitHub Pages.
 `cmchs-staff-schedule` is its own git repo **nested inside** `chs-equipment` —
@@ -276,10 +277,31 @@ Self-hosting on an office PC was considered and is **not recommended**: HTTPS is
 reachable outside the LAN, and it fixes neither repo privacy nor data location — the data is
 in Firebase and the Simpro key is in Apps Script, neither of which moves.
 
-A separate SharePoint migration plan exists (`sharepoint-migration/`, plan in
-`~/.claude/plans/`). Phase 1 validation has **never been run**; Phases 2/3 are blocked on it.
-Headline risk: SharePoint's mandatory CSP blocks inline `<script>`, and chs-equipment is ~1 MB
-of inline script.
+### SharePoint — abandoned, don't re-open it
+A SharePoint hosting migration was planned (`sharepoint-migration/`, plan in
+`~/.claude/plans/`, both now marked superseded). **Dropped 8 Oct 2026** on its own merits,
+before the Phase 1 technical validation was ever run: the **SharePoint banner can't be
+removed**, and it **isn't mobile friendly** — disqualifying for a demo tracker used on phones
+in the field. The outstanding technical risks (mandatory CSP vs ~1 MB of inline script, the
+undocumented `.aspx` rename, PWA/service-worker scope) are moot. The folder is kept, not
+deleted, because this idea tends to come back.
+
+### internal.chsnz.co.nz — the intranet hub (separate repo)
+What SharePoint was wanted for, built properly instead: **`cmchs-internal-hub`**
+(cloned to `C:\Users\JonathanNasrun\cmchs-internal-hub`), GitHub Pages, deploys on push.
+
+- **One Microsoft sign-in** via *the staff schedule's* Firebase project, shared by every app
+  on the domain — sign in once, survives browser restarts.
+- `apps/hub` (Vite + React): tools by category, search, announcements from `tools.json` /
+  `announcements.json`. `apps/service/order-parser/` is live.
+- Plain HTML pages opt in with two lines in `<head>` loading `/shared/gate.js` (emitted by
+  the hub build with a fixed, unhashed name).
+- ⚠️ **Ansur and SimproSync stay in `cmchs-staff-schedule`** and are linked from hub cards.
+  They only move into the hub when the schedule app does (phase 3) — so there's never more
+  than one copy. We already got burned by `_4` vs `_5` of the Ansur page; don't copy them in.
+- The site files are public and the sign-in gate is **not** access control. Confidential data
+  must come from Firebase behind its rules. No API keys in the repo — follow SimproSync's
+  pattern (key in the Apps Script proxy, browser sends only a Firebase ID token).
 
 ---
 
@@ -311,9 +333,11 @@ of inline script.
       the old block.
 
 **Decisions pending**
-- [ ] Private repos: GitHub Pro vs move hosting to Cloudflare Pages/Netlify.
-- [ ] SharePoint Phase 1 validation — run `sharepoint-migration/phase1-validate.ps1` and fill in
-      `phase1-results.md`, or drop the plan.
+- [ ] Private repos: GitHub Pro vs move hosting to Cloudflare Pages/Netlify. Less pressing now
+      the Simpro key is rotated, and the hub's design already assumes public files with
+      Firebase-gated data — but all three repos are still public.
+- [x] ~~SharePoint Phase 1 validation~~ — plan abandoned 8 Oct 2026 (banner can't be removed,
+      not mobile friendly). Replaced by `cmchs-internal-hub`.
 
 **Smaller**
 - [ ] Simpro's job-completed emails are signed "CMCHS - Create job for customer demo equipment"
