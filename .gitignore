@@ -1,2 +1,5 @@
 __pycache__/
 *.pyc
+
+# Its own repo, cloned in here for convenience — never part of this one.
+cmchs-staff-schedule/
