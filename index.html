@@ -367,6 +367,32 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .main{padding:12px;padding-bottom:80px}
   .table-toolbar{top:52px;margin:0 -12px 12px;padding:10px 12px;width:calc(100% + 24px)}
   table{min-width:700px}
+  /* Tables marked .stack turn into one block per row on a phone, each cell
+     labelled with its column heading. Database and History get card layouts
+     from their renderers instead; these are the three that had neither and so
+     were 700px wide on a 390px screen — Scan's session and count lists, and
+     Sold/Retired's nine columns.
+     The !importants are not decoration: these cells carry inline max-width and
+     white-space:nowrap for the desktop table, which would otherwise keep them
+     clipped and on one line here. */
+  table.stack{min-width:0}
+  table.stack thead{display:none}
+  table.stack,table.stack tbody,table.stack tr,table.stack td{display:block;width:auto}
+  table.stack tr{border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--surface);margin-bottom:8px;padding:6px 10px}
+  table.stack tr.row-selected{border-color:var(--accent)}
+  table.stack td{
+    display:flex;gap:10px;align-items:baseline;padding:5px 0;border:none;
+    max-width:none!important;white-space:normal!important;overflow:visible!important;text-overflow:clip!important
+  }
+  table.stack td+td{border-top:1px solid var(--border-subtle,rgba(128,128,128,.15))}
+  table.stack td::before{
+    content:attr(data-label);flex:0 0 40%;min-width:0;
+    color:var(--text3);font-size:12px;font-weight:500
+  }
+  /* The checkbox cell has no heading — don't reserve a label column for it. */
+  table.stack td:not([data-label]){display:block;padding:0}
+  table.stack td:not([data-label])::before{display:none}
+  table.stack .table-empty{text-align:center;color:var(--text3)}
   .td-actions{min-width:160px;padding:0 8px}
   .btn-sm{font-size:11px;padding:3px 7px}
   .table-scroll{max-height:calc(100vh - 160px)}
@@ -991,7 +1017,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
           <span id="session-count" class="row-count"></span>
           <button class="btn btn-sm" onclick="clearSession()">Clear</button>
         </div>
-        <div class="table-wrap"><div class="table-scroll"><table>
+        <div class="table-wrap"><div class="table-scroll"><table class="stack">
           <thead><tr><th>CHS Asset No.</th><th>Model</th><th>Action</th><th>On Loan To</th><th>Location</th><th>Time</th></tr></thead>
           <tbody id="session-tbody"></tbody>
         </table></div></div>
@@ -1041,7 +1067,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
             </div>
           </div>
           <!-- Table -->
-          <div class="table-wrap"><div class="table-scroll" style="max-height:380px"><table>
+          <div class="table-wrap"><div class="table-scroll" style="max-height:380px"><table class="stack">
             <thead><tr>
               <th>CHS Asset No.</th>
               <th>Model</th>
@@ -1275,7 +1301,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
         </div>
       </div>
       <div class="table-wrap"><div class="table-scroll">
-        <table><thead><tr>
+        <table class="stack"><thead><tr>
           <th style="width:36px;padding:10px 8px">
             <input type="checkbox" class="db-checkbox" id="retired-select-all-cb" onclick="toggleRetiredSelectAll(this.checked)" title="Select all">
           </th>
@@ -3135,11 +3161,11 @@ function renderCountOverview() {
       : '<span class="status-badge badge-avail">Available</span>';
     const lastCounted = cat === 'never' ? '—' : esc(e.Counted || '');
     return '<tr>'
-      + '<td class="td-mono">' + esc(e.CHSAssetNo) + '</td>'
-      + '<td>' + esc(e.Model) + '</td>'
-      + '<td>' + statusBadge + '</td>'
-      + '<td>' + catBadge + '</td>'
-      + '<td style="font-size:12px;color:var(--text2)">' + lastCounted + '</td>'
+      + '<td data-label="CHS Asset No." class="td-mono">' + esc(e.CHSAssetNo) + '</td>'
+      + '<td data-label="Model">' + esc(e.Model) + '</td>'
+      + '<td data-label="Status">' + statusBadge + '</td>'
+      + '<td data-label="Count Status">' + catBadge + '</td>'
+      + '<td data-label="Last Counted" style="font-size:12px;color:var(--text2)">' + lastCounted + '</td>'
       + '</tr>';
   }).join('') : '<tr><td colspan="5" class="table-empty">No items match this filter</td></tr>';
 
@@ -3414,10 +3440,10 @@ function addSession(e) {
   document.getElementById('scan-session').style.display = 'block';
   document.getElementById('session-count').textContent = sessionItems.length + ' actions this session';
   document.getElementById('session-tbody').innerHTML = sessionItems.map(s => `<tr>
-    <td class="td-mono">${s.assetNo}</td><td>${s.model||'—'}</td>
-    <td><span class="status-badge ${s.action==='Loaned'?'badge-loan':'badge-avail'}">${s.action}</span></td>
-    <td>${s.loanTo||'—'}</td><td>${s.location||'—'}</td>
-    <td style="font-size:12px;color:var(--text3)">${s.time}</td></tr>`).join('');
+    <td data-label="CHS Asset No." class="td-mono">${s.assetNo}</td><td data-label="Model">${s.model||'—'}</td>
+    <td data-label="Action"><span class="status-badge ${s.action==='Loaned'?'badge-loan':'badge-avail'}">${s.action}</span></td>
+    <td data-label="On Loan To">${s.loanTo||'—'}</td><td data-label="Location">${s.location||'—'}</td>
+    <td data-label="Time" style="font-size:12px;color:var(--text3)">${s.time}</td></tr>`).join('');
 }
 function clearSession() { sessionItems = []; document.getElementById('scan-session').style.display = 'none'; }
 
@@ -11432,15 +11458,15 @@ function renderRetired() {
     <td style="padding:10px 8px;width:36px" onclick="event.stopPropagation()">
       <input type="checkbox" class="db-checkbox" ${checked?'checked':''} onchange="toggleRetiredRowSelect('${e.id}',this.checked)" onclick="event.stopPropagation()">
     </td>
-    <td class="td-mono" style="font-weight:500;white-space:nowrap">${esc(e.CHSAssetNo)}</td>
-    <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Model)}">${esc(e.Model)}</td>
-    <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
-    <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.SerialNo)}</td>
-    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text2)" title="${esc(e.RetiredNotes||e.Notes)}">${esc(e.RetiredNotes || e.Notes)}</td>
-    <td style="font-size:12px;white-space:nowrap">${formatDisplayDate(e.RetiredDate)}</td>
-    <td style="white-space:nowrap"><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border);white-space:nowrap">${esc(e.RetiredReason)}</span></td>
-    <td class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.PartNo)}</td>
-    <td style="white-space:nowrap">${e.NZPrice ? '$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</td>
+    <td data-label="CHS Asset No." class="td-mono" style="font-weight:500;white-space:nowrap">${esc(e.CHSAssetNo)}</td>
+    <td data-label="Model" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Model)}">${esc(e.Model)}</td>
+    <td data-label="Description" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.Description)}">${esc(e.Description)}</td>
+    <td data-label="Serial No." class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.SerialNo)}</td>
+    <td data-label="Notes" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text2)" title="${esc(e.RetiredNotes||e.Notes)}">${esc(e.RetiredNotes || e.Notes)}</td>
+    <td data-label="Date" style="font-size:12px;white-space:nowrap">${formatDisplayDate(e.RetiredDate)}</td>
+    <td data-label="Reason" style="white-space:nowrap"><span style="padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber-border);white-space:nowrap">${esc(e.RetiredReason)}</span></td>
+    <td data-label="Part No." class="td-mono" style="font-size:11px;white-space:nowrap">${esc(e.PartNo)}</td>
+    <td data-label="NZ$" style="white-space:nowrap">${e.NZPrice ? '$'+Number(e.NZPrice).toLocaleString('en-NZ',{minimumFractionDigits:2}) : '—'}</td>
   </tr>`;
   }).join('') : '<tr><td colspan="10" class="table-empty">No retired assets</td></tr>';
 }
