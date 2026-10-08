@@ -386,6 +386,8 @@ thead .col-sticky{background:var(--surface2);z-index:3}
   .db-table-area .table-wrap{display:none!important}
   #db-row-count{display:none!important}
   .mobile-card-list{display:flex!important}
+  #db-card-count{display:block!important}
+  #db-card-count.db-card-count-empty{display:none!important}
   #panel-history .table-wrap{display:none!important}
 
   /* Larger touch targets */
@@ -2022,7 +2024,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 190;
+const APP_VERSION = 191;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
@@ -3601,7 +3603,7 @@ function renderTable() {
       </div>`;
     }).join('') : '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No matching items</div>';
     if (cardCount) {
-      cardCount.style.display = rows.length ? 'block' : 'none';
+      cardCount.classList.toggle('db-card-count-empty', !rows.length);
       cardCount.textContent = rows.length + ' of ' + equipment.length + ' items';
     }
   }
