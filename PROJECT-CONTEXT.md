@@ -52,17 +52,35 @@ SimproSync's relayed API calls.
   to validate SimproSync callers' tokens
 
 ### ⚠️ `clasp push` does NOT make code live
-This cost hours. Pushing updates the project source; the `/exec` URL keeps serving
-whatever **deployment version** was last cut. We found the live deployment pinned at
-**version @20 while 24 versions existed** — meaning the Simpro job-creation wind-down
-had never actually taken effect, and jobs were still being created for weeks.
+This cost hours, twice. Pushing updates the project source; the `/exec` URL keeps serving
+whatever **deployment version** was last cut. First occurrence: the live deployment was
+found pinned at **version @20 while 24 versions existed** — the Simpro job-creation
+wind-down had never actually taken effect, and jobs were still being created for weeks.
+Second occurrence, 2026-10-12: a fix removing `MailApp.sendEmail()` entirely — the Gmail
+account the proxy sent from (`cassserverroom@gmail.com`) was quarantined under company IT
+security policy, so every reminder email (demo/stuck-loan/return-due-soon) was deleted in
+favour of the push notifications that already existed alongside them — was committed to
+GitHub on 2026-10-05, but a stuck-loan reminder email still went out on 2026-10-11, six
+days later, because the live deployment hadn't actually picked up that commit yet. Both
+times the **git repo was right and the live deployment was wrong**; don't trust "I pushed
+to GitHub" as evidence
+of what's actually running.
+
+The other direction causes the same symptom: deploying from a **local `.gas-proxy/`
+checkout that itself hasn't `git pull`ed recently** silently ships whatever that stale
+checkout has, which can *omit* a fix that already exists on GitHub even though the
+deploy "succeeded." Always `git pull` the `chs-equipment` repo immediately before
+`clasp push`/`clasp deploy` — see Working agreements below.
 
 To deploy for real, from `.gas-proxy/`:
 ```bash
 npx clasp push
 npx clasp deploy -i AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw
 ```
-That `-i` keeps the same `/exec` URL. Currently at **@25**.
+That `-i` keeps the same `/exec` URL. Currently at **@30**. `npx clasp push` will prompt to
+confirm an overwrite if the Apps Script HEAD differs from local; from a non-interactive
+shell (e.g. an agent session) that prompt silently no-ops the push ("Skipping push.") —
+use `npx clasp push --force` there instead.
 
 Verify without creating anything (the create branch refuses before calling Simpro):
 ```bash
@@ -313,6 +331,10 @@ What SharePoint was wanted for, built properly instead: **`cmchs-internal-hub`**
 - Commit and push once verified; no need to ask first.
 - Verify before claiming done: `node --check`, `npm run build`, and for anything deployed,
   confirm what's actually **served** (bundle hash / content), not just what was pushed.
+- Before `clasp push`/`clasp deploy` in `.gas-proxy/`, `git pull` the `chs-equipment` repo
+  first — a deploy from a checkout that's behind GitHub can silently ship without a fix
+  that's already merged. After deploying, verify the live `/exec` URL's actual behaviour
+  (see the curl checks under §2), not just that the deploy command exited 0.
 - `cmchs-staff-schedule` is its own repo — `cd` in first.
 
 ---
