@@ -2050,9 +2050,62 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 192;
+const APP_VERSION = 193;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// ── Database sign-in ───────────────────────────────────────────────────
+// The database used to be open to anyone with its address. It is being
+// locked so only signed-in Cass staff can read or write it. Every database
+// call goes through fbFetch, which attaches the signed-in person's database
+// pass. The pass comes from the staff sign-in module near the end of this
+// file (search "Staff sign-in"), which picks up the Internal Hub's Microsoft
+// sign-in, or asks for one.
+//
+// Until the database is locked, a missing pass just means an unsigned
+// request, which still works — so a sign-in problem cannot take the tracker
+// down early. The module may take a moment to load; calls wait for it, but
+// never for more than a few seconds.
+let _dbTokenFn = null;
+const _staffReady = new Promise(resolve => {
+  window.__setDbTokenFn = fn => { _dbTokenFn = fn; resolve(); };
+});
+const _staffWait = ms => Promise.race([_staffReady, new Promise(r => setTimeout(r, ms))]);
+async function dbToken(opts) {
+  await _staffWait(8000);
+  try { return _dbTokenFn ? await _dbTokenFn(opts) : null; } catch (e) { return null; }
+}
+function withDbAuth(url, tok) {
+  return tok ? url + (url.indexOf('?') === -1 ? '?' : '&') + 'auth=' + encodeURIComponent(tok) : url;
+}
+async function fbFetch(url, opts) {
+  let tok = await dbToken();
+  let res = await fetch(withDbAuth(url, tok), opts);
+  if (res.status === 401 || res.status === 403) {
+    if (tok) {
+      // A pass can be refused if it was issued before something changed
+      // (claims, a refresh that dropped them). Get a fresh one and retry once.
+      tok = await dbToken({ force: true });
+      if (tok) res = await fetch(withDbAuth(url, tok), opts);
+    } else if (window.__staffSignInNeeded) {
+      window.__staffSignInNeeded();
+    }
+  }
+  return res;
+}
+// The proxy (Simpro jobs, test pushes) wants to know who is asking. Adds the
+// signed-in person's staff schedule ID token to the request body.
+async function staffIdToken() {
+  await _staffWait(8000);
+  try { return window.__staffIdToken ? await window.__staffIdToken() : null; } catch (e) { return null; }
+}
+async function proxyFetch(url, opts = {}) {
+  const idToken = await staffIdToken();
+  if (idToken && typeof opts.body === 'string') {
+    try { opts = Object.assign({}, opts, { body: JSON.stringify(Object.assign(JSON.parse(opts.body), { idToken })) }); } catch (e) {}
+  }
+  return fetch(url, opts);
+}
 ['app-version', 'app-version-m'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = 'v' + APP_VERSION; });
 
 // ── TEST MODE ──────────────────────────────────────────────────────────
@@ -2162,7 +2215,7 @@ let SIMPRO_CFG = { createJobs: false, windDownFrom: null, changedBy: null, chang
 
 async function loadSimproConfig() {
   try {
-    const r = await fetch(FB_URL + '/simproConfig.json');
+    const r = await fbFetch(FB_URL + '/simproConfig.json');
     const d = await r.json();
     if (d && typeof d === 'object') {
       SIMPRO_CFG = {
@@ -2182,7 +2235,7 @@ async function loadSimproConfig() {
 
 async function saveSimproConfig() {
   try {
-    await fetch(FB_URL + '/simproConfig.json', {
+    await fbFetch(FB_URL + '/simproConfig.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(SIMPRO_CFG)
@@ -2245,6 +2298,14 @@ function doLogout() {
   location.reload();
 }
 async function checkAuth() {
+  // Signed in as staff (via the hub, or the Microsoft button) is a stronger
+  // check than the shared team password, so it lets you straight in. Wait
+  // briefly for the sign-in module so a returning user doesn't see the
+  // password screen flash first.
+  await _staffWait(4000);
+  if (window.__staffUser) {
+    try { sessionStorage.setItem('chs_auth', '1'); localStorage.setItem('chs_mobile_auth', '1'); } catch (e) {}
+  }
   await loadConfig();
   // isMobilePWA()/mpResumeOrSignIn() below are defined in the mobile <script>
   // block near the end of the file, AFTER this one — safe to call here only
@@ -2422,7 +2483,7 @@ function logHistory(entry) {
 // ── FIREBASE CONFIG (passwords loaded at runtime) ─────────────────────
 async function loadConfig() {
   try {
-    const r = await fetch(FB_URL + '/config.json');
+    const r = await fbFetch(FB_URL + '/config.json');
     const d = await r.json();
     if (d && d.appPassword)   APP_PASSWORD   = d.appPassword;
     if (d && d.adminPassword) ADMIN_PASSWORD = d.adminPassword;
@@ -2441,7 +2502,7 @@ async function loadConfig() {
 
 // ── FIREBASE API ───────────────────────────────────────────────────────
 async function fetchBin() {
-  const r = await fetch(FB_URL + '/data.json');
+  const r = await fbFetch(FB_URL + '/data.json');
   if (!r.ok) throw new Error('Load failed: ' + r.status);
   const d = await r.json();
   if (!d) return { equipment: [], history: [] };
@@ -2455,7 +2516,8 @@ let _dataVersion = null;
 function fetchWithTimeout(url, opts = {}, ms = 8000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
-  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  const go = String(url).indexOf(FB_URL) === 0 ? fbFetch : fetch;
+  return go(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
 // Reconciles our about-to-be-saved equipment/history against another
@@ -2574,7 +2636,7 @@ const DEMO_TYPE_FIXED = ['Conference/Presentation', 'Clinical Trial', 'Hotswap']
 let customDemoTypes = [];
 async function loadCustomDemoTypes() {
   try {
-    const r = await fetch(FB_URL + '/customDemoTypes.json');
+    const r = await fbFetch(FB_URL + '/customDemoTypes.json');
     const d = await r.json();
     customDemoTypes = Array.isArray(d) ? d : [];
   } catch(e) { console.warn('loadCustomDemoTypes failed:', e); }
@@ -2584,7 +2646,7 @@ async function addCustomDemoTypeIfNew(val) {
   if (!val || DEMO_TYPE_FIXED.includes(val) || customDemoTypes.includes(val)) return;
   customDemoTypes.push(val);
   try {
-    await fetch(FB_URL + '/customDemoTypes.json', {
+    await fbFetch(FB_URL + '/customDemoTypes.json', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(customDemoTypes)
     });
@@ -2773,7 +2835,7 @@ function writeAudit(type, summary, detail, op) {
   // either, so nothing else would nudge that _v marker).
   (async () => {
     try {
-      await fetch(FB_URL + '/auditLog/' + encodeURIComponent(entry.id) + '.json', {
+      await fbFetch(FB_URL + '/auditLog/' + encodeURIComponent(entry.id) + '.json', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(entry)
       });
@@ -3033,7 +3095,7 @@ function scheduleSave() {
 async function bumpRemoteVersion() {
   const newV = Date.now().toString();
   try {
-    await fetch(FB_URL + '/data/_v.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newV) });
+    await fbFetch(FB_URL + '/data/_v.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newV) });
     _dataVersion = newV; // this session already has the change — avoid it redundantly re-syncing itself
   } catch(e) { /* best-effort — a missed live-sync nudge isn't worth surfacing an error for */ }
 }
@@ -3327,7 +3389,7 @@ async function submitReturn(opts) {
       : equipment.some(e => e.OnLoanTo === prev.loanTo && e.Returned !== 'Yes');
     if (!stillActive) {
       await _closeSimproJobWithNote(effectiveKey, prev.loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
-      try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(effectiveKey) + '.json', { method: 'DELETE' }); } catch(e) {}
+      try { await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(effectiveKey) + '.json', { method: 'DELETE' }); } catch(e) {}
     } else if (batchId) {
       // Batch isn't empty yet — the loanDoc survives, so prune just this
       // item out of it (see _pruneLoanDocItems()) instead of leaving it
@@ -4460,7 +4522,7 @@ async function _findOrphanCandidates() {
   const candidates = [];
   for (const [batchId, items] of Object.entries(orphanedByBatch)) {
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       const doc = await r.json();
       if (doc && doc.loanTo) candidates.push({ batchId, items, doc });
     } catch(e) { /* no loanDoc saved -- nothing to recover from */ }
@@ -4469,7 +4531,7 @@ async function _findOrphanCandidates() {
   // Case C: loanDoc exists in Firebase but equipment items were never updated at all
   // (no BatchID, no OnLoanTo) — the Object.assign + save never ran.
   try {
-    const allDocsResp = await fetch(FB_URL + '/loanDocs.json');
+    const allDocsResp = await fbFetch(FB_URL + '/loanDocs.json');
     const allDocs = await allDocsResp.json();
     if (allDocs) {
       const today = nzDate();
@@ -4671,7 +4733,7 @@ async function deleteOrphanedLoan() {
     return;
   }
 
-  try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
+  try { await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
 
   renderTable(); updateStats(); renderLoans();
   writeAudit('orphan_deleted', 'Orphaned loan deleted (batch ' + batchId + ') — ' + items.length + ' item' + (items.length !== 1 ? 's' : '') + ' cleared', { batchId, loanTo: doc.loanTo, items: items.map(i => i.CHSAssetNo) });
@@ -5101,7 +5163,7 @@ async function submitBatchLoan(opts) {
       try {
         const loanDocPayload = { loanTo, location, startDate, endDate, accountManager: batchAM, contactNumber, jobType: batchJobType, demoType: batchDemoType, island: batchIsland, longTerm: isLongTerm, notes: notes, notesCell: notes, authCell: shippingDetails,
             items: batchLoanItems.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model, Description: e.Description, SerialNo: e.SerialNo })) };
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+        await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loanDocPayload)
         });
@@ -5166,7 +5228,7 @@ async function submitBatchLoan(opts) {
       if (src.pdfKey && src.savedRows) {
         const filteredRows = src.savedRows.filter(row => !confirmedNos.has((row[0] || '').trim()) && !src.movedNos.has((row[0] || '').trim()));
         try {
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(src.pdfKey) + '/savedRows.json', {
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(src.pdfKey) + '/savedRows.json', {
             method: 'PUT', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(filteredRows)
           });
@@ -5777,7 +5839,7 @@ async function confirmBatchReturn(opts) {
       if (!stillActive) {
         await _closeSimproJobWithNote(batchId, _auditLoanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
         try {
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' });
         } catch(e) { /* non-critical — orphan check will skip already-returned items */ }
       } else {
         await _pruneLoanDocItems(batchId, returnedByBatch[batchId] || []);
@@ -5789,7 +5851,7 @@ async function confirmBatchReturn(opts) {
         const legacyKey = 'loandoc_' + encodeURIComponent(loanTo + '|||' + legacyEndDateByLoanTo[loanTo]);
         await _closeSimproJobWithNote(legacyKey, loanTo, 'All items returned to office on ' + formatDisplayDate(nzDate()) + '.');
         try {
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(legacyKey) + '.json', { method: 'DELETE' });
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(legacyKey) + '.json', { method: 'DELETE' });
         } catch(e) { /* non-critical */ }
       }
       // Not attempting a partial-prune for a legacy multi-item loan here —
@@ -5920,7 +5982,7 @@ async function loadTileLocation(assetNo, tileNo) {
   const contentEl = document.getElementById('tile-location-content-' + assetNo);
   if (!contentEl) return;
   try {
-    const r = await fetch(FB_URL + '/tileLocations/' + encodeURIComponent(String(tileNo)) + '.json');
+    const r = await fbFetch(FB_URL + '/tileLocations/' + encodeURIComponent(String(tileNo)) + '.json');
     const d = await r.json();
     if (d && d.location) {
       const mapsUrl = d.latitude && d.longitude
@@ -6256,18 +6318,18 @@ async function confirmExtendLoan() {
   // This preserves simproJobId so saveLoanDocChanges updates the existing Simpro job rather than creating a new one
   if (oldPdfKey !== newPdfKey) {
     try {
-      const oldR = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(oldPdfKey) + '.json');
+      const oldR = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(oldPdfKey) + '.json');
       if (oldR.ok) {
         const oldDoc = await oldR.json();
         if (oldDoc) {
           // Write migrated doc to new key with updated endDate
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(newPdfKey) + '.json', {
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(newPdfKey) + '.json', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...oldDoc, endDate: newDate })
           });
           // Delete the old key so it doesn't linger
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(oldPdfKey) + '.json', { method: 'DELETE' });
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(oldPdfKey) + '.json', { method: 'DELETE' });
           // Update local cache
           if (window._simproJobCache && window._simproJobCache[oldPdfKey]) {
             window._simproJobCache[newPdfKey] = window._simproJobCache[oldPdfKey];
@@ -6309,7 +6371,7 @@ async function confirmExtendLoan() {
   // regardless, but this avoids leaving a stale, orphaned entry behind under
   // the old one.
   try {
-    await fetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' });
+    await fbFetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(oldKey) + '.json', { method: 'DELETE' });
   } catch(e) { console.warn('Could not clear old return-reminder dedup entry', e); }
   setSync('saving', 'Saving...');
   try {
@@ -6465,12 +6527,12 @@ async function saveLoanDocNotes(val) {
   const pdfKey = window._currentLoanDocInfo._pdfKey;
   if (pdfKey) {
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
       const existing = r.ok ? await r.json() : {};
       if (existing) {
         existing.notes = val;
         existing.notesCell = val;
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+        await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(existing)
@@ -6497,11 +6559,11 @@ async function saveLoanDocAuth(val) {
   const pdfKey = window._currentLoanDocInfo._pdfKey;
   if (pdfKey) {
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
       const existing = r.ok ? await r.json() : {};
       if (existing) {
         existing.authCell = val;
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+        await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(existing)
         });
@@ -6579,7 +6641,7 @@ async function viewUpcomingLoanDoc(upcomingId) {
   // Try to load saved loanDoc from Firebase
   let savedRows = null, savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
   try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(u.id) + '.json');
+    const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(u.id) + '.json');
     if (r.ok) {
       const d = await r.json();
       if (d) {
@@ -6935,7 +6997,7 @@ async function viewHistoryPDF(pdfKey) {
   // Load from Firebase
   showToast('info', 'Loading loan document...');
   try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+    const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
     const d = await r.json();
     if (d && (d.items || d.loanTo)) {
       if (!d.items) d.items = [];
@@ -7070,7 +7132,7 @@ async function saveLoanDocChanges() {
     let _existDoc = null;
     if (pdfKey) {
       try {
-        const _existR = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+        const _existR = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
         _existDoc = _existR.ok ? await _existR.json() : null;
       } catch(e) {}
     }
@@ -7106,7 +7168,7 @@ async function saveLoanDocChanges() {
       authCell
     };
     if (_realJobId !== undefined) saveBody.simproJobId = _realJobId;
-    const saveResp = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+    const saveResp = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(saveBody)
@@ -7168,7 +7230,7 @@ async function saveLoanDocChanges() {
     if (newEndDate)   _matchUpcoming.endDate        = toISO(newEndDate);
     if (newAM)        _matchUpcoming.accountManager = newAM;
     try {
-      await fetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(pdfKey) + '.json', {
+      await fbFetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(pdfKey) + '.json', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -7277,7 +7339,7 @@ async function viewLoanDocByKey(key) {
   let savedRows = null, savedExtra = {};
   if (batchId) {
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       const d = await r.json();
       if (d && d.savedRows) {
         savedRows = d.savedRows;
@@ -7309,7 +7371,7 @@ async function viewLoanDocByKey(key) {
     // Try the fallback loandoc_ key that saveLoanDocChanges uses when there's no BatchID
     const fallbackKey = 'loandoc_' + encodeURIComponent((g.loanTo || '') + '|||' + (g.endDate || ''));
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(fallbackKey) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(fallbackKey) + '.json');
       if (r.ok) {
         const d = await r.json();
         if (d) {
@@ -7473,14 +7535,14 @@ async function convertLoanToLongTerm(g) {
 
   if (_oldPdfKey) {
     try {
-      const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_oldPdfKey) + '.json');
+      const _r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_oldPdfKey) + '.json');
       const _existingDoc = _r.ok ? await _r.json() : null;
       if (_existingDoc) {
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+        await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(_existingDoc)
         });
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_oldPdfKey) + '.json', { method: 'DELETE' });
+        await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_oldPdfKey) + '.json', { method: 'DELETE' });
         if (window._simproJobCache && window._simproJobCache[_oldPdfKey]) {
           window._simproJobCache[batchId] = window._simproJobCache[_oldPdfKey];
           delete window._simproJobCache[_oldPdfKey];
@@ -7519,7 +7581,7 @@ async function convertLoanToLongTerm(g) {
   // simproClosedAt marks the job as closed-by-conversion so the Job # badge
   // can render it struck-through rather than looking like a live job.
   try {
-    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+    await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       // loanTo/location included so a just-migrated legacy doc (which may
       // have been keyed under stale values) ends up with the current ones.
@@ -7532,7 +7594,7 @@ async function convertLoanToLongTerm(g) {
   // Clear the stale due-soon reminder dedup keyed to the old end date — same
   // cleanup confirmExtendLoan() does when an end date changes.
   if (oldEndDate) {
-    try { await fetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(loanTo + '|||' + oldEndDate) + '.json', { method: 'DELETE' }); } catch(e) {}
+    try { await fbFetch(FB_URL + '/returnDueSoonReminders/' + encodeURIComponent(loanTo + '|||' + oldEndDate) + '.json', { method: 'DELETE' }); } catch(e) {}
   }
 
   setSync('saving', 'Saving...');
@@ -7565,7 +7627,7 @@ async function confirmLongTermToActive(g, newDate) {
   await saveLoanMeta();
 
   try {
-    await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+    await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ longTerm: false, endDate: newDate })
     });
@@ -7633,7 +7695,7 @@ async function openReassignUpcomingAM(upcomingId) {
   document.getElementById('reassign-shipping').value = '';
   document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml('');
   try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
+    const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
     if (r.ok) {
       const d = await r.json();
       if (d) {
@@ -7684,7 +7746,7 @@ async function _pushSimproAfterRemoval(batchId, loanDoc, updatedRows) {
     return { CHSAssetNo: p.CHSAssetNo, Model: p.Model, Description: p.Description, SerialNo: p.SerialNo };
   }).filter(i => i.CHSAssetNo);
   try {
-    await fetch(SIMPRO_PROXY_URL, {
+    await proxyFetch(SIMPRO_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
       body: JSON.stringify({
         loanTo: loanDoc.loanTo||'', location: loanDoc.location||'',
@@ -7760,7 +7822,7 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
   // If not in cache, check Firebase
   if (!jobId && pdfKey) {
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
       const d = await r.json();
       if (d?.simproJobId) {
         jobId = d.simproJobId;
@@ -7786,7 +7848,7 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
     // GAS may have written a real ID even if the local poll timed out — check now
     if (pdfKey) {
       try {
-        const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+        const _r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
         const _d = await _r.json();
         const _storedId = _d?.simproJobId;
         const _stillPending = _storedId === 'pending' || (typeof _storedId === 'object' && _storedId?.status === 'pending');
@@ -7838,7 +7900,7 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
     window._simproCreating = pdfKey;
     window._simproCreatedAt = Date.now();
     try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
+      await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'pending', ts: Date.now() })
@@ -7862,7 +7924,7 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
     localStorage.setItem('_simproJobCache', JSON.stringify(window._simproJobCache));
     if (pdfKey) {
       try {
-        await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
+        await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', {
           method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fakeId)
         });
       } catch(e) {}
@@ -7896,7 +7958,7 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
     // mode: 'no-cors' is intentional — GAS web apps redirect POSTs and some clients
     // convert them to GET, losing the body. no-cors fires and forgets safely; we
     // read the result from Firebase via polling rather than from the response.
-    await fetch(SIMPRO_PROXY_URL, {
+    await proxyFetch(SIMPRO_PROXY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
       body: requestBody,
@@ -7913,7 +7975,7 @@ async function _submitSimproJob({ pdfKey, loanTo, location, startDate, endDate, 
       const poll = setInterval(async () => {
         attempts++;
         try {
-          const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+          const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
           const d = await r.json();
           const storedId = d?.simproJobId;
           // Accept any value that isn't a pending placeholder
@@ -7959,7 +8021,7 @@ function _cacheSimproJobId(pdfKey, jobId) {
 function closeSimproJob(jobId, loanTo) {
   if (!SIMPRO_PROXY_URL || !jobId || TEST_MODE || isNaN(Number(jobId))) return;
   const body = JSON.stringify({ jobId: Number(jobId), close: true });
-  fetch(SIMPRO_PROXY_URL, {
+  proxyFetch(SIMPRO_PROXY_URL, {
     method: 'POST', headers: { 'Content-Type': 'text/plain' },
     body, mode: 'no-cors'
   }).catch(e => console.warn('Simpro close failed:', e));
@@ -7984,7 +8046,7 @@ async function _closeSimproJobWithNote(batchId, loanTo, closeNote, items) {
   if (!batchId) return;
   let doc = null;
   try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+    const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
     doc = await r.json();
   } catch(e) {}
   const simproJobId = window._simproJobCache?.[batchId] || doc?.simproJobId;
@@ -8009,7 +8071,7 @@ async function _closeSimproJobWithNote(batchId, loanTo, closeNote, items) {
 async function _pruneLoanDocItems(batchId, removedAssetNos) {
   if (!batchId || !removedAssetNos || !removedAssetNos.length) return;
   try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+    const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
     if (!r.ok) return;
     const doc = await r.json();
     if (!doc) return;
@@ -8022,7 +8084,7 @@ async function _pruneLoanDocItems(batchId, removedAssetNos) {
       patch.items = doc.items.filter(i => !removedSet.has((i.CHSAssetNo || '').trim().toLowerCase()));
     }
     if (Object.keys(patch).length) {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
+      await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch)
       });
@@ -8351,7 +8413,7 @@ async function retryMissingSimproJob(pdfKey) {
   // session since then gives an honest message instead of silently turning
   // into an update.
   try {
-    const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+    const _r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
     const _d = await _r.json();
     if (_d?.simproJobId && _d.simproJobId !== 'pending' && !(typeof _d.simproJobId === 'object')) {
       _cacheSimproJobId(pdfKey, _d.simproJobId);
@@ -8384,7 +8446,7 @@ async function retryMissingSimproJob(pdfKey) {
 // with a different loan's number). Neither calls the Simpro API — this
 // only ever writes the number into our own record.
 async function _writeSimproJobId(pdfKey, jobId, loanTo) {
-  await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
+  await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json', {
     method: 'PATCH', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ simproJobId: jobId })
   });
@@ -8440,7 +8502,7 @@ async function promptEditSimproJob(pdfKey, currentJobId, loanTo) {
       : 'Remove the recorded Simpro job number for ' + loanTo + '? There\'s no way to re-link it from this card afterwards.';
     if (!confirm(confirmMsg)) return;
     try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', { method: 'DELETE' });
+      await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '/simproJobId.json', { method: 'DELETE' });
       if (window._loanDocCache?.[pdfKey]) delete window._loanDocCache[pdfKey].simproJobId;
       writeAudit('simpro_updated', 'Simpro job number cleared — ' + loanTo, { loanTo, pdfKey });
       showToast('info', 'Job number cleared for ' + loanTo + (_willReappear ? ' — open Missing Simpro Jobs to create a fresh one.' : '.'));
@@ -8665,7 +8727,7 @@ let _kitGroups = {}; // live data: { kitKey: { label, triggers:[], accessories:[
 
 async function loadKitGroups() {
   try {
-    const r = await fetch(FB_URL + '/kitGroups.json');
+    const r = await fbFetch(FB_URL + '/kitGroups.json');
     const data = await r.json();
     if (data && typeof data === 'object') {
       _kitGroups = data;
@@ -8682,7 +8744,7 @@ async function loadKitGroups() {
 
 async function saveKitGroups() {
   try {
-    await fetch(FB_URL + '/kitGroups.json', {
+    await fbFetch(FB_URL + '/kitGroups.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(_kitGroups)
@@ -9073,7 +9135,7 @@ function confirmReadinessDate() {
 }
 async function loadLoanMeta() {
   try {
-    const r = await fetch(FB_URL + '/loanMeta.json');
+    const r = await fbFetch(FB_URL + '/loanMeta.json');
     const d = await r.json();
     // Merge with any loanMeta already loaded from /data.json
     if (d && typeof d === 'object') {
@@ -9092,7 +9154,7 @@ async function loadLoanMeta() {
 // storage concern for a long while.
 async function loadAuditLog() {
   try {
-    const r = await fetch(FB_URL + '/auditLog.json');
+    const r = await fbFetch(FB_URL + '/auditLog.json');
     const d = await r.json();
     if (d && typeof d === 'object') {
       auditLog = Object.values(d).sort((a, b) => (b.ts || '').localeCompare(a.ts || '')).slice(0, 300);
@@ -9105,7 +9167,7 @@ async function saveLoanMeta() {
   try {
     const _safeMeta = {};
     Object.entries(loanMeta).forEach(([k, v]) => { _safeMeta[k.replace(/[.#$[\]/]/g, '_')] = v; });
-    await fetch(FB_URL + '/loanMeta.json', {
+    await fbFetch(FB_URL + '/loanMeta.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(_safeMeta)
@@ -9140,7 +9202,7 @@ let _testReportsList = [];  // [{id, filename, mimeType, size, uploadedAt, uploa
 // Shallow fetch only returns {key: true, ...}, which is all presence needs.
 async function loadTestReportsIndex() {
   try {
-    const r = await fetch(FB_URL + '/testReports.json?shallow=true');
+    const r = await fbFetch(FB_URL + '/testReports.json?shallow=true');
     const d = await r.json();
     window._testReportsKeys = new Set(d ? Object.keys(d) : []);
   } catch(e) { window._testReportsKeys = new Set(); }
@@ -9163,7 +9225,7 @@ function closeTestReportsModal() {
 async function refreshTestReportsList() {
   if (!_testReportsKey) return;
   try {
-    const r = await fetch(FB_URL + '/testReports/' + _testReportsKey + '.json');
+    const r = await fbFetch(FB_URL + '/testReports/' + _testReportsKey + '.json');
     const d = await r.json();
     _testReportsList = d ? Object.entries(d).map(([id, meta]) => ({ id, ...meta })) : [];
     _testReportsList.sort((a,b) => (b.uploadedAt||'').localeCompare(a.uploadedAt||''));
@@ -9242,10 +9304,10 @@ async function uploadTestReports(files) {
       });
       const id = uid();
       const meta = { filename: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, uploadedAt: nzNow(), uploadedBy: currentOperator || '' };
-      await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', {
+      await fbFetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(meta)
       });
-      await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', {
+      await fbFetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataUrl)
       });
       writeAudit('test_report_uploaded', file.name + ' uploaded — ' + document.getElementById('test-reports-title').textContent.replace('Test Reports — ', ''), { key: _testReportsKey, filename: file.name });
@@ -9268,7 +9330,7 @@ async function uploadTestReports(files) {
 async function downloadTestReport(id, filename) {
   if (!_testReportsKey) return;
   try {
-    const r = await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json');
+    const r = await fbFetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json');
     const dataUrl = await r.json();
     if (!dataUrl) { showToast('error', 'Could not load file'); return; }
     const a = document.createElement('a');
@@ -9284,8 +9346,8 @@ async function deleteTestReport(id) {
   if (!_testReportsKey) return;
   const report = _testReportsList.find(r => r.id === id);
   try {
-    await fetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
-    await fetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
+    await fbFetch(FB_URL + '/testReports/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
+    await fbFetch(FB_URL + '/testReportFiles/' + _testReportsKey + '/' + id + '.json', { method: 'DELETE' });
     writeAudit('test_report_deleted', (report?.filename || 'Report') + ' deleted — ' + document.getElementById('test-reports-title').textContent.replace('Test Reports — ', ''), { key: _testReportsKey, filename: report?.filename || '' });
     showToast('success', 'Report deleted');
     await refreshTestReportsList();
@@ -9303,7 +9365,7 @@ let _amUnlocked = false;
 
 async function loadAccountManagers() {
   try {
-    const r = await fetch(FB_URL + '/accountManagers.json');
+    const r = await fbFetch(FB_URL + '/accountManagers.json');
     const d = await r.json();
     accountManagers = Array.isArray(d) ? d : [];
   } catch(e) {
@@ -9317,7 +9379,7 @@ async function loadAccountManagers() {
 async function saveAccountManagers() {
   accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
   try {
-    await fetch(FB_URL + '/accountManagers.json', {
+    await fbFetch(FB_URL + '/accountManagers.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(accountManagers)
@@ -9948,7 +10010,7 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       let _savedExtra = { notesCell: '', authCell: '', batchNotes: '' };
       let _savedRows = null;
       try {
-        const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+        const _r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
         if (_r.ok) {
           const _d = await _r.json();
           if (_d) {
@@ -10391,7 +10453,7 @@ async function _doAddItemsToLoan(g, validRows) {
   let _savedRows = null;
   if (batchId) {
     try {
-      const _r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
+      const _r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json');
       if (_r.ok) {
         const _d = await _r.json();
         if (_d) {
@@ -10454,7 +10516,7 @@ async function removeDeviceFromLoan(id, assetNo) {
   if (_removedFromBatchId) {
     (async () => {
       try {
-        const _dr = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json');
+        const _dr = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json');
         if (_dr.ok) {
           const _dd = await _dr.json();
           if (_dd) {
@@ -10462,7 +10524,7 @@ async function removeDeviceFromLoan(id, assetNo) {
             if (Array.isArray(_dd.savedRows)) {
               const _lower = assetNo.toLowerCase();
               _updatedRows = _dd.savedRows.filter(row => (row[0] || '').trim().toLowerCase() !== _lower);
-              await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json', {
+              await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_removedFromBatchId) + '.json', {
                 method: 'PATCH', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ savedRows: _updatedRows })
               });
@@ -10583,7 +10645,7 @@ async function _getJobId(pdfKey) {
   const raw = window._simproJobCache[pdfKey];
   if (raw && raw !== 'pending' && typeof raw !== 'object' && !isNaN(Number(raw))) return Number(raw);
   try {
-    const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
+    const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json');
     const d = await r.json();
     const id = d?.simproJobId;
     if (id && id !== 'pending' && typeof id !== 'object' && !isNaN(Number(id))) {
@@ -10642,7 +10704,7 @@ async function openReassignAMByKey(key, mode) {
     document.getElementById('reassign-shipping').value = '';
     document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml('');
     try {
-      const r = await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
+      const r = await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json');
       if (r.ok) { const d = await r.json(); if (d) { document.getElementById('reassign-contact').value = d.contactNumber || ''; document.getElementById('reassign-notes').value = d.notesCell || d.notes || ''; document.getElementById('reassign-shipping').value = d.authCell || ''; document.getElementById('reassign-demo-type').innerHTML = demoTypeOptionsHtml(d.demoType || ''); } }
     } catch(e) {}
     document.getElementById('reassign-am-modal').classList.add('open');
@@ -10718,7 +10780,7 @@ async function _simproPush(batchId, jobId, loanData, items) {
     return d;
   }
   try {
-    await fetch(SIMPRO_PROXY_URL, {
+    await proxyFetch(SIMPRO_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
       body: JSON.stringify({
         loanTo: loanData.loanTo || '', location: loanData.location || '',
@@ -10747,7 +10809,7 @@ async function reassignCreateNewLoan() {
 
   // Capture source loan info so doLoan() can update the original Simpro job
   const srcJobId = _reassignPdfKey ? await _getJobId(_reassignPdfKey) : null;
-  const srcDoc   = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
+  const srcDoc   = _reassignPdfKey ? await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
   window._reassignPendingSource = {
     loanKey:     _reassignLoanKey,
     pdfKey:      _reassignPdfKey,
@@ -10813,7 +10875,7 @@ async function confirmReassignAM() {
       await saveUpcomingLoans();
       if (_reassignPdfKey) {
         try {
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, demoType: newDemoType, ...(newAM ? { accountManager: newAM } : {}) })
           });
@@ -10868,7 +10930,7 @@ async function confirmReassignAM() {
       }
       if (_reassignPdfKey) {
         try {
-          await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
+          await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json', {
             method: 'PATCH', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ contactNumber: newContact, notesCell: newNotes, authCell: newShipping, demoType: newDemoType, ...(newAM ? { accountManager: newAM } : {}) })
           });
@@ -10930,8 +10992,8 @@ async function confirmReassignAM() {
     }
   }
 
-  const origDoc = _reassignPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
-  const tgtDoc  = targetBatchId   ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(targetBatchId)   + '.json').then(r => r.json()).catch(() => null) : null;
+  const origDoc = _reassignPdfKey ? await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
+  const tgtDoc  = targetBatchId   ? await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(targetBatchId)   + '.json').then(r => r.json()).catch(() => null) : null;
 
   // Appended to each side's Simpro notes (not our own editable notesCell —
   // this is a system-generated trail for whoever looks at the job directly
@@ -11007,7 +11069,7 @@ async function confirmReassignAM() {
     const movedNos     = new Set(movedItems.map(i => (i.CHSAssetNo || '').trim().toLowerCase()));
     const filteredRows = origDoc.savedRows.filter(row => !movedNos.has((row[0] || '').trim().toLowerCase()));
     try {
-      await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '/savedRows.json', {
+      await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '/savedRows.json', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(filteredRows)
       });
@@ -11074,7 +11136,7 @@ async function _performDeleteLoan(g) {
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   // Delete loanDocs so orphan detector doesn't flag them
   for (const batchId of batchIds) {
-    try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
+    try { await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
   }
   writeAudit('loan_deleted', 'Loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' item' + (g.items.length !== 1 ? 's' : '') + ' marked as returned', { loanTo: g.loanTo, items: g.items.map(i => i.CHSAssetNo) });
   showToast('info', 'Loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' marked as returned');
@@ -11097,7 +11159,7 @@ async function deleteScheduledLoanByKey(key) {
   });
   scheduleSave(); renderTable(); updateStats(); renderLoans();
   for (const batchId of batchIds) {
-    try { await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
+    try { await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(batchId) + '.json', { method: 'DELETE' }); } catch(e) {}
   }
   writeAudit('scheduled_deleted', 'Scheduled loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' item' + (g.items.length !== 1 ? 's' : '') + ' cleared', { loanTo: g.loanTo, items: g.items.map(i => i.CHSAssetNo) });
   showToast('info', 'Scheduled loan for ' + g.loanTo + ' deleted — ' + g.items.length + ' device' + (g.items.length > 1 ? 's' : '') + ' cleared');
@@ -11119,7 +11181,7 @@ let _retireItemId = null;
 
 async function loadRetiredAssets() {
   try {
-    const r = await fetch(FB_URL + '/retired.json');
+    const r = await fbFetch(FB_URL + '/retired.json');
     const d = await r.json();
     retiredAssets = Array.isArray(d) ? d : [];
   } catch(e) { retiredAssets = []; }
@@ -11128,7 +11190,7 @@ async function loadRetiredAssets() {
 // ── UPCOMING LOANS ─────────────────────────────────────────────────────
 async function loadTileLocationCache() {
   try {
-    const r = await fetch(FB_URL + '/tileLocations.json');
+    const r = await fbFetch(FB_URL + '/tileLocations.json');
     const d = await r.json();
     if (!d) return;
     window._tileLocationCache = {};
@@ -11141,7 +11203,7 @@ async function loadTileLocationCache() {
 
 async function loadLoanDocNotes() {
   try {
-    const r = await fetch(FB_URL + '/loanDocs.json');
+    const r = await fbFetch(FB_URL + '/loanDocs.json');
     const allDocs = await r.json();
     if (!allDocs) return;
     window._loanDocCache = window._loanDocCache || {};
@@ -11212,7 +11274,7 @@ function cleanLoanNotesFromDevices() {
 
 async function loadUpcomingLoans() {
   try {
-    const r = await fetch(FB_URL + '/upcomingLoans.json');
+    const r = await fbFetch(FB_URL + '/upcomingLoans.json');
     const d = await r.json();
     upcomingLoans = d ? Object.values(d) : [];
   } catch(e) { upcomingLoans = []; }
@@ -11236,7 +11298,7 @@ async function deleteUpcomingLoan(id) {
   markDirty('loans', 'database', 'calendar');
   upcomingLoans = upcomingLoans.filter(u => u.id !== id);
   try {
-    await fetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
+    await fbFetch(FB_URL + '/upcomingLoans/' + encodeURIComponent(id) + '.json', { method: 'DELETE' });
     await bumpRemoteVersion();
   } catch(e) { console.warn('Could not delete upcoming loan', e); }
 }
@@ -11387,7 +11449,7 @@ async function activateUpcomingLoans() {
 async function saveRetiredAssets() {
   markRetiredChanged();
   try {
-    await fetch(FB_URL + '/retired.json', {
+    await fbFetch(FB_URL + '/retired.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(retiredAssets)
@@ -11717,7 +11779,7 @@ function _colorKeyForGroup(g) {
 
 async function loadLoanColors() {
   try {
-    const r = await fetch(FB_URL + '/loanColors.json');
+    const r = await fbFetch(FB_URL + '/loanColors.json');
     if (r.ok) { const d = await r.json(); if (d) _loanColors = d; }
   } catch(e) {}
 }
@@ -11725,7 +11787,7 @@ async function loadLoanColors() {
 async function saveLoanColor(key, color) {
   _loanColors[key] = color;
   try {
-    await fetch(FB_URL + '/loanColors/' + encodeURIComponent(key) + '.json', {
+    await fbFetch(FB_URL + '/loanColors/' + encodeURIComponent(key) + '.json', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(color)
     });
@@ -11943,7 +12005,7 @@ function renderCalendar() {
 // Called by the 30-second poller when it detects a version change.
 async function syncFromFirebase() {
   try {
-    const r = await fetch(FB_URL + '/data.json');
+    const r = await fbFetch(FB_URL + '/data.json');
     if (!r.ok) return;
     const fresh = await r.json();
     if (!fresh || fresh._v === _dataVersion) return; // nothing changed
@@ -12039,9 +12101,18 @@ function startAutoSync() {
   // Firebase RTDB streams change events over SSE — no polling delay.
   let _es = null;
 
-  function connect() {
+  async function connect() {
     if (_es) { try { _es.close(); } catch(e) {} }
-    _es = new EventSource(FB_URL + '/data/_v.json?accept=text/event-stream');
+    // EventSource cannot send headers, so the pass goes on the URL. Passes
+    // last an hour; when one expires the database sends auth_revoked and the
+    // stream is reopened with a fresh one.
+    const tok = await dbToken();
+    _es = new EventSource(withDbAuth(FB_URL + '/data/_v.json?accept=text/event-stream', tok));
+    _es.addEventListener('auth_revoked', () => {
+      try { _es.close(); } catch(e) {}
+      _es = null;
+      setTimeout(connect, 500);
+    });
 
     _es.addEventListener('put', async (e) => {
       try {
@@ -12075,7 +12146,7 @@ function startAutoSync() {
     setInterval(async () => {
       if (document.hidden) return;
       try {
-        const vr = await fetch(FB_URL + '/data/_v.json');
+        const vr = await fbFetch(FB_URL + '/data/_v.json');
         if (!vr.ok) return;
         const remoteV = await vr.json();
         if (remoteV && _dataVersion && remoteV !== _dataVersion) await syncFromFirebase();
@@ -12434,7 +12505,7 @@ const TEST_PUSH_SCENARIOS = {
 async function sendTestPushNotification(amName, title, body) {
   if (!SIMPRO_PROXY_URL) { showToast('error', 'No proxy configured'); return; }
   try {
-    await fetch(SIMPRO_PROXY_URL, {
+    await proxyFetch(SIMPRO_PROXY_URL, {
       method: 'POST', headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors',
       body: JSON.stringify({ action: 'testPush', amName, title, body, requesterName: currentOperator })
     });
@@ -14490,7 +14561,7 @@ function mpOpenReassignFlow(key, mode) {
     mpGoScreen('reassign');
     // Contact/notes/shipping/demoType live in the loan doc, not on equipment —
     // fetched after the screen is already showing, same lag as desktop.
-    fetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.ok ? r.json() : null).then(d => {
+    fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(_reassignPdfKey) + '.json').then(r => r.ok ? r.json() : null).then(d => {
       if (d && _mp.reassign) {
         _mp.reassign.contact  = d.contactNumber || '';
         _mp.reassign.notes    = d.notesCell || d.notes || '';
@@ -14665,7 +14736,7 @@ function mpReassignCreateNewLoan() {
   (async () => {
     try {
       const srcJobId = srcPdfKey ? await _getJobId(srcPdfKey) : null;
-      const srcDoc = srcPdfKey ? await fetch(FB_URL + '/loanDocs/' + encodeURIComponent(srcPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
+      const srcDoc = srcPdfKey ? await fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(srcPdfKey) + '.json').then(r => r.json()).catch(() => null) : null;
       window._reassignPendingSource = {
         loanKey: srcLoanKey, pdfKey: srcPdfKey, loanTo: g.loanTo, jobId: srcJobId,
         movedNos: new Set(movedItems.map(i => i.CHSAssetNo)),
@@ -14789,7 +14860,7 @@ function mpOpenLoanFormFlow(key) {
     am: getGroupAM(g), items: g.items, doc: null
   };
   mpGoScreen('loanform');
-  fetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json').then(r => r.ok ? r.json() : null).then(d => {
+  fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(pdfKey) + '.json').then(r => r.ok ? r.json() : null).then(d => {
     if (_mp.loanForm) { _mp.loanForm.doc = d || {}; mpRenderLoanForm(); }
   }).catch(() => { if (_mp.loanForm) { _mp.loanForm.doc = {}; mpRenderLoanForm(); } });
 }
@@ -14803,7 +14874,7 @@ function mpOpenUpcomingLoanFormFlow(upcomingId) {
     doc: null
   };
   mpGoScreen('loanform');
-  fetch(FB_URL + '/loanDocs/' + encodeURIComponent(u.id) + '.json').then(r => r.ok ? r.json() : null).then(d => {
+  fbFetch(FB_URL + '/loanDocs/' + encodeURIComponent(u.id) + '.json').then(r => r.ok ? r.json() : null).then(d => {
     if (_mp.loanForm) { _mp.loanForm.doc = d || {}; mpRenderLoanForm(); }
   }).catch(() => { if (_mp.loanForm) { _mp.loanForm.doc = {}; mpRenderLoanForm(); } });
 }
@@ -15379,6 +15450,140 @@ function mpRunSheetAction(idx) {
   const it = (window._mpSheetActions||[])[idx];
   if (it && it[1]) setTimeout(it[1], 350); // let the sheet close before the next modal opens
 }
+</script>
+
+<script type="module">
+// ── Staff sign-in ──────────────────────────────────────────────────────
+// One Microsoft sign-in for every Cass tool. This uses the staff schedule's
+// Firebase project — the same one the Internal Hub signs in with — so inside
+// the hub (internal.chsnz.co.nz/demo/) you are already signed in and see no
+// prompt at all. On demo.chsnz.co.nz it asks once, then remembers you.
+//
+// That sign-in is not accepted by this tracker's own database (a different
+// Firebase project), so it is traded for a database pass: the Simpro proxy
+// checks the sign-in and mints a chs-equipment custom token, which is
+// exchanged here for an ID token the database accepts. Passes last an hour
+// and are refreshed in the background.
+//
+// The settings come from the hub (shared/auth-config.json) rather than being
+// copied into this public repo; a cached copy covers the hub being down.
+const AUTH_CFG_URL = 'https://internal.chsnz.co.nz/shared/auth-config.json';
+const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';   // same as the hub
+const CHS_KEY = FIREBASE_CONFIG.apiKey;                        // this project's public web key
+const PASS_KEY = 'chs_db_pass';
+
+let auth = null, A = null, user = null, pass = null, inflight = null;
+try { pass = JSON.parse(localStorage.getItem(PASS_KEY) || 'null'); } catch (e) {}
+const savePass = p => { pass = p; try { p ? localStorage.setItem(PASS_KEY, JSON.stringify(p)) : localStorage.removeItem(PASS_KEY); } catch (e) {} };
+
+async function mintPass() {
+  const idToken = await user.getIdToken();
+  const r = await fetch(SIMPRO_PROXY_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'rtdbToken', idToken }) });
+  const j = await r.json();
+  if (!j.success) throw new Error(j.error || 'No database pass');
+  const ex = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=' + CHS_KEY, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token: j.customToken, returnSecureToken: true }) }).then(r => r.json());
+  if (!ex.idToken) throw new Error('Pass exchange failed: ' + ((ex.error && ex.error.message) || 'unknown'));
+  savePass({ uid: user.uid, idToken: ex.idToken, refreshToken: ex.refreshToken, exp: Date.now() + Number(ex.expiresIn) * 1000 });
+}
+
+async function refreshPass() {
+  const r = await fetch('https://securetoken.googleapis.com/v1/token?key=' + CHS_KEY, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(pass.refreshToken) }).then(r => r.json());
+  if (!r.id_token) throw new Error('Refresh failed');
+  savePass({ uid: pass.uid, idToken: r.id_token, refreshToken: r.refresh_token, exp: Date.now() + Number(r.expires_in) * 1000 });
+}
+
+async function getDbToken(opts) {
+  if (!user) return null;
+  if (pass && pass.uid !== user.uid) savePass(null);     // someone else signed in
+  const force = opts && opts.force;
+  if (pass && !force && pass.exp - Date.now() > 5 * 60 * 1000) return pass.idToken;
+  // One request at a time: dozens of calls start at once on load.
+  if (!inflight) {
+    inflight = (async () => {
+      if (pass && pass.refreshToken && !force) { try { await refreshPass(); return; } catch (e) {} }
+      await mintPass();
+    })().finally(() => { inflight = null; });
+  }
+  await inflight;
+  return pass ? pass.idToken : null;
+}
+
+// Signed in? Use the name for "Who are you?" when it matches an account manager.
+function adoptOperator() {
+  if (!user || !user.displayName) return;
+  let tries = 0;
+  const t = setInterval(() => {
+    if (++tries > 40) return clearInterval(t);
+    if (typeof accountManagers === 'undefined' || !accountManagers.length) return;
+    clearInterval(t);
+    const want = user.displayName.trim().toLowerCase();
+    const email = (user.email || '').toLowerCase();
+    const match = accountManagers.find(a => (a.name || '').trim().toLowerCase() === want)
+      || (email && accountManagers.find(a => (a.email || '').toLowerCase() === email));
+    if (match && typeof setOperator === 'function' && currentOperator !== match.name) setOperator(match.name);
+  }, 500);
+}
+
+function signInUI(blocking) {
+  if (document.getElementById('staff-signin')) return;
+  const el = document.createElement('div');
+  el.id = 'staff-signin';
+  el.style.cssText = blocking
+    ? 'position:fixed;inset:0;z-index:100000;background:rgba(15,20,30,.72);display:flex;align-items:center;justify-content:center;padding:20px'
+    : 'position:fixed;left:16px;bottom:16px;z-index:100000';
+  el.innerHTML = blocking
+    ? '<div style="background:#fff;color:#1c2230;border-radius:12px;padding:24px;max-width:380px;font:15px/1.45 system-ui,sans-serif">'
+      + '<h3 style="margin:0 0 8px">Sign in to continue</h3>'
+      + '<p style="margin:0 0 16px">The demo register now needs your Cass Microsoft account.</p>'
+      + '<button style="padding:10px 16px;border-radius:8px;border:none;background:#554596;color:#fff;font-weight:600;cursor:pointer">Sign in with Microsoft</button>'
+      + '<p class="m" style="margin:12px 0 0;font-size:13px;color:#b42318"></p></div>'
+    : '<button style="padding:9px 14px;border-radius:999px;border:1px solid #d0d5dd;background:#fff;color:#1c2230;font:600 13px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer">Sign in with Microsoft</button>';
+  const btn = el.querySelector('button');
+  btn.addEventListener('click', () => {
+    // No await before the popup: it must open in the same turn as the click.
+    const provider = new A.OAuthProvider('microsoft.com');
+    provider.setCustomParameters({ tenant: cfg.tenant, prompt: 'select_account' });
+    A.signInWithPopup(auth, provider).then(() => location.reload()).catch(e => {
+      const m = el.querySelector('.m');
+      if (m) m.textContent = 'Sign-in did not complete: ' + (e.code || e.message);
+    });
+  });
+  document.body.appendChild(el);
+}
+
+let cfg = null;
+async function start() {
+  try {
+    cfg = await fetch(AUTH_CFG_URL, { cache: 'no-cache' }).then(r => r.json());
+    if (cfg && cfg.apiKey) localStorage.setItem('chs_staff_cfg', JSON.stringify(cfg));
+  } catch (e) {
+    try { cfg = JSON.parse(localStorage.getItem('chs_staff_cfg') || 'null'); } catch (e2) {}
+  }
+  if (!cfg || !cfg.apiKey) throw new Error('sign-in settings unavailable');
+  const [appMod, authMod] = await Promise.all([import(SDK + 'firebase-app.js'), import(SDK + 'firebase-auth.js')]);
+  A = authMod;
+  // [DEFAULT], deliberately: that is the name the hub's saved session is
+  // stored under. This SDK copy is separate from the push one at the top of
+  // the page, so the two default apps do not collide.
+  auth = A.getAuth(appMod.initializeApp({ apiKey: cfg.apiKey, authDomain: cfg.authDomain, projectId: cfg.projectId, appId: cfg.appId }));
+  user = await new Promise(resolve => { const off = A.onAuthStateChanged(auth, u => { off(); resolve(u); }); });
+  A.onAuthStateChanged(auth, u => { user = u; window.__staffUser = u; if (!u) savePass(null); });
+  window.__staffUser = user;
+  window.__staffIdToken = () => (user ? user.getIdToken() : null);
+  window.__staffSignInNeeded = () => signInUI(true);
+  window.__setDbTokenFn(getDbToken);
+  if (user) adoptOperator();
+  else signInUI(false);
+}
+start().catch(e => {
+  console.warn('[staff sign-in] unavailable:', e && e.message);
+  window.__setDbTokenFn(async () => null);
+});
 </script>
 
 </body>
