@@ -44,31 +44,44 @@ self.addEventListener('fetch', event => {
   // Firebase and external API calls — never intercept
   if (url.hostname.includes('firebase') || url.hostname.includes('googleapis')) return;
 
-  // HTML page — network first, update cache, fall back to cache if offline.
-  // cache: 'no-store' is required here — a plain fetch() is still subject to
-  // normal HTTP caching, and GitHub Pages serves this file with
-  // Cache-Control: max-age=600, so without this a "network-first" fetch
-  // could still be silently satisfied from the browser's HTTP cache for up
-  // to 10 minutes after a deploy, defeating the whole point of this branch.
+  // HTML page — served from the cache straight away, with a fresh copy
+  // fetched in the background for next time ("stale-while-revalidate").
+  // It used to be network-first: every launch waited for the whole ~1 MB
+  // page to come down before anything showed, which on a phone was most of
+  // the start-up time. Now a launch is instant; a new version arrives one
+  // launch later, and the open page is told so it can say "update
+  // downloaded". With nothing cached yet (first visit), it is network as
+  // before.
+  //
+  // cache: 'no-store' on the background fetch is required — GitHub Pages
+  // serves this file with Cache-Control: max-age=600, so a plain fetch()
+  // could be answered from the HTTP cache with a copy up to 10 minutes old.
+  //
+  // One entry, under '/': every entry point is the same index.html (start_url
+  // is '/?mobile=1', deep links add ?reassign=/?return=), so lookups ignore
+  // the query string.
   if (url.pathname === '/' || url.pathname.endsWith('.html')) {
-    event.respondWith(
-      fetch(event.request, { cache: 'no-store' })
-        .then(response => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+    event.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request, { ignoreSearch: true });
+      const update = fetch(event.request, { cache: 'no-store' }).then(async response => {
+        if (response.ok) {
+          const fresh = await response.clone().text();
+          const old = cached ? await cached.clone().text() : null;
+          await cache.put(new Request('/'), response.clone());
+          if (old !== null && old !== fresh) {
+            const wins = await self.clients.matchAll({ type: 'window' });
+            wins.forEach(w => w.postMessage({ type: 'html-updated' }));
           }
-          return response;
-        })
-        // ignoreSearch matters here: the install step only ever pre-caches
-        // the bare '/' (CACHED_URLS below), but every real entry point has
-        // a query string (start_url is '/?mobile=1', deep links add
-        // ?reassign=/?return=). Without it, offline-with-no-prior-visit to
-        // any of those falls through to a cache MISS on an exact-URL match
-        // against that bare '/' entry and fails outright, even though the
-        // identical index.html would happily serve it.
-        .catch(() => caches.match(event.request, { ignoreSearch: true }))
-    );
+        }
+        return response;
+      });
+      if (cached) {
+        event.waitUntil(update.catch(() => {}));
+        return cached;
+      }
+      return update.catch(() => caches.match(event.request, { ignoreSearch: true }));
+    })());
     return;
   }
 
