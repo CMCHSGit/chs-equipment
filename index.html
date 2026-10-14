@@ -2092,7 +2092,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 195;
+const APP_VERSION = 196;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
@@ -5020,6 +5020,47 @@ function _findExistingLoanMatch(loanTo, location, endDate) {
     u.loanTo.trim().toLowerCase() === lt && (u.location || '').trim().toLowerCase() === loc && u.endDate === endDate);
 }
 
+// Shared by doLoan() (inside submitBatchLoan), _doBasketAddToLoan() and
+// _doAddItemsToLoan(): a new claim is about to overwrite `item`'s existing
+// OnLoanTo/dates. If that incumbent loan hasn't started yet, its claim would
+// otherwise just vanish — overwritten with no trace, since the equipment
+// record is the only place it was tracked. Found live: Southern Cross
+// Hamilton's booking (19–20/10) needed 6 items already pre-allocated to
+// Southern Cross North Harbour's booking (29/10–09/11, created earlier but
+// starting later) — Hamilton's dates don't actually overlap North Harbour's
+// at all, so there's no real conflict, but the item-claiming logic at every
+// call site either wrongly treated the earlier, non-conflicting claim as
+// stuck (doLoan(), _doBasketAddToLoan()) or silently erased the later
+// incumbent's reservation outright (_doAddItemsToLoan()). This hands the
+// incumbent's claim on that one item back to its own upcomingLoans entry
+// instead, so it naturally reactivates via _tryActivateUpcomingLoan() once
+// the new claimant returns it — call this BEFORE overwriting the equipment
+// record, and only when the incumbent's own LoanStartDate is still in the
+// future (an already-active incumbent is physically holding the item right
+// now; that's a real hand-back, not something to silently reschedule).
+function _deferToIncumbentUpcoming(item, newLoanTo, newStart, newEnd) {
+  const incumbentBatchId = item.BatchID || ('loandoc_' + encodeURIComponent(item.OnLoanTo + '|||' + (item.LoanEndDate || '')));
+  let uLoan = upcomingLoans.find(u => u.id === incumbentBatchId);
+  if (!uLoan) {
+    uLoan = {
+      id: incumbentBatchId,
+      loanTo: item.OnLoanTo, location: item.Location || '',
+      startDate: item.LoanStartDate || '', endDate: item.LoanEndDate || '',
+      accountManager: (loanMeta[incumbentBatchId] && loanMeta[incumbentBatchId].accountManager) || '',
+      borrowerEmail: item.BorrowerEmail || '',
+      items: []
+    };
+    upcomingLoans.push(uLoan);
+  }
+  if (!uLoan.items.some(i => i.CHSAssetNo === item.CHSAssetNo)) {
+    uLoan.items.push({ id: item.id, CHSAssetNo: item.CHSAssetNo, Model: item.Model, SerialNo: item.SerialNo });
+  }
+  logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Converted',
+    loanTo: item.OnLoanTo, location: item.Location, batchId: incumbentBatchId,
+    notes: 'Deferred to upcoming — ' + newLoanTo + '\'s earlier, non-overlapping booking (' +
+      formatDisplayDate(newStart) + (newEnd ? ' – ' + formatDisplayDate(newEnd) : '') + ') claimed this item first.' });
+}
+
 async function submitBatchLoan(opts) {
   // Disable immediately to prevent double-submission
   const _submitBtn = document.getElementById('btn-batch');
@@ -5149,7 +5190,16 @@ async function submitBatchLoan(opts) {
     for (const d of devicesToLoan) {
       const item = equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase());
       if (!item) continue;
-      const currentlyOut = item.OnLoanTo && item.Returned !== 'Yes' && item.OnLoanTo !== loanTo;
+      let currentlyOut = item.OnLoanTo && item.Returned !== 'Yes' && item.OnLoanTo !== loanTo;
+      if (currentlyOut) {
+        // An incumbent that hasn't started yet and doesn't actually overlap
+        // our dates isn't really in the way — let it through to the overlap
+        // check below (which reclaims it from that incumbent) instead of
+        // wrongly treating an earlier, non-conflicting claim as stuck.
+        const _iStart = item.LoanStartDate || '', _iEnd = item.LoanEndDate || '';
+        const _iOverlaps = (!_iEnd || _iEnd >= startDate) && (!endDate || endDate >= _iStart);
+        if (_iStart && _iStart > today && !_iOverlaps) currentlyOut = false;
+      }
       if (currentlyOut) {
         upcomingDevices.push(item);
       } else {
@@ -5158,6 +5208,7 @@ async function submitBatchLoan(opts) {
     }
 
     const _lockedOut = [];
+    const _reclaimed = [];
     for (const item of directDevices) {
       const idx = equipment.findIndex(e => e.id === item.id);
       if (idx < 0) continue;
@@ -5175,13 +5226,23 @@ async function submitBatchLoan(opts) {
             : ' (on loan to ' + _existItem.OnLoanTo + ' until ' + formatDisplayDate(_existEnd) + ' — dates overlap)'));
           continue;
         }
-        // Dates don't overlap — allow through
+        // Dates don't overlap. If the incumbent hasn't started yet, its claim
+        // would otherwise be silently destroyed by the overwrite below —
+        // defer it to its own upcomingLoans entry instead.
+        if (_existStart && _existStart > today) {
+          _reclaimed.push(_existItem.OnLoanTo);
+          _deferToIncumbentUpcoming(_existItem, loanTo, startDate, endDate);
+        }
       }
       Object.assign(equipment[idx], { OnLoanTo: loanTo, Location: location, LoanStartDate: startDate, LoanEndDate: endDate, Returned: 'No', BatchID: batchId, BorrowerEmail: batchEmail });
       logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes, batchId, _pdfKey: batchId });
     }
     if (_lockedOut.length) {
       showToast('error', _lockedOut.length + ' item(s) skipped — already locked to a Simpro job: ' + _lockedOut.join(', '));
+    }
+    if (_reclaimed.length) {
+      const _names = [...new Set(_reclaimed)].join(', ');
+      showToast('warn', _reclaimed.length + ' item(s) reclaimed from an upcoming loan to ' + _names + ' — make sure they\'re back in time for that booking.');
     }
 
     if (upcomingDevices.length) {
@@ -5198,6 +5259,11 @@ async function submitBatchLoan(opts) {
       upcomingDevices.forEach(item => {
         logHistory({ id: uid(), ts: nzNow(), chsAssetNo: item.CHSAssetNo, model: item.Model, action: 'Loan', loanTo, location, loanStart: startDate, loanEnd: endDate, notes: (notes ? notes + ' — ' : '') + 'Booked as upcoming (currently on loan to ' + item.OnLoanTo + ')', batchId, _pdfKey: batchId });
       });
+    }
+    // _deferToIncumbentUpcoming() above already pushed its own entries onto
+    // upcomingLoans directly (for a different batch than this loan's own) —
+    // save if either that or this loan's own pending items happened.
+    if (upcomingDevices.length || _reclaimed.length) {
       await saveUpcomingLoans();
     }
 
@@ -9436,14 +9502,47 @@ async function loadAccountManagers() {
   updateAMDropdowns();
 }
 
+// Names this page has removed since it loaded, so the merge below doesn't
+// bring them straight back.
+const _amRemoved = new Set();
+
+// The list is saved whole, but it isn't only edited here any more: the
+// Internal Hub's Admin settings add people to it, set their role and switch
+// their reminders off (`notify: false`). A page that loaded this morning
+// would otherwise put its old copy back on its next save (enabling push is
+// one) and undo those. So: re-read the current list first, keep anyone added
+// elsewhere, take `notify` from the current list (only Admin sets it), and
+// save conditionally (ETag, like saveBin) so two saves can't cross.
 async function saveAccountManagers() {
-  accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+  const key = a => (a && a.name || '').trim().toLowerCase();
   try {
-    await fbFetch(FB_URL + '/accountManagers.json', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(accountManagers)
-    });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      let etag = null;
+      try {
+        const g = await fbFetch(FB_URL + '/accountManagers.json', { headers: { 'X-Firebase-ETag': 'true' } });
+        if (g.ok) {
+          etag = g.headers.get('ETag');
+          const d = await g.json();
+          const fresh = Array.isArray(d) ? d.filter(Boolean) : [];
+          const mine = new Map(accountManagers.map(a => [key(a), a]));
+          for (const f of fresh) {
+            const m = mine.get(key(f));
+            if (m) { if (f.notify === false) m.notify = false; else delete m.notify; }
+            else if (!_amRemoved.has(key(f))) accountManagers.push(f);
+          }
+        }
+      } catch (e) { /* couldn't read: fall through to a plain save, as before */ }
+      accountManagers.sort((a, b) => (a.name||'').localeCompare(b.name||''));
+      const res = await fbFetch(FB_URL + '/accountManagers.json', {
+        method: 'PUT',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, etag ? { 'if-match': etag } : {}),
+        body: JSON.stringify(accountManagers)
+      });
+      if (res.status !== 412) {
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        break;
+      }
+    }
   } catch(e) {
     console.warn('Could not save account managers:', e);
     showToast('error', 'Could not save account managers');
@@ -9604,6 +9703,11 @@ function renderAMList() {
 
 function updateAMField(i, field, val) {
   if (accountManagers[i]) {
+    // A rename: the old name is gone, so saveAccountManagers()'s merge mustn't
+    // re-add it as someone "added elsewhere".
+    if (field === 'name' && accountManagers[i].name && accountManagers[i].name.trim() !== val.trim()) {
+      _amRemoved.add(accountManagers[i].name.trim().toLowerCase());
+    }
     accountManagers[i][field] = val.trim();
     saveAccountManagers();
   }
@@ -9625,6 +9729,7 @@ function addAccountManager() {
 function removeAccountManager(i) {
   const removed = accountManagers[i];
   accountManagers.splice(i, 1);
+  if (removed) _amRemoved.add((removed.name || '').trim().toLowerCase());
   saveAccountManagers();
   renderAMList();
   if (removed) writeAudit('am_removed', removed.name + ' removed from account managers', { name: removed.name, email: removed.email || '' });
@@ -9979,7 +10084,16 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   itemsToAdd.forEach(b => {
     const eq = equipment.find(e => e.id === b.id);
     if (!eq) return;
-    const currentlyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.OnLoanTo !== g.loanTo;
+    let currentlyOut = eq.OnLoanTo && eq.Returned !== 'Yes' && eq.OnLoanTo !== g.loanTo;
+    if (targetIsFuture && currentlyOut) {
+      // An incumbent that hasn't started yet and doesn't actually overlap our
+      // dates isn't really in the way — reclaim it below instead of wrongly
+      // treating an earlier, non-conflicting claim as stuck.
+      const _iEnd = eq.LoanEndDate || '', _iStart = eq.LoanStartDate || '';
+      const _iNewEnd = g.endDate || '';
+      const _iOverlaps = (!_iEnd || _iEnd >= g.startDate) && (!_iNewEnd || _iNewEnd >= _iStart);
+      if (_iStart && _iStart > today && !_iOverlaps) currentlyOut = false;
+    }
     if (targetIsFuture && currentlyOut) {
       upcomingItems.push(b);
     } else {
@@ -9988,9 +10102,19 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
   });
 
   // Direct items — overwrite equipment record as before
+  const _reclaimed = [];
   directItems.forEach(b => {
     const idx = equipment.findIndex(e => e.id === b.id);
     if (idx < 0) return;
+    const _prevItem = equipment[idx];
+    // Dates don't overlap (checked above when that's why this item is here).
+    // If the incumbent hasn't started yet, its claim would otherwise be
+    // silently destroyed by the overwrite below — defer it instead.
+    if (_prevItem.OnLoanTo && _prevItem.Returned !== 'Yes' && _prevItem.OnLoanTo !== g.loanTo &&
+        _prevItem.LoanStartDate && _prevItem.LoanStartDate > today) {
+      _reclaimed.push(_prevItem.OnLoanTo);
+      _deferToIncumbentUpcoming(_prevItem, g.loanTo, g.startDate || nzDate(), g.endDate || '');
+    }
     Object.assign(equipment[idx], {
       OnLoanTo: g.loanTo, Location: g.location,
       LoanStartDate: g.startDate || nzDate(),
@@ -10001,6 +10125,10 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
     logHistory({ id: uid(), ts: nzNow(), chsAssetNo: equipment[idx].CHSAssetNo, model: equipment[idx].Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Added to existing loan', batchId });
     added++;
   });
+  if (_reclaimed.length) {
+    const _names = [...new Set(_reclaimed)].join(', ');
+    showToast('warn', _reclaimed.length + ' item(s) reclaimed from an upcoming loan to ' + _names + ' — make sure they\'re back in time for that booking.');
+  }
 
   // Upcoming items — store in upcomingLoans so equipment record stays on current loan
   if (upcomingItems.length) {
@@ -10031,6 +10159,10 @@ async function _doBasketAddToLoan(g, itemsToAdd, skipped) {
       logHistory({ id: uid(), ts: nzNow(), chsAssetNo: eq.CHSAssetNo, model: eq.Model, action: 'Loan', loanTo: g.loanTo, location: g.location, loanStart: g.startDate, loanEnd: g.endDate, notes: 'Booked as upcoming (currently on loan to ' + eq.OnLoanTo + ')', batchId });
       added++;
     });
+    await saveUpcomingLoans();
+  } else if (_reclaimed.length) {
+    // _deferToIncumbentUpcoming() above already pushed its own entry onto
+    // upcomingLoans directly (for a different batch than this group's own).
     await saveUpcomingLoans();
   }
 
@@ -10443,7 +10575,7 @@ async function _doAddItemsToLoan(g, validRows) {
   // See matching comment in _doBasketAddToLoan: prefer the upcoming loan's own
   // stable id over a shared item's current (possibly a different loan's) BatchID.
   const batchId = g._upcomingId || g.items[0]?.BatchID || newBatchId();
-  const added = [], skipped = [], collisions = [];
+  const added = [], skipped = [], collisions = [], reclaimed = [];
   validRows.forEach(r => {
     const idx = equipment.findIndex(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === r.value.toLowerCase());
     if (idx < 0) { skipped.push(r.value); return; }
@@ -10467,7 +10599,13 @@ async function _doAddItemsToLoan(g, validRows) {
         skipped.push(r.value);
         return;
       }
-      // Dates don't overlap — allow through (item will transfer when current loan ends)
+      // Dates don't overlap. If the incumbent hasn't started yet, its claim
+      // would otherwise be silently destroyed by the overwrite below — defer
+      // it to its own upcomingLoans entry instead of just losing it.
+      if (existStart && existStart > nzDate()) {
+        reclaimed.push(item.OnLoanTo);
+        _deferToIncumbentUpcoming(item, g.loanTo, newStart, newEnd);
+      }
     }
     Object.assign(equipment[idx], {
       OnLoanTo: g.loanTo, Location: g.location,
@@ -10481,6 +10619,11 @@ async function _doAddItemsToLoan(g, validRows) {
   });
   if (collisions.length) {
     showToast('error', 'Skipped ' + collisions.length + ' item(s) already on a different active loan: ' + collisions.join(', '));
+  }
+  if (reclaimed.length) {
+    const names = [...new Set(reclaimed)].join(', ');
+    showToast('warn', reclaimed.length + ' item(s) reclaimed from an upcoming loan to ' + names + ' — make sure they\'re back in time for that booking.');
+    await saveUpcomingLoans();
   }
   if (added.length) {
     writeAudit('items_added', added.length + ' item' + (added.length !== 1 ? 's' : '') + ' added to loan — ' + g.loanTo, {
