@@ -88,7 +88,7 @@ To deploy for real, from `.gas-proxy/`:
 npx clasp push
 npx clasp deploy -i AKfycbzKLt_IP3GPRiNQkYkCep-_Yee06rDwc3uJGnQQuzjVuCSJOImJnaqDgU-3W3q9Y4OHUw
 ```
-That `-i` keeps the same `/exec` URL. Currently at **@30**. `npx clasp push` will prompt to
+That `-i` keeps the same `/exec` URL. Currently at **@39**. `npx clasp push` will prompt to
 confirm an overwrite if the Apps Script HEAD differs from local; from a non-interactive
 shell (e.g. an agent session) that prompt silently no-ops the push ("Skipping push.") —
 use `npx clasp push --force` there instead.
