@@ -861,7 +861,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       <button class="btn btn-sm desktop-only" onclick="promptAddAsset()" style="font-size:11px;padding:4px 8px">+ Add Asset</button>
       <button class="btn btn-sm desktop-only" onclick="doLogout()" style="font-size:11px;padding:4px 8px">Sign out</button>
       <div class="user-avatar-wrap desktop-only" id="user-avatar-wrap">
-        <button class="user-avatar-btn" id="user-avatar-btn" onclick="toggleUserDropdown()" title="Switch user" style="display:none"></button>
+        <button class="user-avatar-btn" id="user-avatar-btn" onclick="toggleUserDropdown()" title="Signed in" style="display:none"></button>
         <div class="user-avatar-dropdown" id="user-avatar-dropdown">
           <div class="user-av-dd-head">
             <div class="user-av-dd-av" id="user-av-dd-av"></div>
@@ -870,9 +870,9 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
               <div class="user-av-dd-sub">Logged in as</div>
             </div>
           </div>
-          <button class="user-av-dd-item" onclick="showUserSelectModal(true);document.getElementById('user-avatar-dropdown').classList.remove('open')">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            Switch user
+          <button class="user-av-dd-item" onclick="doLogout()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sign out
           </button>
         </div>
       </div>
@@ -2092,7 +2092,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 198;
+const APP_VERSION = 199;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
@@ -2164,7 +2164,7 @@ async function proxyFetch(url, opts = {}) {
 // touching real systems.
 //
 // The toggle button itself is only shown to these two operators (matched
-// against the "Switch user" name, currentOperator — see initOperator/
+// against the signed-in name, currentOperator — see initOperator/
 // setOperator below). Everyone else never sees it exists. Since
 // currentOperator can change mid-session, updateTestModeUI() is re-run from
 // renderOperatorAvatar() on every load and every user switch, and forces
@@ -2347,6 +2347,20 @@ function matchStaffOperator() {
   return m ? m.name : null;
 }
 
+// Who you are is the Microsoft account you signed in with. A name this
+// device saved earlier (from the old "pick your name" step) never overrides
+// it, or one person's laptop would keep logging changes under whoever used
+// it before. False when the account matches no account manager record —
+// only then is anyone asked to pick a name. The hub's read-only placeholder
+// (apps/demo/embed.js) is left alone.
+function _applyStaffIdentity() {
+  if (currentOperator === 'Read-only viewer') return true;
+  const m = matchStaffOperator();
+  if (!m) return false;
+  if (m !== currentOperator) setOperator(m);
+  return true;
+}
+
 // A database pass saved by an earlier visit means this device has signed in
 // before: go straight in and let the sign-in module confirm in the
 // background (it covers the page with the sign-in card if it can't).
@@ -2379,11 +2393,8 @@ function enterApp() {
   document.getElementById('app').style.display = 'block';
   loadData().then(async () => {
     setTimeout(handleReturnLink, 1200);
-    if (!currentOperator) {
-      await _staffWait(4000);
-      const m = matchStaffOperator();
-      if (m) setOperator(m); else showUserSelectModal(false);
-    }
+    await _staffWait(4000);
+    if (!_applyStaffIdentity() && !currentOperator) showUserSelectModal(false);
   });
   return true;
 }
@@ -12426,9 +12437,8 @@ function startAutoSync() {
       <!-- CURRENT USER -->
       <div class="settings-section">
         <div class="settings-section-title">👤 Current User</div>
-        <div class="settings-section-sub">Select who you are. Saved locally so you don't need to re-select each time. Your name is recorded in the audit log for every change you make.</div>
+        <div class="settings-section-sub">Taken from your Microsoft sign-in. Your name is recorded in the audit log for every change you make. To be someone else, sign out and sign in as them.</div>
         <div id="settings-user-display" style="margin-bottom:12px"></div>
-        <button class="btn btn-primary" onclick="showUserSelectModal(true)">Change User</button>
       </div>
 
       <!-- KIT GROUPS -->
@@ -12756,10 +12766,9 @@ function mpAskName() {
   nameField.innerHTML = '<option value="">Select your name…</option>' +
     accountManagers.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('');
   nameField.style.display = 'block';
-  document.getElementById('mp-remember-row').style.display = 'flex';
   document.getElementById('mp-signin-btn').style.display = '';
   const hint = document.getElementById('mp-signin-hint');
-  if (hint) hint.textContent = 'Pick your name.';
+  if (hint) hint.textContent = 'Your Microsoft account isn\'t linked to a staff record. Pick your name, and ask an admin to check your name or email under Manage your staff.';
 }
 
 async function mpSignInStep() {
@@ -12787,11 +12796,8 @@ async function mpSignInStep() {
 // "switch user" feature uses) or falls back to the sign-in screen.
 async function mpResumeOrSignIn() {
   await loadData();
-  if (!currentOperator || !accountManagers.find(a => a.name === currentOperator)) {
-    await _staffWait(4000);
-    const m = matchStaffOperator();
-    if (m) setOperator(m);
-  }
+  await _staffWait(4000);
+  _applyStaffIdentity();
   // Scanning is a phone's main job: fetch its decoders now, quietly, so the
   // first scan doesn't wait for them.
   setTimeout(() => { needLib('zxing').catch(() => {}); needLib('jsqr').catch(() => {}); }, 3000);
