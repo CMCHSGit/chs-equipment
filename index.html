@@ -28,7 +28,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="CMCHS Demo Tracker">
 <link rel="apple-touch-icon" href="icon-180.png">
-<meta name="theme-color" content="#1d4ed8">
+<meta name="theme-color" content="#554596">
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -124,11 +124,11 @@ function needLibOrToast(name) {
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <!-- Mobile app design system fonts — only loaded for #mobile-app, see mp-tokens style block -->
-<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Source+Sans+3:wght@300;400;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700&family=Source+Sans+3:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f4f3f0;--surface:#fff;--surface2:#f9f8f6;--border:#e5e3de;--border2:#d4d1ca;--text:#1a1917;--text2:#6b6860;--text3:#9c9a94;--accent:#1d4ed8;--accent-light:#eff4ff;--green:#15803d;--green-light:#f0fdf4;--green-border:#bbf7d0;--red:#dc2626;--red-light:#fef2f2;--red-border:#fecaca;--amber:#d97706;--amber-light:#fffbeb;--amber-border:#fde68a;--lt:#0e7490;--lt-light:#ecfeff;--lt-mid:#cffafe;--lt-border:#67e8f9;--radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.06)}
+:root{--bg:#f4f4f5;--surface:#fff;--surface2:#f8f8f9;--border:#e8e9ea;--border2:#d1d3d4;--text:#1d1d1d;--text2:#575756;--text3:#747577;--accent:#554596;--accent-light:#ece9f6;--green:#15803d;--green-light:#f0fdf4;--green-border:#bbf7d0;--red:#dc2626;--red-light:#fef2f2;--red-border:#fecaca;--amber:#d97706;--amber-light:#fffbeb;--amber-border:#fde68a;--lt:#0e7490;--lt-light:#ecfeff;--lt-mid:#cffafe;--lt-border:#67e8f9;--radius:8px;--radius-lg:12px;--shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);--shadow-md:0 4px 12px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.06)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+body{font-family:'Source Sans 3',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
 
 /* LOGIN */
 .login-wrap{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px}
@@ -137,10 +137,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .login-logo svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2}
 .login-title{font-size:20px;font-weight:600;margin-bottom:6px;letter-spacing:-.02em}
 .login-sub{font-size:13px;color:var(--text2);margin-bottom:24px}
-.login-input{width:100%;padding:11px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:15px;text-align:center;letter-spacing:.1em;outline:none;transition:border-color .15s;margin-bottom:12px}
+.login-input{width:100%;padding:11px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:15px;text-align:center;letter-spacing:.1em;outline:none;transition:border-color .15s;margin-bottom:12px}
 .login-input:focus{border-color:var(--accent)}
-.login-btn{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;cursor:pointer;transition:background .15s}
-.login-btn:hover{background:#1e40af}
+.login-btn{width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:15px;font-weight:500;cursor:pointer;transition:background .15s}
+.login-btn:hover{background:#3f3374}
 .login-err{margin-top:10px;padding:8px 12px;background:var(--red-light);border:1px solid var(--red-border);border-radius:var(--radius);font-size:13px;color:var(--red);display:none}
 
 /* LOADING */
@@ -151,8 +151,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .loading-msg{font-size:14px;color:var(--text2)}
 
 /* HEADER */
-.app-header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 20px;height:64px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
-.app-logo{font-size:16px;font-weight:600;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
+.app-header{background:linear-gradient(90deg,#554596 0 33.34%,#80bd01 33.34% 66.67%,#ef7d00 66.67%) bottom/100% 4px no-repeat,var(--surface);border-bottom:0;padding:0 24px 4px;height:68px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.app-logo{display:flex;align-items:center;gap:16px;flex:0 0 auto}
+.app-title{font:600 18px/1.25 'Source Sans 3',system-ui,sans-serif;color:var(--text);white-space:nowrap}
 .app-logo-dot{width:8px;height:8px;background:var(--accent);border-radius:50%}
 .header-right{display:flex;gap:8px;align-items:center;min-width:0}
 /* Everything in the header stays full-size and un-clipped except the nav
@@ -169,7 +170,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .nav-tabs{display:flex;gap:2px;background:var(--bg);border-radius:var(--radius);padding:3px;flex-shrink:1;min-width:0;overflow-x:auto;scrollbar-width:thin}
 .nav-tabs::-webkit-scrollbar{height:4px}
 .nav-tabs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-.nav-tab{padding:5px 14px;border-radius:6px;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.nav-tab{padding:5px 14px;border-radius:6px;border:none;background:transparent;font-family:'Source Sans 3',sans-serif;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .nav-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
 .nav-tab:hover:not(.active){color:var(--text)}
 
@@ -178,9 +179,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .panel{display:none}.panel.active{display:block}
 
 /* BUTTONS */
-.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface);font-family:'Source Sans 3',sans-serif;font-size:13px;font-weight:500;color:var(--text);cursor:pointer;transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surface2)}.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn-primary:hover{background:#1e40af}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn-primary:hover{background:#3f3374}
 .btn-green{background:var(--green);border-color:var(--green);color:#fff}.btn-green:hover{background:#166534}
 .btn-red{background:var(--red);border-color:var(--red);color:#fff}.btn-red:hover{background:#b91c1c}
 .btn-sm{padding:4px 10px;font-size:12px}
@@ -197,14 +198,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .scan-card h2{font-size:16px;font-weight:600;margin-bottom:4px}
 .scan-card .subtitle{color:var(--text2);font-size:13px;margin-bottom:20px}
 .scan-tabs{display:flex;border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;margin-bottom:20px}
-.scan-tab{flex:1;padding:9px;border:none;background:var(--surface);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;border-right:1px solid var(--border2)}
+.scan-tab{flex:1;padding:9px;border:none;background:var(--surface);font-family:'Source Sans 3',sans-serif;font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s;border-right:1px solid var(--border2)}
 .scan-tab:last-child{border-right:none}
 .scan-tab.active{background:var(--accent);color:#fff}
 .scan-tab:hover:not(.active){background:var(--surface2)}
 .scan-input-wrap{position:relative;margin-bottom:12px}
 .scan-input{width:100%;padding:12px 44px 12px 14px;border:2px solid var(--border2);border-radius:var(--radius);font-family:'DM Mono',monospace;font-size:16px;font-weight:500;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
 .scan-input:focus{border-color:var(--accent)}
-.scan-input::placeholder{font-family:'DM Sans',sans-serif;font-size:14px;font-weight:400;color:var(--text3)}
+.scan-input::placeholder{font-family:'Source Sans 3',sans-serif;font-size:14px;font-weight:400;color:var(--text3)}
 .scan-cam-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text2);padding:4px;border-radius:4px}
 .scan-cam-btn:hover{color:var(--accent);background:var(--accent-light)}
 .asset-preview-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px}
@@ -214,7 +215,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-group{display:flex;flex-direction:column;gap:4px}
 .form-group label{font-size:12px;font-weight:500;color:var(--text2)}
-.form-group input,.form-group select,.form-group textarea{padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
+.form-group input,.form-group select,.form-group textarea{padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border-color .15s}
 .form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--accent)}
 .form-actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
 .status-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:500;white-space:nowrap}
@@ -289,18 +290,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 .kit-item-badge{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--red-light);color:var(--red);border:1px solid var(--red-border);white-space:nowrap}
 .kit-item-badge.avail{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
 .kit-modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
-.btn-readiness{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1.5px solid;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap}
+.btn-readiness{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:500;border:1.5px solid;cursor:pointer;font-family:'Source Sans 3',sans-serif;transition:all .15s;white-space:nowrap}
 .btn-readiness.unticked{background:#fff;color:var(--text2);border-color:var(--border2)}
 .btn-readiness.unticked:hover{border-color:var(--accent);color:var(--accent)}
 .btn-readiness.ticked-tested{background:var(--green-light);color:var(--green);border-color:var(--green-border)}
-.btn-readiness.ticked-dispatched{background:#eff4ff;color:var(--accent);border-color:#bfdbfe}
+.btn-readiness.ticked-dispatched{background:#ece9f6;color:var(--accent);border-color:#cac4e3}
 .btn-readiness.ticked-notest{background:var(--surface2);color:var(--text2);border-color:var(--border2)}
 .badge-no-test-req{background:var(--surface2);color:var(--text2);border:1px solid var(--border2)}
 
 /* TABLE */
 .table-toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:64px;z-index:50;background:var(--bg);padding:12px 20px 10px;border-bottom:1px solid var(--border);margin:0 -20px 12px;width:calc(100% + 40px)}
 .search-wrap{position:relative}
-.search-input{padding:7px 12px 7px 34px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;width:220px}
+.search-input{padding:7px 12px 7px 34px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;width:220px}
 .search-input:focus{border-color:var(--accent)}
 .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
@@ -323,7 +324,7 @@ tr:hover td{background:var(--surface2)}
 .db-with-basket{display:flex;gap:16px;align-items:flex-start}
 .db-table-area{flex:1;min-width:0}
 .basket-panel{background:var(--surface);border:1.5px solid var(--accent);border-radius:var(--radius-lg);overflow:hidden;box-shadow:0 4px 16px rgba(29,78,216,.12);width:280px;flex-shrink:0;position:sticky;top:128px;max-height:calc(100vh - 160px);display:flex;flex-direction:column}
-.basket-header{background:var(--accent-light);padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #bfdbfe;flex-shrink:0}
+.basket-header{background:var(--accent-light);padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #cac4e3;flex-shrink:0}
 .basket-title{font-size:13px;font-weight:600;color:var(--accent);flex:1}
 .basket-items-scroll{overflow-y:auto;flex:1}
 .basket-item{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--border);font-size:13px}
@@ -332,12 +333,12 @@ tr:hover td{background:var(--surface2)}
 .basket-item-info{flex:1;min-width:0}
 .basket-item-asset{font-family:'DM Mono',monospace;font-size:12px;font-weight:600}
 .basket-item-desc{font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.basket-footer{padding:10px 14px;display:flex;flex-direction:column;gap:6px;background:var(--accent-light);border-top:1px solid #bfdbfe;flex-shrink:0}
+.basket-footer{padding:10px 14px;display:flex;flex-direction:column;gap:6px;background:var(--accent-light);border-top:1px solid #cac4e3;flex-shrink:0}
 @media(max-width:700px){.db-with-basket{flex-direction:column-reverse}.basket-panel{width:100%;position:static;max-height:none}}
 tr:hover .col-sticky{background:var(--surface2)}
 thead .col-sticky{background:var(--surface2);z-index:3}
 .row-count{font-size:12px;color:var(--text3);margin-left:auto}
-.filter-select{padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none}
+.filter-select{padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none}
 .chip{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
 .chip-yes{background:var(--green-light);color:var(--green);display:inline-flex;align-items:center;max-width:100%}.chip-no{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
 
@@ -395,20 +396,20 @@ thead .col-sticky{background:var(--surface2);z-index:3}
 .mobile-menu{display:none;position:fixed;top:56px;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:99}
 .mobile-menu.open{display:block}
 .mobile-menu-inner{background:var(--surface);padding:8px 0;border-bottom:1px solid var(--border);box-shadow:var(--shadow-md)}
-.mobile-nav-item{width:100%;display:flex;align-items:center;gap:14px;padding:14px 20px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;text-align:left;transition:background .1s}
+.mobile-nav-item{width:100%;display:flex;align-items:center;gap:14px;padding:14px 20px;border:none;background:none;font-family:'Source Sans 3',sans-serif;font-size:15px;font-weight:500;color:var(--text);cursor:pointer;text-align:left;transition:background .1s}
 .mobile-nav-item:hover,.mobile-nav-item.active{background:var(--accent-light);color:var(--accent)}
 .mobile-nav-item svg{flex-shrink:0;color:inherit}
 /* BOTTOM NAV for mobile quick access */
 .mobile-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);z-index:98;padding:6px 0 env(safe-area-inset-bottom,0)}
 .mobile-bottom-nav-inner{display:flex;justify-content:space-around}
-.mobile-bottom-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border:none;background:none;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;color:var(--text2);cursor:pointer}
+.mobile-bottom-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border:none;background:none;font-family:'Source Sans 3',sans-serif;font-size:10px;font-weight:500;color:var(--text2);cursor:pointer}
 .mobile-bottom-btn.active{color:var(--accent)}
 .mobile-bottom-btn svg{flex-shrink:0}
 
 @media(max-width:700px){
   .desktop-only{display:none!important}
   .mobile-only{display:flex!important}
-  .app-header{padding:0 12px;height:52px}
+  .app-header{padding:0 12px 4px;height:60px}
   .main{padding:12px;padding-bottom:80px}
   .table-toolbar{top:52px;margin:0 -12px 12px;padding:10px 12px;width:calc(100% + 24px)}
   table{min-width:700px}
@@ -558,7 +559,7 @@ tr.row-selected .col-sticky{background:var(--accent-light)!important}
 .detail-status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500;margin-bottom:16px}
 tr.clickable-row{cursor:pointer}
 tr.clickable-row:hover td{background:var(--accent-light)!important}
-.user-avatar-wrap{position:relative}.user-avatar-btn{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;transition:opacity .15s;flex-shrink:0;letter-spacing:.5px;font-family:'DM Sans',sans-serif}.user-avatar-btn:hover{opacity:.85}.user-avatar-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:220px;z-index:200;overflow:hidden;display:none}.user-avatar-dropdown.open{display:block}.user-av-dd-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.user-av-dd-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}.user-av-dd-info{min-width:0}.user-av-dd-name{font-size:13px;font-weight:600;color:var(--text)}.user-av-dd-sub{font-size:11px;color:var(--text2);margin-top:1px}.user-av-dd-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text);border:none;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif}.user-av-dd-item:hover{background:var(--surface2)}.user-select-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px}.user-select-card{background:var(--surface);border-radius:var(--radius-lg);padding:32px;max-width:420px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.18)}.user-select-title{font-size:20px;font-weight:700;color:var(--text);margin:0 0 6px}.user-select-sub{font-size:14px;color:var(--text2);margin:0 0 20px}.user-select-list{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto}.user-select-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;background:none;width:100%;text-align:left;font-family:'DM Sans',sans-serif}.user-select-item:hover,.user-select-item:focus{border-color:var(--accent);background:var(--accent-light);outline:none}.user-select-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}.user-select-name{font-size:14px;font-weight:500;color:var(--text)}.user-select-footer{margin-top:20px;display:flex;justify-content:flex-end}
+.user-avatar-wrap{position:relative}.user-avatar-btn{width:34px;height:34px;border-radius:50%;border:2px solid rgba(255,255,255,.25);cursor:pointer;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;color:#fff;transition:opacity .15s;flex-shrink:0;letter-spacing:.5px;font-family:'Source Sans 3',sans-serif}.user-avatar-btn:hover{opacity:.85}.user-avatar-dropdown{position:absolute;top:calc(100% + 8px);right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 8px 24px rgba(0,0,0,.12);min-width:220px;z-index:200;overflow:hidden;display:none}.user-avatar-dropdown.open{display:block}.user-av-dd-head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}.user-av-dd-av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0}.user-av-dd-info{min-width:0}.user-av-dd-name{font-size:13px;font-weight:600;color:var(--text)}.user-av-dd-sub{font-size:11px;color:var(--text2);margin-top:1px}.user-av-dd-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .1s;font-size:13px;color:var(--text);border:none;background:none;width:100%;text-align:left;font-family:'Source Sans 3',sans-serif}.user-av-dd-item:hover{background:var(--surface2)}.user-select-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1100;display:flex;align-items:center;justify-content:center;padding:20px}.user-select-card{background:var(--surface);border-radius:var(--radius-lg);padding:32px;max-width:420px;width:100%;box-shadow:0 16px 48px rgba(0,0,0,.18)}.user-select-title{font-size:20px;font-weight:700;color:var(--text);margin:0 0 6px}.user-select-sub{font-size:14px;color:var(--text2);margin:0 0 20px}.user-select-list{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto}.user-select-item{display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid var(--border);border-radius:var(--radius);cursor:pointer;transition:all .15s;background:none;width:100%;text-align:left;font-family:'Source Sans 3',sans-serif}.user-select-item:hover,.user-select-item:focus{border-color:var(--accent);background:var(--accent-light);outline:none}.user-select-av{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}.user-select-name{font-size:14px;font-weight:500;color:var(--text)}.user-select-footer{margin-top:20px;display:flex;justify-content:flex-end}
 </style>
 <!-- ══════════════════════════════════════════════════════════════════════
      MOBILE APP (PWA) — separate design system, see design/README.md.
@@ -683,7 +684,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 .mp-err{color:var(--mp-critical);font-size:13px}
 
 /* ── HEADER + NAV ────────────────────────────────────────────────── */
-#mp-header{height:46px;flex-shrink:0;background:var(--mp-white);display:flex;align-items:center;justify-content:space-between;padding:0 var(--mp-space-4);position:relative}
+#mp-header{height:46px;flex-shrink:0;background:var(--mp-white);display:flex;align-items:center;justify-content:flex-start;padding:0 var(--mp-space-4);position:relative}
 #mp-header::after{content:'';position:absolute;left:0;right:0;bottom:-3px;height:3px;display:flex}
 .mp-role-chip{font:600 11px var(--mp-font-body);padding:4px 10px;border-radius:var(--mp-radius-pill)}
 .mp-role-chip.mp-am{background:var(--mp-purple-20);color:var(--mp-purple)}
@@ -811,9 +812,18 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 .hub-back:hover{background:#dbd7ed;border-color:#968ac1;color:#3f3374;text-decoration:none}
 .hub-back:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(85,69,150,.35)}
 .hub-back-chev{width:16px;height:16px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-.hub-back img{width:20px;height:20px;display:block;flex:0 0 auto}
+.hub-back img{display:none}
+/* The logo after the pill, as in every hub tool (shared/hub-back.css there):
+   the full logo at the hub header's 48px, just the mark on a narrow screen. */
+.tool-brand{display:flex;align-items:center;flex:0 0 auto}
+.tool-logo{display:block;height:48px;width:auto}
+.tool-logo-mark{display:none;width:28px;height:28px}
+.tool-divider{flex:0 0 auto;width:1px;height:28px;background:#d1d3d4}
+.mp-logo-mark{width:24px;height:24px;flex:0 0 auto;margin-right:8px}
+#mp-header .mp-role-chip{margin-left:auto}
+@media (max-width:759px){.tool-logo{display:none}.tool-logo-mark{display:block}.tool-divider,.app-title{display:none}}
 .hub-back-short{display:none}
-#mp-header .hub-back{margin-right:8px}
+#mp-header .hub-back{margin-right:10px}
 @media (max-width:420px){
   .hub-back{padding-right:11px}
   .hub-back-long{display:none}
@@ -841,11 +851,11 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 <div id="app" style="display:none">
   <header class="app-header">
     <div class="app-logo">
-      <img src="data:image/png;base64,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" alt="CMCHS Demo Equipment" style="height:40px;width:auto;object-fit:contain;display:block">
-      <a class="hub-back" href="https://internal.chsnz.co.nz/" aria-label="Back to the Internal Hub"><svg class="hub-back-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><img src="https://internal.chsnz.co.nz/brand/logo-mark.png" alt=""><span class="hub-back-long">Internal Hub</span><span class="hub-back-short">Hub</span></a>
+      <a class="hub-back" href="https://internal.chsnz.co.nz/" aria-label="Back to the Internal Hub"><svg class="hub-back-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="hub-back-long">Internal Hub</span><span class="hub-back-short">Hub</span></a>
+      <span class="tool-brand" aria-hidden="true"><img class="tool-logo" src="https://internal.chsnz.co.nz/brand/logo-full-colour.png" alt=""><img class="tool-logo-mark" src="https://internal.chsnz.co.nz/brand/logo-mark.png" alt=""></span><span class="tool-divider" aria-hidden="true"></span><span class="app-title">Demo equipment tracker</span>
     </div>
     <div class="header-right">
-      <span id="app-version" class="desktop-only" style="font-size:10px;color:var(--text3);margin-right:2px" title="App version — bumps with every deployed change"></span>
+      <span id="app-version" class="desktop-only" style="font-size:10px;color:var(--text3);margin:0 2px 0 8px" title="App version — bumps with every deployed change"></span>
       <button id="test-mode-toggle" class="btn btn-sm desktop-only" onclick="toggleTestMode()" style="display:none;font-size:10px;padding:3px 7px;margin-right:6px">🧪 Test Mode</button>
       <div class="sync-pill desktop-only"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Ready</span></div>
       <div class="nav-tabs desktop-only">
@@ -1136,9 +1146,9 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
           <option value="on-loan">On loan</option><option value="overdue">Overdue</option><option value="booked">Booked</option>
         </select>
         <!-- SELECTION ACTION BAR -->
-        <div id="selection-bar" style="display:none;align-items:center;gap:6px;padding:5px 10px;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:var(--radius);flex-wrap:wrap">
+        <div id="selection-bar" style="display:none;align-items:center;gap:6px;padding:5px 10px;background:var(--accent-light);border:1px solid #cac4e3;border-radius:var(--radius);flex-wrap:wrap">
           <span id="selection-label" style="font-size:12px;font-weight:600;color:var(--accent);white-space:nowrap">0 selected</span>
-          <div style="width:1px;height:16px;background:#bfdbfe;flex-shrink:0"></div>
+          <div style="width:1px;height:16px;background:#cac4e3;flex-shrink:0"></div>
           <button class="btn btn-sm btn-primary" onclick="issueLoanFromSelection()">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>Add to Basket
           </button>
@@ -1181,7 +1191,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
             <div class="basket-header">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--accent)"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
               <span class="basket-title" id="basket-title">Loan Basket</span>
-              <span id="basket-count" style="font-size:11px;color:var(--accent);font-weight:600;background:#dbeafe;padding:2px 7px;border-radius:20px"></span>
+              <span id="basket-count" style="font-size:11px;color:var(--accent);font-weight:600;background:#dbd7ed;padding:2px 7px;border-radius:20px"></span>
             </div>
             <div class="basket-items-scroll" id="basket-items-list"></div>
             <div class="basket-footer">
@@ -1370,7 +1380,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
         <p class="subtitle">Import from Excel or CSV. Existing items matched by CHS Asset Number will be updated; new ones added. Saves automatically.</p>
         <div id="import-auth-wrap" style="text-align:center;padding:20px 0;margin-bottom:16px">
         <div style="font-size:14px;color:var(--text2);margin-bottom:10px">Enter admin password to access import</div>
-        <input type="password" id="import-pw" placeholder="Admin password" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:280px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockImport()">
+        <input type="password" id="import-pw" placeholder="Admin password" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:14px;outline:none;width:100%;max-width:280px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockImport()">
         <button class="btn btn-primary" onclick="unlockImport()">Unlock Import</button>
         <div id="import-pw-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
       </div>
@@ -1570,7 +1580,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px">This will remove the item from the main database and move it to the Sold / Retired tab.</div>
     <div class="form-group" style="margin-bottom:12px">
       <label>Reason</label>
-      <select id="retire-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      <select id="retire-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         <option value="">Optional…</option>
         <option>Sold</option>
         <option>Retired / End of life</option>
@@ -1582,7 +1592,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     </div>
     <div class="form-group" style="margin-bottom:16px">
       <label>Notes</label>
-      <textarea id="retire-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical" placeholder="e.g. Sold to Southland Hospital, invoice #1234"></textarea>
+      <textarea id="retire-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;resize:vertical" placeholder="e.g. Sold to Southland Hospital, invoice #1234"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeRetireModal()">Cancel</button>
@@ -1601,7 +1611,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Serial number, dates and other equipment details are locked once retired — only the reason and notes can be corrected here.</div>
     <div class="form-group" style="margin-bottom:12px">
       <label>Reason</label>
-      <select id="retired-edit-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      <select id="retired-edit-reason" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         <option value="">Optional…</option>
         <option>Sold</option>
         <option>Retired / End of life</option>
@@ -1613,11 +1623,11 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     </div>
     <div class="form-group" style="margin-bottom:12px">
       <label>Retired Notes</label>
-      <textarea id="retired-edit-retirednotes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical" placeholder="e.g. Sold to Southland Hospital, invoice #1234"></textarea>
+      <textarea id="retired-edit-retirednotes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;resize:vertical" placeholder="e.g. Sold to Southland Hospital, invoice #1234"></textarea>
     </div>
     <div class="form-group" style="margin-bottom:16px">
       <label>Notes</label>
-      <textarea id="retired-edit-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
+      <textarea id="retired-edit-notes" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeRetiredEditModal()">Cancel</button>
@@ -1647,7 +1657,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <!-- Target loan dropdown (active loans) -->
     <div id="reassign-target-section" style="display:none;margin-bottom:16px">
       <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Move to</label>
-      <select id="reassign-target-loan" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      <select id="reassign-target-loan" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         <option value="">— Select loan —</option>
       </select>
     </div>
@@ -1656,48 +1666,48 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div class="form-group" style="margin:0;grid-column:1/-1">
           <label>Event and/or Customer Name</label>
-          <input type="text" id="reassign-loan-to" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          <input type="text" id="reassign-loan-to" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         </div>
         <div class="form-group" style="margin:0;grid-column:1/-1">
           <label>Location / Address</label>
-          <input type="text" id="reassign-location" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          <input type="text" id="reassign-location" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         </div>
         <div class="form-group" style="margin:0">
           <label>Start Date</label>
-          <input type="date" id="reassign-start-date" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          <input type="date" id="reassign-start-date" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         </div>
         <div class="form-group" style="margin:0">
           <label>End Date</label>
-          <input type="date" id="reassign-end-date" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          <input type="date" id="reassign-end-date" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         </div>
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Contact Number</label>
-        <input type="text" id="reassign-contact" placeholder="e.g. 021 123 4567" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <input type="text" id="reassign-contact" placeholder="e.g. 021 123 4567" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Account Manager</label>
-        <select id="reassign-am-select" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <select id="reassign-am-select" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
           <option value="">Select account manager...</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Account Manager Email</label>
-        <input type="email" id="reassign-am-email" placeholder="Email address" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <input type="email" id="reassign-am-email" placeholder="Email address" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Demo Type</label>
-        <select id="reassign-demo-type" onchange="onDemoTypeSelectChange(this)" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+        <select id="reassign-demo-type" onchange="onDemoTypeSelectChange(this)" style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
           <option value="">Select demo type…</option>
         </select>
       </div>
       <div class="form-group" style="margin-bottom:8px">
         <label>Notes</label>
-        <textarea id="reassign-notes" rows="2" placeholder="Loan notes..." style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
+        <textarea id="reassign-notes" rows="2" placeholder="Loan notes..." style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
       </div>
       <div class="form-group" style="margin-bottom:16px">
         <label>Shipping Details</label>
-        <textarea id="reassign-shipping" rows="2" placeholder="Shipping details..." style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
+        <textarea id="reassign-shipping" rows="2" placeholder="Shipping details..." style="width:100%;padding:9px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
       </div>
     </div>
     <div class="modal-footer" style="flex-direction:column;gap:8px;align-items:stretch">
@@ -1707,7 +1717,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span id="reassign-confirm-label">Move to Loan</span>
         </button>
       </div>
-      <button id="reassign-new-loan-btn" onclick="reassignCreateNewLoan()" style="display:none;width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--radius);background:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--accent);cursor:pointer;text-align:center">
+      <button id="reassign-new-loan-btn" onclick="reassignCreateNewLoan()" style="display:none;width:100%;padding:9px;border:1px dashed var(--border2);border-radius:var(--radius);background:none;font-family:'Source Sans 3',sans-serif;font-size:13px;color:var(--accent);cursor:pointer;text-align:center">
         + Create new loan with these items
       </button>
     </div>
@@ -1749,11 +1759,11 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px" id="extend-subtitle"></div>
     <div class="form-group" style="margin-bottom:16px">
       <label>New End Date</label>
-      <input type="date" id="extend-date" style="width:100%;padding:10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none">
+      <input type="date" id="extend-date" style="width:100%;padding:10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:14px;outline:none">
     </div>
     <div class="form-group" style="margin-bottom:16px">
       <label>Reason (optional)</label>
-      <input type="text" id="extend-reason" placeholder="e.g. Customer requested extension" style="width:100%;padding:10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+      <input type="text" id="extend-reason" placeholder="e.g. Customer requested extension" style="width:100%;padding:10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeExtendModal()">Cancel</button>
@@ -1772,7 +1782,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <div style="font-size:13px;color:var(--text2);margin-bottom:16px;white-space:pre-line" id="longterm-subtitle"></div>
     <div class="form-group" style="margin-bottom:16px;display:none" id="longterm-date-group">
       <label>New End Date</label>
-      <input type="date" id="longterm-date" style="width:100%;padding:10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none">
+      <input type="date" id="longterm-date" style="width:100%;padding:10px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:14px;outline:none">
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeLongTermModal()">Cancel</button>
@@ -1790,13 +1800,13 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     </div>
     <div id="history-mgmt-auth" style="text-align:center;padding:20px 0">
       <div style="font-size:14px;color:var(--text2);margin-bottom:12px">Enter admin password to manage history</div>
-      <input type="password" id="hmgmt-pw" placeholder="Admin password" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:280px;display:block;margin:0 auto 12px" onkeydown="if(event.key==='Enter')historyMgmtAuth()">
+      <input type="password" id="hmgmt-pw" placeholder="Admin password" style="padding:10px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:14px;outline:none;width:100%;max-width:280px;display:block;margin:0 auto 12px" onkeydown="if(event.key==='Enter')historyMgmtAuth()">
       <button class="btn btn-primary" onclick="historyMgmtAuth()">Unlock</button>
       <div id="hmgmt-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
     </div>
     <div id="history-mgmt-content" style="display:none">
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-        <input type="text" id="hmgmt-search" placeholder="Search…" oninput="renderHistoryMgmt()" style="padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;flex:1;min-width:160px">
+        <input type="text" id="hmgmt-search" placeholder="Search…" oninput="renderHistoryMgmt()" style="padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;flex:1;min-width:160px">
         <button class="btn btn-sm" onclick="selectAllHistoryMgmt(true)">Select all</button>
         <button class="btn btn-sm" onclick="selectAllHistoryMgmt(false)">Deselect all</button>
         <button class="btn btn-sm btn-red" onclick="deleteSelectedHistory()">Delete selected</button>
@@ -1817,7 +1827,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
     <!-- AUTH -->
     <div id="am-auth-section" style="text-align:center;padding:12px 0 8px">
       <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Enter admin password to manage your staff</div>
-      <input type="password" id="am-pw-input" placeholder="Admin password" style="padding:9px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;width:100%;max-width:260px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockAMModal()">
+      <input type="password" id="am-pw-input" placeholder="Admin password" style="padding:9px 14px;border:1.5px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:14px;outline:none;width:100%;max-width:260px;display:block;margin:0 auto 10px" onkeydown="if(event.key==='Enter')unlockAMModal()">
       <button class="btn btn-primary" onclick="unlockAMModal()">Unlock</button>
       <div id="am-pw-err" style="color:var(--red);font-size:13px;margin-top:8px;display:none">Incorrect password</div>
     </div>
@@ -1829,14 +1839,14 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M11 18h2"/></svg>A–Z
         </button>
       </div>
-      <input type="text" id="am-search" placeholder="Search by name or email..." oninput="renderAMList()" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;margin-bottom:8px">
+      <input type="text" id="am-search" placeholder="Search by name or email..." oninput="renderAMList()" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;margin-bottom:8px">
       <div id="am-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:300px;overflow-y:auto"></div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">Add New</div>
         <div style="display:flex;flex-direction:column;gap:8px">
-          <input type="text" id="am-new-name" placeholder="Full name" style="padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('am-new-email').focus()">
+          <input type="text" id="am-new-name" placeholder="Full name" style="padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')document.getElementById('am-new-email').focus()">
           <div style="display:flex;gap:8px">
-            <input type="email" id="am-new-email" placeholder="Email address" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addAccountManager()">
+            <input type="email" id="am-new-email" placeholder="Email address" style="flex:1;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none" onkeydown="if(event.key==='Enter')addAccountManager()">
             <button class="btn btn-primary" onclick="addAccountManager()">Add</button>
           </div>
         </div>
@@ -1863,20 +1873,20 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       <div style="display:flex;flex-direction:column;gap:10px">
         <div>
           <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Send to</label>
-          <select id="test-push-am" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onchange="updateTestPushDeviceNote()"></select>
+          <select id="test-push-am" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none" onchange="updateTestPushDeviceNote()"></select>
           <div id="test-push-device-note" style="font-size:12px;color:var(--text3);margin-top:4px"></div>
         </div>
         <div>
           <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Scenario</label>
-          <select id="test-push-scenario" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none" onchange="applyTestPushScenario()"></select>
+          <select id="test-push-scenario" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none" onchange="applyTestPushScenario()"></select>
         </div>
         <div>
           <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Title</label>
-          <input type="text" id="test-push-title" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+          <input type="text" id="test-push-title" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
         </div>
         <div>
           <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Body</label>
-          <textarea id="test-push-body" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
+          <textarea id="test-push-body" rows="2" style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;resize:vertical"></textarea>
         </div>
         <button class="btn btn-primary" id="test-push-send-btn" onclick="submitTestPush()" style="margin-top:4px">Send Test Push</button>
       </div>
@@ -2014,8 +2024,8 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
       <button class="modal-close" onclick="closeAuditLog()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div style="padding:10px 0 8px;display:flex;gap:8px;flex-wrap:wrap">
-      <input id="audit-search" type="text" placeholder="Search…" oninput="renderAuditLog()" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
-      <select id="audit-filter-cat" onchange="renderAuditLog()" style="padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
+      <input id="audit-search" type="text" placeholder="Search…" oninput="renderAuditLog()" style="flex:1;min-width:160px;padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
+      <select id="audit-filter-cat" onchange="renderAuditLog()" style="padding:7px 10px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
         <option value="">All categories</option>
         <option value="loans">Loans</option>
         <option value="database">Database</option>
@@ -2092,7 +2102,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 200;
+const APP_VERSION = 201;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
@@ -2913,20 +2923,20 @@ function _auditBadge(type) {
     loan_created:     'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
     loan_deleted:     'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     scheduled_deleted:'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
-    loan_extended:    'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    loan_extended:    'background:#ece9f6;color:#554596;border:1px solid #cac4e3',
     loan_longterm_on: 'background:var(--lt-mid);color:var(--lt);border:1px solid var(--lt-border)',
     loan_longterm_off:'background:var(--lt-mid);color:var(--lt);border:1px solid var(--lt-border)',
     items_returned:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
     item_removed:     'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
-    items_added:      'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    items_added:      'background:#ece9f6;color:#554596;border:1px solid #cac4e3',
     orphan_recovered: 'background:#fffbeb;color:#d97706;border:1px solid #fde68a',
     orphan_deleted:   'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     items_transferred:'background:#ede9fe;color:#6d28d9;border:1px solid #c4b5fd',
     simpro_created:   'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
-    simpro_updated:   'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    simpro_updated:   'background:#ece9f6;color:#554596;border:1px solid #cac4e3',
     simpro_closed:    'background:var(--surface2);color:var(--text2);border:1px solid var(--border)',
     asset_added:      'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
-    asset_edited:     'background:#eff4ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    asset_edited:     'background:#ece9f6;color:#554596;border:1px solid #cac4e3',
     asset_deleted:    'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
     asset_retired:    'background:#fdf4ff;color:#7c3aed;border:1px solid #e9d5ff',
     upcoming_loan_deleted:  'background:#fef2f2;color:#dc2626;border:1px solid #fecaca',
@@ -3072,9 +3082,9 @@ function markLoanSeen(batchId, loanTo) {
 function _demoTypeBadge(demoType) {
   if (!demoType) return '';
   const isClinical = demoType === 'Clinical Trial';
-  const bg     = isClinical ? '#fef2f2' : '#eff4ff';
-  const color  = isClinical ? '#dc2626' : '#1d4ed8';
-  const border = isClinical ? '#fecaca' : '#bfdbfe';
+  const bg     = isClinical ? '#fef2f2' : '#ece9f6';
+  const color  = isClinical ? '#dc2626' : '#554596';
+  const border = isClinical ? '#fecaca' : '#cac4e3';
   const icon   = isClinical ? '&#x1F52C;' : '&#x26A1;';
   return ' · <span style="background:' + bg + ';color:' + color + ';border:1px solid ' + border + ';border-radius:4px;padding:1px 7px;font-size:11px;font-weight:600;white-space:nowrap">' + icon + ' ' + esc(demoType) + '</span>';
 }
@@ -6636,7 +6646,7 @@ function renderHistoryMgmt() {
     <div class="br-item ${_histMgmtChecked[h.id]?'checked':''}" onclick="toggleHistoryMgmt('${h.id}')">
       <div class="br-checkbox">${_histMgmtChecked[h.id]?'✓':''}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:500;font-family:'DM Mono',monospace">${h.chsAssetNo||'—'} <span style="font-family:'DM Sans',sans-serif;font-weight:400;color:var(--text2)">${h.model||''}</span></div>
+        <div style="font-size:12px;font-weight:500;font-family:'DM Mono',monospace">${h.chsAssetNo||'—'} <span style="font-family:'Source Sans 3',sans-serif;font-weight:400;color:var(--text2)">${h.model||''}</span></div>
         <div style="font-size:11px;color:var(--text2)">${aL[h.action]||h.action} ${h.loanTo?'→ '+h.loanTo:''} · ${h.ts?formatDisplayDateTime(h.ts):''}</div>
       </div>
       <div style="font-size:11px;color:${_histMgmtChecked[h.id]?'var(--red)':'var(--text3)'}">${_histMgmtChecked[h.id]?'Delete':''}</div>
@@ -6985,7 +6995,7 @@ function generateLoanDoc(loanItems, loanInfo, savedRows, savedExtra) {
             </table>
           </td>
           <td style="border:1px solid #ccc;padding:12px 16px;width:44%;vertical-align:middle">
-            <div style="color:#1d4ed8;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
+            <div style="color:#554596;font-weight:700;font-size:12px;text-align:center">Please ensure this form accompanies<br>demo stock throughout trial and<br>is returned to Connected Healthcare</div>
             <div style="color:#dc2626;font-weight:700;font-size:11px;text-align:center;margin-top:6px">Check all units have current ESC</div>
           </td>
           <td style="border:1px solid #ccc;padding:8px 16px;width:28%;vertical-align:top">
@@ -9756,15 +9766,15 @@ function renderAMList() {
           <div style="flex:1">
             <input type="text" value="${esc(am.name)}" placeholder="Name"
               onchange="updateAMField(${i},'name',this.value)"
-              style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none">
+              style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none">
           </div>
           <button class="btn btn-sm btn-red" onclick="removeAccountManager(${i})">Remove</button>
         </div>
         <input type="email" value="${esc(am.email||'')}" placeholder="Email address"
           onchange="updateAMField(${i},'email',this.value)"
-          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;margin-bottom:6px">
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;margin-bottom:6px">
         <select onchange="updateAMField(${i},'role',this.value)"
-          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
+          style="width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:var(--radius);font-family:'Source Sans 3',sans-serif;font-size:13px;outline:none;background:var(--surface);color:var(--text)">
           <option value="am"${role==='am'?' selected':''}>Account Manager</option>
           <option value="service"${role==='service'?' selected':''}>Service &amp; Projects</option>
         </select>
@@ -12610,7 +12620,8 @@ function startAutoSync() {
   <!-- APP SHELL -->
   <div id="mp-shell" style="display:none;flex-direction:column;height:100%">
     <div id="mp-header">
-      <a class="hub-back" href="https://internal.chsnz.co.nz/" aria-label="Back to the Internal Hub"><svg class="hub-back-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><img src="https://internal.chsnz.co.nz/brand/logo-mark.png" alt=""><span class="hub-back-long">Internal Hub</span><span class="hub-back-short">Hub</span></a>
+      <a class="hub-back" href="https://internal.chsnz.co.nz/" aria-label="Back to the Internal Hub"><svg class="hub-back-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="hub-back-long">Internal Hub</span><span class="hub-back-short">Hub</span></a>
+      <img class="mp-logo-mark" src="https://internal.chsnz.co.nz/brand/logo-mark.png" alt="" aria-hidden="true">
       <div class="mp-h3" id="mp-header-title">Today</div>
       <div class="mp-role-chip mp-am" id="mp-role-chip">Your loans</div>
     </div>
