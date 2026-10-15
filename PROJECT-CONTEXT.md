@@ -48,8 +48,19 @@ SimproSync's relayed API calls.
 
 **Secrets are Script Properties, not constants** (Apps Script → Project Settings):
 - `SIMPRO_API_KEY` — read via `simproKey_()`
-- `FIREBASE_SCHEDULE_PROJECT_ID` — the staff-schedule Firebase project id, used only
-  to validate SimproSync callers' tokens
+- `FIREBASE_SCHEDULE_PROJECT_ID` — the staff-schedule Firebase project id, used
+  to validate hub/SimproSync callers' tokens, and for demo reminders on hub phones
+  (below)
+
+**Demo reminders go to hub phones** (since 2026-10-15). Phones turned on at
+internal.chsnz.co.nz are registered with the *staff schedule's* Firebase project
+(`users/{uid}.fcmTokens`), so `sendPushToPerson_` reads that list and sends through
+that project ("HUB PUSH" in `Code.js`), with links into `internal.chsnz.co.nz/demo/`.
+Anyone with no hub phone still gets reminders on phones set up at demo.chsnz.co.nz.
+It runs on the chs-equipment service account, which needs **Firebase Cloud Messaging
+API Admin** and **Cloud Datastore Viewer** in the staff schedule's Google Cloud
+project's IAM; without them everything falls back to the demo.chsnz.co.nz phones.
+`checkHubPush()` (run in the editor) says whether the roles are in place.
 
 ### ⚠️ `clasp push` does NOT make code live
 This cost hours, twice. Pushing updates the project source; the `/exec` URL keeps serving
