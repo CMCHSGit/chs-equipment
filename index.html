@@ -2092,7 +2092,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 199;
+const APP_VERSION = 200;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
@@ -5376,6 +5376,8 @@ async function submitBatchLoan(opts) {
     writeAudit('loan_created',
       devicesToLoanAll.length + ' item' + (devicesToLoanAll.length !== 1 ? 's' : '') + ' loaned to ' + loanTo + (location ? ' — ' + location : ''),
       { loanTo, location, startDate, endDate, batchId, items: devicesToLoanAll.map(e => e.CHSAssetNo) });
+    notifyProjectTrackerOfLoan({ batchId, loanTo, location, startDate, endDate,
+      items: devicesToLoanAll.map(e => ({ CHSAssetNo: e.CHSAssetNo, Model: e.Model || '' })) });
     // If this loan was started from "Create new loan" in the reassign flow,
     // update the original Simpro job to reflect the items that stayed behind
     if (window._reassignPendingSource) {
@@ -6375,6 +6377,38 @@ async function sendLoanConfirmationEmail(loanItems, loanInfo, amEmail, amName) {
 // Handle return/extend/reassign deep links — tapped from a push notification
 // (and, while EmailJS's loan confirmation email still links here too, from
 // that email's manage/return/extend links).
+// The project tracker opens the hub's copy of this page (/demo/, same site)
+// in a pop-up to make the loan for one of its jobs:
+//   /demo/?newLoan=1&ref=<job id>&loanTo=…&location=…&start=…&end=…&notes=…
+// This fills in the batch loan form; devices are picked as usual (Browse
+// Database). When the loan is confirmed, submitBatchLoan() posts
+// { type: 'chs-demo-loan-created', ref, batchId, … } back to the page that
+// opened it, which links the job's equipment to the loan. Nothing else
+// changes: it is the normal loan form, with the normal checks.
+function openLoanFromProjectTracker(params) {
+  window._ptLoanRef = params.get('ref') || null;
+  switchTab('scan');
+  setScanMode('batch');
+  const set = (id, v) => { const el = document.getElementById(id); if (el && v) el.value = v; };
+  set('b-loan-to', params.get('loanTo'));
+  set('b-location', params.get('location'));
+  set('b-start-date', params.get('start'));
+  set('b-end-date', params.get('end'));
+  set('b-notes', params.get('notes'));
+  showToast('info', 'Loan for the project tracker: pick the devices with Browse Database, then Confirm Loan.');
+}
+
+// Tells the project tracker that opened this page (see above) which loan was
+// made. Same-site only: the message never goes to another website.
+function notifyProjectTrackerOfLoan(info) {
+  if (!window._ptLoanRef) return;
+  const msg = Object.assign({ type: 'chs-demo-loan-created', ref: window._ptLoanRef }, info);
+  window._ptLoanRef = null;
+  [window.parent !== window ? window.parent : null, window.opener].forEach(w => {
+    try { if (w) w.postMessage(msg, location.origin); } catch (e) {}
+  });
+}
+
 function handleReturnLink() {
   const params = new URLSearchParams(window.location.search);
   if (!params.toString()) return; // nothing to handle
@@ -6388,6 +6422,9 @@ function handleReturnLink() {
   // Handle direct tab link e.g. ?tab=loans
   const tabParam = params.get('tab');
   if (tabParam) { switchTab(tabParam); return; }
+  // From the project tracker (internal.chsnz.co.nz/projects/): start a new
+  // loan for one of its jobs, filled in — see openLoanFromProjectTracker().
+  if (params.get('newLoan') === '1') { openLoanFromProjectTracker(params); return; }
   // Deep link from the scheduled stuck-loan reminder push (see
   // .gas-proxy/Code.js sendStuckLoanReminders()) — jumps straight into the
   // Reassign modal, pre-filled, same as clicking the in-app toast.
