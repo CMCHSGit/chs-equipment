@@ -2092,7 +2092,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 196;
+const APP_VERSION = 197;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
@@ -11166,7 +11166,11 @@ async function confirmReassignAM() {
   const remainingItems = g.items.filter(i => !checkedAssetNos.has(i.CHSAssetNo));
 
   const isUpcoming = targetVal.startsWith('upcoming:');
-  const targetKey  = decodeURIComponent(targetVal.slice(targetVal.indexOf(':') + 1));
+  // Not decoded: the option values are written as _loanKey() verbatim, which
+  // is already URI-encoded, and _loanGroupMap is keyed by that same encoded
+  // form — decoding turned every %7C back into "|" and made every Active or
+  // Scheduled target come back "Target loan not found".
+  const targetKey  = targetVal.slice(targetVal.indexOf(':') + 1);
 
   let targetBatchId = null, targetLoanData = {}, targetGroupItems = [];
   if (isUpcoming) {
