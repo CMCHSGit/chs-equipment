@@ -2092,7 +2092,7 @@ html.mp-suppress-loan-doc #loan-doc-modal{position:fixed!important;left:-9999px!
 // ── CONFIG ─────────────────────────────────────────────────────────────
 // Bump this by 1 on every change that gets pushed, so it's visible (top-right of header)
 // whether a browser tab is running the latest code or a stale cached copy.
-const APP_VERSION = 197;
+const APP_VERSION = 198;
 let APP_PASSWORD   = null; // loaded from Firebase /config.json
 const FB_URL = 'https://chs-equipment-default-rtdb.asia-southeast1.firebasedatabase.app';
 
@@ -5008,16 +5008,35 @@ function isStartingSoon(today, startDate, island) {
 // same customer/location/end date — the signature of "someone booked a new
 // loan without realising they could add items to an existing one", which
 // silently produces two loans that look identical but don't share a
-// BatchID (see submitBatchLoan()'s warning below). Reads equipment/
+// BatchID (see submitBatchLoan()'s block below). Reads equipment/
 // upcomingLoans directly rather than window._loanGroups, which is only ever
-// as fresh as the last renderLoans().
-function _findExistingLoanMatch(loanTo, location, endDate) {
+// as fresh as the last renderLoans(); submitBatchLoan() also passes in a
+// fresh copy of both from Firebase, so a second window opened before the
+// first loan was made still sees it.
+function _findExistingLoanMatch(loanTo, location, endDate, eqList, upList) {
+  eqList = eqList || equipment; upList = upList || upcomingLoans;
   const lt = loanTo.trim().toLowerCase(), loc = location.trim().toLowerCase();
-  const activeMatch = equipment.some(e => e.OnLoanTo && e.Returned !== 'Yes' &&
+  const activeMatch = eqList.some(e => e && e.OnLoanTo && e.Returned !== 'Yes' &&
     e.OnLoanTo.trim().toLowerCase() === lt && (e.Location || '').trim().toLowerCase() === loc && e.LoanEndDate === endDate);
   if (activeMatch) return true;
-  return upcomingLoans.some(u => (TEST_MODE || !isTestBatch(u.id)) &&
-    u.loanTo.trim().toLowerCase() === lt && (u.location || '').trim().toLowerCase() === loc && u.endDate === endDate);
+  return upList.some(u => u && (TEST_MODE || !isTestBatch(u.id)) &&
+    (u.loanTo || '').trim().toLowerCase() === lt && (u.location || '').trim().toLowerCase() === loc && u.endDate === endDate);
+}
+
+// Fresh equipment/upcomingLoans straight from Firebase, for the duplicate
+// check above. Falls back to the in-memory copies if offline or slow, so a
+// bad connection never blocks a loan on its own.
+async function _fetchLiveLoanState() {
+  let eqList = equipment, upList = upcomingLoans;
+  try {
+    const [dr, ur] = await Promise.all([
+      fetchWithTimeout(FB_URL + '/data/equipment.json', {}, 6000),
+      fetchWithTimeout(FB_URL + '/upcomingLoans.json', {}, 6000)
+    ]);
+    if (dr.ok) { const d = await dr.json(); if (d) eqList = Array.isArray(d) ? d : Object.values(d); }
+    if (ur.ok) { const u = await ur.json(); upList = u ? Object.values(u) : []; }
+  } catch (e) { /* use the in-memory copies */ }
+  return { eqList, upList };
 }
 
 // Shared by doLoan() (inside submitBatchLoan), _doBasketAddToLoan() and
@@ -5102,21 +5121,25 @@ async function submitBatchLoan(opts) {
     if (!batchIslandCheck) { showErr('Please select the shipping Island (North or South) — this determines how much notice we get for shipping.'); return; }
   }
 
-  // Warn (don't block) when a loan for the exact same customer/location/end
-  // date already exists — this is exactly what happens when someone books a
-  // new loan without realising they could "Add items" to an existing one
-  // instead, and it silently produces two loans that look identical but
-  // don't share a BatchID, so they never merge into one card. Checked
-  // directly against the live equipment/upcomingLoans arrays rather than
-  // window._loanGroups, which is only ever as fresh as the last renderLoans().
+  // Block when a loan for the exact same customer/location/end date already
+  // exists — this is exactly what happens when someone books a new loan
+  // without realising they could "Add items" to an existing one instead, and
+  // it produces two loans that look identical but don't share a BatchID, so
+  // they never merge into one card. It used to be an OK/Cancel warning, and
+  // got clicked through (5 Oct 2026: a 4-item loan, then a 7-item loan of
+  // the same 4 plus 3 more a minute later). Checked against a fresh copy from Firebase, not just this
+  // window's, so a second window opened before the first loan still sees it.
   // Skipped for long-term loans — the match is keyed partly on end date, and
   // every long-term loan has a blank one, so this would otherwise fire
   // against any other long-term loan for the same customer/location (e.g.
   // topping up an account manager's existing long-term gear, which is a
   // normal, expected thing to do here, not a mistake to warn about).
-  if (!isLongTerm && _findExistingLoanMatch(loanTo, location, endDate)) {
-    const proceed = confirm('A loan for "' + loanTo + '" at this location, ending ' + formatDisplayDate(endDate) + ', already exists.\n\nIf these devices belong on that loan, cancel this and use "Add items" on the existing loan instead — creating a second loan with the same details won\'t merge with it.\n\nClick OK to create this as a separate new loan anyway.');
-    if (!proceed) { if (_submitBtn) { _submitBtn.disabled = false; _submitBtn.textContent = 'Confirm Loan'; } return; }
+  if (!isLongTerm) {
+    const { eqList, upList } = await _fetchLiveLoanState();
+    if (_findExistingLoanMatch(loanTo, location, endDate, eqList, upList)) {
+      showErr('A loan to <b>' + esc(loanTo) + '</b> at <b>' + esc(location) + '</b>, ending ' + esc(formatDisplayDate(endDate)) + ', already exists. Open it in Loans and use <b>Add items</b> instead — a second loan with the same details would not merge with it.');
+      return;
+    }
   }
 
   const allFound = batchDevices.filter(d => equipment.find(e => e.CHSAssetNo && e.CHSAssetNo.trim().toLowerCase() === d.value.toLowerCase()));
