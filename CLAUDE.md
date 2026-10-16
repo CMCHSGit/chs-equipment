@@ -36,9 +36,11 @@ Several people work on these repos with Claude, often at the same time.
 - **Apps Script: `clasp push` does not make code live.** It must be followed by
   `clasp deploy -i <deployment id>` (see PROJECT-CONTEXT.md §2), from an
   up-to-date checkout, then check the live `/exec` URL. This has bitten twice.
-- **Database and Firestore rules are not deployed by a push.** `database.rules.json`
-  and `cmchs-staff-schedule/firestore.rules` are pasted into the Firebase console
-  by someone with access. Say so when a change needs it.
+- **Database rules moved to the hub repo on 16 Oct 2026:**
+  `cmchs-internal-hub/rules/database.rules.json` (this tracker's Realtime
+  Database) and `rules/firestore.rules`. Edit them there. A push does not
+  publish them: they are pasted into the Firebase console by someone with
+  access. Say so when a change needs it.
 - **Ask before anything people would notice and can't undo:** deleting data,
   changing live rules, rotating keys, anything that signs people out.
 
