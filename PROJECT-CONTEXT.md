@@ -17,9 +17,9 @@ Script Property. It is still in git history and needs rotating — see Open item
 | Staff schedule | schedule.chsnz.co.nz | `cmchs-staff-schedule/` (React+Vite) | Firebase Firestore/Auth/FCM |
 | SimproSync | schedule.chsnz.co.nz/simprosync/ | `cmchs-staff-schedule/simprosync/` | Simpro, via proxy |
 | Ansur PVT → PDF | schedule.chsnz.co.nz/ansurtopdf/ | `cmchs-staff-schedule/public/ansurtopdf/index.html` | none (all client-side) |
-| Simpro proxy + push reminders | Apps Script web app | `chs-equipment/.gas-proxy/` | — |
-| Daily Firebase→Drive backup | Apps Script | `chs-equipment/.gas-backup/` | — |
-| Tile location sync | GitHub Actions (daily 07:00 NZST) | `chs-equipment/scripts/tile_sync.py` | Firebase RTDB |
+| Simpro proxy + push reminders | Apps Script web app | `cmchs-internal-hub/backend/apps-script/proxy/` (was `.gas-proxy/` here) | — |
+| Daily Firebase→Drive backup | Apps Script | `cmchs-internal-hub/backend/apps-script/backup/` (was `.gas-backup/`) | — |
+| Tile location sync | GitHub Actions (daily 07:00 NZST) | `cmchs-internal-hub/backend/tile-sync/tile_sync.py` (was `scripts/`) | Firebase RTDB |
 | Intranet hub | internal.chsnz.co.nz | `cmchs-internal-hub` (separate repo) | Firebase Auth |
 
 Both repos are **public** on GitHub (`CMCHSGit`), deployed by GitHub Pages.
@@ -252,6 +252,10 @@ edited, shipping a page where nothing responded. Check all blocks.
 ---
 
 ## 6. Tile location sync
+
+> **Moved 16 Oct 2026** to `cmchs-internal-hub/backend/tile-sync/`, run by that repo's
+> `.github/workflows/tile-sync.yml` (secrets `TILE_EMAIL`, `TILE_PASSWORD`,
+> `CHS_EQUIPMENT_SERVICE_ACCOUNT`). Paths below that say `scripts/` mean that folder now.
 
 Was: BlueStacks Android emulator + ADB UI scraping, scrolling the Tile app once a day on
 someone's laptop. Now: `scripts/tile_sync.py` calls Tile's backend directly via

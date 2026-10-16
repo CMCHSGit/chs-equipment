@@ -1,8 +1,8 @@
 # CMCHS internal tools — read this first
 
-This repo is the demo equipment tracker (`index.html`, served at demo.chsnz.co.nz),
-the Simpro proxy and nightly backup (Apps Script, `.gas-proxy/` and `.gas-backup/`),
-and Tile sync (`scripts/tile_sync.py`). The staff schedule is a separate repo
+This repo is the demo equipment tracker (`index.html`, served at demo.chsnz.co.nz).
+The Simpro proxy, nightly backup and Tile sync it used to hold now live in
+`cmchs-internal-hub/backend/`, and its database rules in `cmchs-internal-hub/rules/`. The staff schedule is a separate repo
 cloned inside it (`cmchs-staff-schedule/`); the intranet hub is a third repo,
 `cmchs-internal-hub`, normally cloned next to this one.
 
@@ -37,9 +37,8 @@ Several people work on these repos with Claude, often at the same time.
   `cmchs-internal-hub/backend/apps-script/`. Edit and deploy them there
   (`backend/README.md`): `clasp push` does not make code live, `clasp deploy -i`
   from an up-to-date checkout does, then check the live `/exec` URL.
-- **Tile sync is moving too** (`cmchs-internal-hub/backend/tile-sync/`). The copy
-  here (`scripts/`, `.github/workflows/tile-sync.yml`) only keeps running until
-  the hub's is switched on; don't change it, change the hub's.
+- **Tile sync moved to the hub repo on 16 Oct 2026** (`cmchs-internal-hub/backend/tile-sync/`
+  and its workflow there); it no longer runs from here.
 - **Database rules moved to the hub repo on 16 Oct 2026:**
   `cmchs-internal-hub/rules/database.rules.json` (this tracker's Realtime
   Database) and `rules/firestore.rules`. Edit them there. A push does not
