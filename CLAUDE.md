@@ -6,6 +6,11 @@ and Tile sync (`scripts/tile_sync.py`). The staff schedule is a separate repo
 cloned inside it (`cmchs-staff-schedule/`); the intranet hub is a third repo,
 `cmchs-internal-hub`, normally cloned next to this one.
 
+**Everything is being merged into one app in `cmchs-internal-hub`:** read its
+`INTEGRATION-PLAN.md` first. As pieces move there (rules, Apps Script, the
+tracker itself), this repo stops being where they are changed; the plan's
+checklist says what has moved.
+
 Before changing anything, read `PROJECT-CONTEXT.md` (how the systems fit
 together, and the traps already hit) and `TODO.md`.
 
