@@ -42,6 +42,10 @@ via Firebase Auth. `users/{uid}.role == 'admin'` gates admin features.
 
 ## 2. The Simpro proxy — and the trap that hid a whole feature
 
+> **Moved 16 Oct 2026:** the proxy is now `cmchs-internal-hub/backend/apps-script/proxy`
+> and the backup `backend/apps-script/backup` (same Apps Script projects). Deploy from
+> there: `backend/README.md`. Paths below that say `.gas-proxy/` mean that folder now.
+
 `.gas-proxy/Code.js` is an Apps Script web app (`ANYONE_ANONYMOUS`). It handles
 Simpro job create/update/close, push reminders on time-driven triggers, and now
 SimproSync's relayed API calls.

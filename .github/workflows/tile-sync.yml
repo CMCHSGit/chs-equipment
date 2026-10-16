@@ -1,3 +1,7 @@
+# FROZEN, being retired: Tile sync moved to cmchs-internal-hub (backend/tile-sync,
+# .github/workflows/tile-sync.yml there). This copy keeps running only until the
+# hub's is switched on (its TILE_SYNC_HERE variable), then it is deleted.
+# Change the hub's copy, not this one.
 # Daily Tile location sync - see scripts/tile_sync.py for what this replaced
 # (a BlueStacks/ADB UI-scraping setup that needed a dedicated machine left
 # running). This just calls Tile's own API, so it runs here instead.

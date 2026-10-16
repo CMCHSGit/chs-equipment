@@ -33,9 +33,13 @@ Several people work on these repos with Claude, often at the same time.
   key or any password; they live in Apps Script Script Properties and GitHub
   Actions secrets. Logs and messages give counts only — never staff or customer
   names, emails or addresses. (Firebase *web* config is not secret.)
-- **Apps Script: `clasp push` does not make code live.** It must be followed by
-  `clasp deploy -i <deployment id>` (see PROJECT-CONTEXT.md §2), from an
-  up-to-date checkout, then check the live `/exec` URL. This has bitten twice.
+- **The Apps Script proxy and backup moved to the hub repo on 16 Oct 2026:**
+  `cmchs-internal-hub/backend/apps-script/`. Edit and deploy them there
+  (`backend/README.md`): `clasp push` does not make code live, `clasp deploy -i`
+  from an up-to-date checkout does, then check the live `/exec` URL.
+- **Tile sync is moving too** (`cmchs-internal-hub/backend/tile-sync/`). The copy
+  here (`scripts/`, `.github/workflows/tile-sync.yml`) only keeps running until
+  the hub's is switched on; don't change it, change the hub's.
 - **Database rules moved to the hub repo on 16 Oct 2026:**
   `cmchs-internal-hub/rules/database.rules.json` (this tracker's Realtime
   Database) and `rules/firestore.rules`. Edit them there. A push does not

@@ -1,3 +1,5 @@
+# FROZEN, being retired: moved to cmchs-internal-hub/backend/tile-sync/tile_sync.py.
+# Change that copy, not this one.
 """
 CHS Tile Location Sync
 =======================
