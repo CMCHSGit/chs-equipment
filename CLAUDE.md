@@ -1,6 +1,6 @@
 # CMCHS internal tools — read this first
 
-This repo is the demo equipment tracker (`index.html`, served at demo.chsnz.co.nz).
+This repo was the demo equipment tracker. **Since 19 Oct 2026 the tracker is in the hub** (`cmchs-internal-hub/apps/equipment`, at internal.chsnz.co.nz/equipment/), and `index.html` here only forwards demo.chsnz.co.nz there; `sw.js` stays so phones registered here keep getting reminders. The old tracker is the git tag `old-tracker-final`: don't change it here.
 The Simpro proxy, nightly backup and Tile sync it used to hold now live in
 `cmchs-internal-hub/backend/`, and its database rules in `cmchs-internal-hub/rules/`. The staff schedule is a separate repo
 cloned inside it (`cmchs-staff-schedule/`); the intranet hub is a third repo,
