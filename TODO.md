@@ -1,8 +1,13 @@
 # To do
 
-Last updated: 2026-10-15
+Last updated: 2026-10-30
 
 ## Infrastructure (shared)
+
+- [ ] **New 2026-10-30: the hub activity log (who did what, when) — three things only Jonathan can do** (code is live: hub `d27308b`; `shared/activity.js`, "Activity log" in the hub README).
+  - [ ] **Check the Drive backup.** The backup script is pushed (clasp). In its Apps Script editor run `checkActivityBackup()` (should say READY, with how many lines are waiting), then `activityBackupNow()`. Folder "CMCHS Hub Activity Log Backups" should get a "Hub activity log YYYY-MM" spreadsheet and a Hub-Activity-….json file. No new permission is asked for. The 3am run does it nightly from now on; if `checkActivityBackup()` says 403, it is the same Cloud Datastore Viewer grant as `checkProjectsBackup()`. Keep that folder private: it holds names and what people did.
+  - [ ] **Paste `cmchs-internal-hub/rules/firestore.rules` into the Firebase console** (staff schedule project → Firestore → Rules, the whole file) — optional but wanted: a line must carry the server's time and only known fields, so nobody can backdate or pad the log. The log works without it. Tested on the emulator (50 checks). Say when it is pasted so the rules README can record it.
+  - [ ] **Look at it once with real use.** Settings → Staff schedule → Activity log (admins): use a few tools, then Refresh and confirm lines appear with the right tool and name; try the filters and Download CSV. I could not sign in to check this live. Not logged on purpose: page views, individual checklist ticks, and each ask's title or comment text.
 
 - [ ] **New 2026-10-27, needed before the N1 site visit: paste `cmchs-internal-hub/rules/firestore.rules` into the Firebase console** (staff schedule project → Firestore → Rules, the whole file). It adds `checklists` for the new Project checklists tool (Service → Project checklists, hub `f235906`). Until it is pasted the tool loads but cannot read or save anything, and says the rule may not be published. Everyone signed in can read and tick; Engineers, Management and admins make lists and import. Tested on the emulator (25 checks). **Updated again 27 Oct (night): paste it once more, and then SHARE the list** (Checklists is the new name; hub 2 commits on). It now has steps, sharing (a list is seen only by its owner and who it is shared with, like an ask) and asks can attach one. Until the new rules are pasted, ticking steps is refused for people who are not Engineers/Management. Jonathan then opens the list and chooses Share, adding the people going on site, or nobody else can see it. **Updated 27 Oct (evening): paste it again** if it was pasted earlier today: it now also lets anyone add a device found on site (an id starting found-) and remove their own. Until the new copy is pasted, Add a device is refused and the tool says the rule may not be published. Needs testing: make a list from the N1 export, tick from two phones at once, export.
 
