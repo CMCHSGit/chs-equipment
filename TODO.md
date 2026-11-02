@@ -1,8 +1,16 @@
 # To do
 
-Last updated: 2026-10-30
+Last updated: 2026-11-02
 
 ## Infrastructure (shared)
+
+- [ ] **New 2026-11-02: CHS Test Bench is in the hub (`/testbench/`, hub `1b90478`) — checks only a person with the real analyser can do.** Built and tested with a simulated frame; not tried on real hardware or against real Simpro.
+  - [ ] On a laptop with the ESA612 (Edge or Chrome): open Service → CHS Test Bench, **connect the analyser** (the bench is shown in a frame; the frame is allowed Web Serial, but this is the first time it runs that way), run a test, choose the **Templates** and **Results** folders again (folder access is per address, so once more on each laptop), save the PDF.
+  - [ ] **Send to Simpro:** after saving, open the "Send to Simpro" bar, give a real job number, send; check the PDF, results file and .mtr are on the job in Simpro. The person needs Simpro access (admins have it; others in Settings → People and access).
+  - [ ] **Offline:** open the Test Bench once online, then turn Wi-Fi off, reload, run and save a test, queue it to a job; turn Wi-Fi on with the hub open and check it goes by itself.
+  - [ ] Tests in progress on the old SharePoint copy do not carry over (browsers keep them per address): finish or export them before switching. Then rename/delete `ServiceCHS Test Bench.html` and `ServiceMindrayTest TemplatesCHS Test Bench_2.html` so nobody opens an old copy.
+  - [ ] When the bench file changes: `node scripts/update-bench.mjs "<file>"` in the hub repo (see "CHS Test Bench" in its README), commit and push.
+  - [ ] Found on the way, not mine: 4 Asks sweep tests (`npm test -w apps/asks`) fail on main since the proxy change `237a6a2` ("trackJob_ is not defined" in the test's sandbox). Whoever owns that change should add it to the test.
 
 - [ ] **New 2026-10-30: the hub activity log (who did what, when) — three things only Jonathan can do** (code is live: hub `d27308b`; `shared/activity.js`, "Activity log" in the hub README).
   - [ ] **Check the Drive backup.** The backup script is pushed (clasp). In its Apps Script editor run `checkActivityBackup()` (should say READY, with how many lines are waiting), then `activityBackupNow()`. Folder "CMCHS Hub Activity Log Backups" should get a "Hub activity log YYYY-MM" spreadsheet and a Hub-Activity-….json file. No new permission is asked for. The 3am run does it nightly from now on; if `checkActivityBackup()` says 403, it is the same Cloud Datastore Viewer grant as `checkProjectsBackup()`. Keep that folder private: it holds names and what people did.
